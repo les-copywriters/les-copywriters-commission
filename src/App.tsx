@@ -10,6 +10,9 @@ import LoginPage from "@/pages/LoginPage";
 import DashboardPage from "@/pages/DashboardPage";
 import RefundsPage from "@/pages/RefundsPage";
 import AdminPage from "@/pages/AdminPage";
+import TeamPage from "@/pages/TeamPage";
+import CloserDetailPage from "@/pages/CloserDetailPage";
+import SetterDetailPage from "@/pages/SetterDetailPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +29,9 @@ const AppRoutes = () => (
     <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
     <Route path="/refunds" element={<ProtectedRoute><RefundsPage /></ProtectedRoute>} />
     <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
+    <Route path="/team" element={<ProtectedRoute><TeamPage /></ProtectedRoute>} />
+    <Route path="/team/closer/:name" element={<ProtectedRoute><CloserDetailPage /></ProtectedRoute>} />
+    <Route path="/team/setter/:name" element={<ProtectedRoute><SetterDetailPage /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
   </Routes>
 );

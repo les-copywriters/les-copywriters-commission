@@ -2,12 +2,13 @@ import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/i18n";
-import { LayoutDashboard, AlertTriangle, Shield, LogOut, Globe, Menu, X } from "lucide-react";
+import { LayoutDashboard, AlertTriangle, Shield, Users, LogOut, Globe, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { to: "/dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
+  { to: "/team", labelKey: "nav.team", icon: Users },
   { to: "/refunds", labelKey: "nav.refunds", icon: AlertTriangle },
   { to: "/admin", labelKey: "nav.admin", icon: Shield },
 ];
