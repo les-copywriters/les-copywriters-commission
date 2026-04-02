@@ -2,6 +2,7 @@ const fr: Record<string, string> = {
   // Nav
   "nav.dashboard": "Commissions",
   "nav.refunds": "Remboursements",
+  "nav.team": "Équipe",
   "nav.admin": "Administration",
   "nav.logout": "Déconnexion",
   "nav.language": "FR",
@@ -78,6 +79,23 @@ const fr: Record<string, string> = {
   "admin.confirmDelete": "Êtes-vous sûr de vouloir supprimer cette entrée ? Cette action est irréversible.",
   "admin.cancel": "Annuler",
   "admin.confirm": "Confirmer",
+
+  // Team page
+  "team.title": "Performance de l'équipe",
+  "team.subtitle": "Détails des commissions par closer et setter",
+  "team.sales": "Ventes",
+  "team.commission": "Comm.",
+  "team.volume": "Volume",
+
+  // Detail pages
+  "detail.performance": "Aperçu des performances",
+  "detail.totalComm": "Commission totale",
+  "detail.totalSales": "Total ventes",
+  "detail.avgComm": "Moy. par vente",
+  "detail.refundsUnpaid": "Remb. / Impayés",
+  "detail.refundsUnpaidSub": "remboursés / échoués",
+  "detail.commByProduct": "Commission par produit",
+  "detail.salesHistory": "Historique des ventes",
 
   // Common
   "common.noData": "Aucune donnée disponible",
