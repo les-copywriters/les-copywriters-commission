@@ -21,13 +21,13 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/50 p-4">
-      <Card className="w-full max-w-md shadow-xl border-0">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[hsl(213,55%,8%)] to-[hsl(213,50%,14%)] p-4">
+      <Card className="w-full max-w-md shadow-2xl border-0 bg-card/95 backdrop-blur">
         <CardHeader className="text-center space-y-2">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-primary">
-            <Lock className="h-7 w-7 text-primary-foreground" />
+            <span className="text-xl font-black text-primary-foreground">LC</span>
           </div>
-          <CardTitle className="text-2xl font-bold">{t("login.title")}</CardTitle>
+          <CardTitle className="text-2xl font-bold">Les Copywriters</CardTitle>
           <CardDescription>{t("login.description")}</CardDescription>
         </CardHeader>
         <CardContent>
