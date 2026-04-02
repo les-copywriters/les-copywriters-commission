@@ -13,7 +13,6 @@ const navItems = [
   { to: "/admin", labelKey: "nav.admin", icon: Shield },
 ];
 
-/** Sidebar navigation for authenticated pages */
 const AppSidebar = ({ open, onToggle }: { open: boolean; onToggle: () => void }) => {
   const { pathname } = useLocation();
   const { logout } = useAuth();
@@ -25,12 +24,10 @@ const AppSidebar = ({ open, onToggle }: { open: boolean; onToggle: () => void })
 
   return (
     <>
-      {/* Mobile overlay */}
       {open && (
         <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={onToggle} />
       )}
 
-      {/* Mobile hamburger */}
       <Button
         variant="ghost"
         size="icon"
@@ -48,9 +45,9 @@ const AppSidebar = ({ open, onToggle }: { open: boolean; onToggle: () => void })
       >
         <div className="flex h-16 items-center gap-2 px-6 font-bold text-lg">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary">
-            <LayoutDashboard className="h-4 w-4 text-sidebar-primary-foreground" />
+            <span className="text-sm font-black text-sidebar-primary-foreground">LC</span>
           </div>
-          Sales Tracker
+          Les Copywriters
         </div>
 
         <nav className="flex-1 space-y-1 px-3 py-4">

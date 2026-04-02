@@ -34,7 +34,7 @@ const DashboardPage = () => {
     { name: t("dashboard.refunds"), value: totalRefunds },
     { name: t("dashboard.impayes"), value: totalImpayes },
   ];
-  const PIE_COLORS = ["hsl(142, 71%, 45%)", "hsl(222, 47%, 40%)", "hsl(0, 84%, 60%)", "hsl(38, 92%, 50%)"];
+  const PIE_COLORS = ["hsl(201, 96%, 46%)", "hsl(213, 50%, 30%)", "hsl(0, 84%, 60%)", "hsl(38, 92%, 50%)"];
 
   return (
     <AppLayout>
@@ -54,11 +54,11 @@ const DashboardPage = () => {
             <CardContent>
               <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={closerData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(220,13%,91%)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(216,16%,88%)" />
                   <XAxis dataKey="name" fontSize={12} />
                   <YAxis fontSize={12} />
                   <Tooltip formatter={(v: number) => fmt(v)} />
-                  <Bar dataKey="sales" fill="hsl(142, 71%, 45%)" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="sales" fill="hsl(201, 96%, 46%)" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
@@ -69,11 +69,11 @@ const DashboardPage = () => {
             <CardContent>
               <ResponsiveContainer width="100%" height={250}>
                 <LineChart data={monthlyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(220,13%,91%)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(216,16%,88%)" />
                   <XAxis dataKey="month" fontSize={12} />
                   <YAxis fontSize={12} />
                   <Tooltip formatter={(v: number) => fmt(v)} />
-                  <Line type="monotone" dataKey="sales" stroke="hsl(222, 47%, 11%)" strokeWidth={2} dot={{ r: 4 }} />
+                  <Line type="monotone" dataKey="sales" stroke="hsl(213, 50%, 10%)" strokeWidth={2} dot={{ r: 4 }} />
                 </LineChart>
               </ResponsiveContainer>
             </CardContent>
