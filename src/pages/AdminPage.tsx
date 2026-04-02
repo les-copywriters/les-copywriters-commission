@@ -14,6 +14,7 @@ import { Sale } from "@/types";
 import { Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+/** Admin page — override commissions, remove entries */
 const AdminPage = () => {
   const { t, locale } = useLanguage();
   const [sales, setSales] = useState<Sale[]>(mockSales);
@@ -48,10 +49,10 @@ const AdminPage = () => {
         <h1 className="text-3xl font-bold">{t("admin.title")}</h1>
 
         <Card className="border-0 shadow-sm">
-          <CardHeader><CardTitle className="text-base">{t("admin.salesManagement")}</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">{t("admin.commissionsManagement")}</CardTitle></CardHeader>
           <CardContent>
             {sales.length === 0 ? (
-              <p className="text-center py-8 text-muted-foreground">{t("admin.noSales")}</p>
+              <p className="text-center py-8 text-muted-foreground">{t("admin.noData")}</p>
             ) : (
               <Table>
                 <TableHeader>
@@ -61,6 +62,7 @@ const AdminPage = () => {
                     <TableHead>{t("table.closer")}</TableHead>
                     <TableHead className="text-right">{t("table.amount")}</TableHead>
                     <TableHead className="text-right">{t("table.closerComm")}</TableHead>
+                    <TableHead className="text-right">{t("table.setterComm")}</TableHead>
                     <TableHead>{t("table.status")}</TableHead>
                     <TableHead className="text-right">{t("table.actions")}</TableHead>
                   </TableRow>
@@ -72,7 +74,8 @@ const AdminPage = () => {
                       <TableCell className="font-medium">{sale.clientName}</TableCell>
                       <TableCell>{sale.closer}</TableCell>
                       <TableCell className="text-right">{fmt(sale.amount)}</TableCell>
-                      <TableCell className="text-right">{fmt(sale.closerCommission)}</TableCell>
+                      <TableCell className="text-right font-medium">{fmt(sale.closerCommission)}</TableCell>
+                      <TableCell className="text-right font-medium">{fmt(sale.setterCommission)}</TableCell>
                       <TableCell>
                         {sale.refunded ? (
                           <Badge variant="destructive">{t("status.refunded")}</Badge>
