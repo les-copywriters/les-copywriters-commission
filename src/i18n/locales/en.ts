@@ -1,0 +1,113 @@
+const en: Record<string, string> = {
+  // Nav
+  "nav.dashboard": "Dashboard",
+  "nav.newSale": "New Sale",
+  "nav.refunds": "Refunds",
+  "nav.admin": "Administration",
+  "nav.logout": "Logout",
+  "nav.language": "EN",
+
+  // Login
+  "login.title": "Sales Tracker",
+  "login.description": "Sign in to access your dashboard",
+  "login.email": "Email",
+  "login.password": "Password",
+  "login.submit": "Sign in",
+
+  // Dashboard
+  "dashboard.title": "Dashboard",
+  "dashboard.totalSales": "Total Sales",
+  "dashboard.commissions": "Commissions",
+  "dashboard.refunds": "Refunds",
+  "dashboard.impayes": "Failed Payments",
+  "dashboard.trendUp": "+12% this month",
+  "dashboard.closersSetters": "Closers + Setters",
+  "dashboard.requests": "requests",
+  "dashboard.ongoing": "ongoing",
+  "dashboard.salesByCloser": "Sales by Closer",
+  "dashboard.monthlyTrend": "Monthly Trend",
+  "dashboard.breakdown": "Breakdown",
+  "dashboard.recentSales": "Recent Sales",
+  "dashboard.noSales": "No sales recorded",
+  "dashboard.closerComm": "Closer commissions",
+  "dashboard.setterComm": "Setter commissions",
+
+  // Table headers
+  "table.date": "Date",
+  "table.client": "Client",
+  "table.product": "Product",
+  "table.closer": "Closer",
+  "table.setter": "Setter",
+  "table.amount": "Amount",
+  "table.status": "Status",
+  "table.closerComm": "Closer comm.",
+  "table.actions": "Actions",
+  "table.approve": "Approve",
+
+  // Status badges
+  "status.paid": "Paid",
+  "status.refunded": "Refunded",
+  "status.unpaid": "Unpaid",
+  "status.approved": "Approved",
+  "status.refused": "Refused",
+  "status.pending": "Pending",
+
+  // Sale form
+  "saleForm.title": "New Sale",
+  "saleForm.info": "Sale Information",
+  "saleForm.date": "Date",
+  "saleForm.product": "Product",
+  "saleForm.productPlaceholder": "Choose a product",
+  "saleForm.clientName": "Client Name",
+  "saleForm.clientNamePlaceholder": "John Doe",
+  "saleForm.clientEmail": "Client Email",
+  "saleForm.clientEmailPlaceholder": "john@mail.com",
+  "saleForm.closer": "Closer",
+  "saleForm.closerPlaceholder": "Choose a closer",
+  "saleForm.setter": "Setter",
+  "saleForm.setterPlaceholder": "Choose a setter",
+  "saleForm.amount": "Amount (€)",
+  "saleForm.calculatedComm": "Calculated Commissions",
+  "saleForm.closerComm": "Closer (8.8%)",
+  "saleForm.setterComm": "Setter (1%)",
+  "saleForm.submit": "Save Sale",
+  "saleForm.success": "Sale saved",
+  "saleForm.validation.clientName": "Client name is required",
+  "saleForm.validation.clientEmail": "Client email is invalid",
+  "saleForm.validation.product": "Product is required",
+  "saleForm.validation.closer": "Closer is required",
+  "saleForm.validation.setter": "Setter is required",
+  "saleForm.validation.amount": "Amount must be greater than 0",
+
+  // Refunds page
+  "refunds.title": "Refunds & Failed Payments",
+  "refunds.tab.refunds": "Refunds",
+  "refunds.tab.impayes": "Failed Payments",
+  "refunds.requestsTitle": "Refund Requests",
+  "refunds.failedTitle": "Failed Payments",
+  "refunds.noRefunds": "No refund requests",
+  "refunds.noImpayes": "No failed payments recorded",
+  "refunds.confirmToggle": "Are you sure you want to change the status of this refund?",
+  "refunds.toggled": "Refund status updated",
+
+  // Admin page
+  "admin.title": "Administration",
+  "admin.salesManagement": "Sales Management",
+  "admin.noSales": "No sales to manage",
+  "admin.editCommission": "Edit Commission",
+  "admin.commLabel": "Closer commission (€)",
+  "admin.save": "Save",
+  "admin.saleDeleted": "Sale deleted",
+  "admin.commUpdated": "Commission updated",
+  "admin.confirmDelete": "Are you sure you want to delete this sale? This action cannot be undone.",
+  "admin.cancel": "Cancel",
+  "admin.confirm": "Confirm",
+
+  // Common
+  "common.noData": "No data available",
+  "common.loading": "Loading...",
+  "common.confirm": "Confirm",
+  "common.cancel": "Cancel",
+};
+
+export default en;

@@ -1,0 +1,113 @@
+const fr: Record<string, string> = {
+  // Nav
+  "nav.dashboard": "Tableau de bord",
+  "nav.newSale": "Nouvelle vente",
+  "nav.refunds": "Remboursements",
+  "nav.admin": "Administration",
+  "nav.logout": "Déconnexion",
+  "nav.language": "FR",
+
+  // Login
+  "login.title": "Sales Tracker",
+  "login.description": "Connectez-vous pour accéder au tableau de bord",
+  "login.email": "Email",
+  "login.password": "Mot de passe",
+  "login.submit": "Se connecter",
+
+  // Dashboard
+  "dashboard.title": "Tableau de bord",
+  "dashboard.totalSales": "Ventes totales",
+  "dashboard.commissions": "Commissions",
+  "dashboard.refunds": "Remboursements",
+  "dashboard.impayes": "Impayés",
+  "dashboard.trendUp": "+12% ce mois",
+  "dashboard.closersSetters": "Closers + Setters",
+  "dashboard.requests": "demandes",
+  "dashboard.ongoing": "en cours",
+  "dashboard.salesByCloser": "Ventes par closer",
+  "dashboard.monthlyTrend": "Tendance mensuelle",
+  "dashboard.breakdown": "Répartition",
+  "dashboard.recentSales": "Dernières ventes",
+  "dashboard.noSales": "Aucune vente enregistrée",
+  "dashboard.closerComm": "Commissions closers",
+  "dashboard.setterComm": "Commissions setters",
+
+  // Table headers
+  "table.date": "Date",
+  "table.client": "Client",
+  "table.product": "Produit",
+  "table.closer": "Closer",
+  "table.setter": "Setter",
+  "table.amount": "Montant",
+  "table.status": "Statut",
+  "table.closerComm": "Comm. closer",
+  "table.actions": "Actions",
+  "table.approve": "Approuver",
+
+  // Status badges
+  "status.paid": "Payé",
+  "status.refunded": "Remboursé",
+  "status.unpaid": "Impayé",
+  "status.approved": "Approuvé",
+  "status.refused": "Refusé",
+  "status.pending": "En attente",
+
+  // Sale form
+  "saleForm.title": "Nouvelle vente",
+  "saleForm.info": "Informations de la vente",
+  "saleForm.date": "Date",
+  "saleForm.product": "Produit",
+  "saleForm.productPlaceholder": "Choisir un produit",
+  "saleForm.clientName": "Nom du client",
+  "saleForm.clientNamePlaceholder": "Jean Dupont",
+  "saleForm.clientEmail": "Email du client",
+  "saleForm.clientEmailPlaceholder": "jean@mail.com",
+  "saleForm.closer": "Closer",
+  "saleForm.closerPlaceholder": "Choisir un closer",
+  "saleForm.setter": "Setter",
+  "saleForm.setterPlaceholder": "Choisir un setter",
+  "saleForm.amount": "Montant (€)",
+  "saleForm.calculatedComm": "Commissions calculées",
+  "saleForm.closerComm": "Closer (8.8%)",
+  "saleForm.setterComm": "Setter (1%)",
+  "saleForm.submit": "Enregistrer la vente",
+  "saleForm.success": "Vente enregistrée",
+  "saleForm.validation.clientName": "Le nom du client est requis",
+  "saleForm.validation.clientEmail": "L'email du client est invalide",
+  "saleForm.validation.product": "Le produit est requis",
+  "saleForm.validation.closer": "Le closer est requis",
+  "saleForm.validation.setter": "Le setter est requis",
+  "saleForm.validation.amount": "Le montant doit être supérieur à 0",
+
+  // Refunds page
+  "refunds.title": "Remboursements & Impayés",
+  "refunds.tab.refunds": "Remboursements",
+  "refunds.tab.impayes": "Impayés",
+  "refunds.requestsTitle": "Demandes de remboursement",
+  "refunds.failedTitle": "Paiements échoués",
+  "refunds.noRefunds": "Aucune demande de remboursement",
+  "refunds.noImpayes": "Aucun impayé enregistré",
+  "refunds.confirmToggle": "Êtes-vous sûr de vouloir modifier le statut de ce remboursement ?",
+  "refunds.toggled": "Statut du remboursement mis à jour",
+
+  // Admin page
+  "admin.title": "Administration",
+  "admin.salesManagement": "Gestion des ventes",
+  "admin.noSales": "Aucune vente à gérer",
+  "admin.editCommission": "Modifier la commission",
+  "admin.commLabel": "Commission closer (€)",
+  "admin.save": "Enregistrer",
+  "admin.saleDeleted": "Vente supprimée",
+  "admin.commUpdated": "Commission mise à jour",
+  "admin.confirmDelete": "Êtes-vous sûr de vouloir supprimer cette vente ? Cette action est irréversible.",
+  "admin.cancel": "Annuler",
+  "admin.confirm": "Confirmer",
+
+  // Common
+  "common.noData": "Aucune donnée disponible",
+  "common.loading": "Chargement...",
+  "common.confirm": "Confirmer",
+  "common.cancel": "Annuler",
+};
+
+export default fr;
