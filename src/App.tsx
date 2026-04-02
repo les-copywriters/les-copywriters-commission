@@ -8,14 +8,12 @@ import { LanguageProvider } from "@/i18n";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import LoginPage from "@/pages/LoginPage";
 import DashboardPage from "@/pages/DashboardPage";
-import SaleFormPage from "@/pages/SaleFormPage";
 import RefundsPage from "@/pages/RefundsPage";
 import AdminPage from "@/pages/AdminPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
 
-/** Redirect to login if not authenticated */
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuth();
   if (!user) return <Navigate to="/" replace />;
@@ -26,7 +24,6 @@ const AppRoutes = () => (
   <Routes>
     <Route path="/" element={<LoginPage />} />
     <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-    <Route path="/sales/new" element={<ProtectedRoute><SaleFormPage /></ProtectedRoute>} />
     <Route path="/refunds" element={<ProtectedRoute><RefundsPage /></ProtectedRoute>} />
     <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
