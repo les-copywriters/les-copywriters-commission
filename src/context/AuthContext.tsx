@@ -39,9 +39,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       .single();
 
     if (error) {
-      // Profile row doesn't exist yet — this happens when a Supabase Auth user
-      // was created but no profile was inserted (e.g. via the dashboard).
-      // We don't log the user out; we show a clear message so they can contact admin.
       if (error.code === "PGRST116") {
         toast.error("Your account has no profile yet. Please contact an administrator.");
       } else {
@@ -51,7 +48,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    if (!data?.name || !data?.role) {
+    if (!data || !data.name || !data.role) {
       toast.error("Your profile is incomplete. Please contact an administrator.");
       setUser(null);
       return;

@@ -19,6 +19,7 @@ export interface Database {
           name?: string;
           role?: "closer" | "setter" | "admin";
         };
+        Relationships: [];
       };
       sales: {
         Row: {
@@ -99,6 +100,22 @@ export interface Database {
           jotform_submission_id?: string | null;
           created_at?: string;
         };
+        Relationships: [
+          {
+            foreignKeyName: "sales_closer_id_fkey";
+            columns: ["closer_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "sales_setter_id_fkey";
+            columns: ["setter_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       refunds: {
         Row: {
@@ -125,6 +142,7 @@ export interface Database {
           status?: "pending" | "approved" | "refused";
           created_at?: string;
         };
+        Relationships: [];
       };
       bonus_tiers: {
         Row: {
@@ -142,6 +160,7 @@ export interface Database {
           min_sales?: number;
           bonus_amount?: number;
         };
+        Relationships: [];
       };
       impayes: {
         Row: {
@@ -165,6 +184,7 @@ export interface Database {
           date?: string;
           created_at?: string;
         };
+        Relationships: [];
       };
     };
     Views: {
