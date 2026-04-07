@@ -149,14 +149,19 @@ const TeamManagePage = () => {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold">{t("teamManage.title")}</h1>
-            <p className="text-sm text-muted-foreground mt-1">{t("teamManage.subtitle")}</p>
+      <div className="space-y-8">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+              <UserCog className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">{t("teamManage.title")}</h1>
+              <p className="text-sm text-muted-foreground">{t("teamManage.subtitle")}</p>
+            </div>
           </div>
-          <Button onClick={() => setInviteOpen(true)} className="shrink-0">
-            <UserPlus className="mr-2 h-4 w-4" />
+          <Button onClick={() => setInviteOpen(true)} className="shrink-0 gap-2">
+            <UserPlus className="h-4 w-4" />
             {t("teamManage.inviteMember")}
           </Button>
         </div>
