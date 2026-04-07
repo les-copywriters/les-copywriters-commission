@@ -17,6 +17,8 @@ const makeSale = (
   opts?: { bonus?: number; refunded?: boolean; impaye?: boolean }
 ): Sale => ({
   id, date, clientName, clientEmail, product, closer, setter, amount,
+  closerId: mockUsers.find(u => u.name === closer)?.id ?? "",
+  setterId: mockUsers.find(u => u.name === setter)?.id ?? "",
   closerCommission: Math.round(amount * CLOSER_RATE * 100) / 100,
   setterCommission: Math.round(amount * SETTER_RATE * 100) / 100,
   ...opts,
