@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, TrendingDown, AlertTriangle, Wallet, DollarSign, ShoppingCart, Gift } from "lucide-react";
+import { TrendingUp, TrendingDown, AlertTriangle, Wallet, DollarSign, ShoppingCart, Gift, LayoutDashboard } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line,
@@ -133,10 +133,15 @@ const DashboardPage = () => {
   if (isAdmin) {
     return (
       <AppLayout>
-        <div className="space-y-6">
-          <div>
-            <h1 className="text-3xl font-bold">{t("dashboard.title")}</h1>
-            <p className="text-sm text-muted-foreground mt-1">{t("dashboard.salesSource")}</p>
+        <div className="space-y-8">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+              <LayoutDashboard className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">{t("dashboard.title")}</h1>
+              <p className="text-sm text-muted-foreground">{t("dashboard.salesSource")}</p>
+            </div>
           </div>
 
           {loading ? <CardSkeletons /> : (
