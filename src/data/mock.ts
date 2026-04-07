@@ -1,4 +1,5 @@
 import { Sale, User, Refund, Impaye } from "@/types";
+import { CLOSER_RATE, SETTER_RATE } from "@/lib/commissionRates";
 
 /** Placeholder users — replace with API call later */
 export const mockUsers: User[] = [
@@ -16,8 +17,8 @@ const makeSale = (
   opts?: { bonus?: number; refunded?: boolean; impaye?: boolean }
 ): Sale => ({
   id, date, clientName, clientEmail, product, closer, setter, amount,
-  closerCommission: Math.round(amount * 0.088 * 100) / 100,
-  setterCommission: Math.round(amount * 0.01 * 100) / 100,
+  closerCommission: Math.round(amount * CLOSER_RATE * 100) / 100,
+  setterCommission: Math.round(amount * SETTER_RATE * 100) / 100,
   ...opts,
 });
 

@@ -1,29 +1,40 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useLanguage } from "@/i18n";
+import { formatCurrency } from "@/lib/formatCurrency";
 import AppLayout from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { mockRefunds, mockImpayes, mockSales } from "@/data/mock";
-import { Refund } from "@/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { useRefunds, useUpdateRefundStatus } from "@/hooks/useRefunds";
+import { useImpayes } from "@/hooks/useImpayes";
+import { useSales } from "@/hooks/useSales";
 
 const RefundsPage = () => {
   const { t, locale } = useLanguage();
-  const [refunds, setRefunds] = useState<Refund[]>(mockRefunds);
-  const [confirmId, setConfirmId] = useState<string | null>(null);
-  const fmt = (n: number) => new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-US", { style: "currency", currency: "EUR" }).format(n);
-  const getSaleName = (saleId: string) => mockSales.find((s) => s.id === saleId)?.clientName ?? saleId;
+  const { data: refunds = [], isLoading: loadingRefunds } = useRefunds();
+  const { data: impayes = [], isLoading: loadingImpayes } = useImpayes();
+  const { data: sales = [] } = useSales();
+  const updateStatus = useUpdateRefundStatus();
 
-  const toggleRefund = (id: string) => {
-    setRefunds((prev) =>
-      prev.map((r) => r.id === id ? { ...r, status: r.status === "approved" ? "refused" : "approved" } : r)
-    );
-    toast.success(t("refunds.toggled"));
-    setConfirmId(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
+  const fmt = (n: number) => formatCurrency(n, locale);
+  const saleNameMap = useMemo(() => new Map(sales.map(s => [s.id, s.clientName])), [sales]);
+  const getSaleName = (saleId: string) => saleNameMap.get(saleId) ?? saleId;
+
+  const handleToggle = (id: string) => {
+    const refund = refunds.find(r => r.id === id);
+    if (!refund) return;
+    const newStatus = refund.status === "approved" ? "refused" : "approved";
+    updateStatus.mutate({ id, saleId: refund.saleId, status: newStatus }, {
+      onSuccess: () => { toast.success(t("refunds.toggled")); setConfirmId(null); },
+      onError: (e) => toast.error(e.message),
+    });
   };
 
   return (
@@ -34,16 +45,19 @@ const RefundsPage = () => {
         <Tabs defaultValue="refunds">
           <TabsList>
             <TabsTrigger value="refunds">{t("refunds.tab.refunds")} ({refunds.length})</TabsTrigger>
-            <TabsTrigger value="impayes">{t("refunds.tab.impayes")} ({mockImpayes.length})</TabsTrigger>
+            <TabsTrigger value="impayes">{t("refunds.tab.impayes")} ({impayes.length})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="refunds" className="mt-4">
             <Card className="border-0 shadow-sm">
               <CardHeader><CardTitle className="text-base">{t("refunds.requestsTitle")}</CardTitle></CardHeader>
               <CardContent>
-                {refunds.length === 0 ? (
+                {loadingRefunds ? (
+                  <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+                ) : refunds.length === 0 ? (
                   <p className="text-center py-8 text-muted-foreground">{t("refunds.noRefunds")}</p>
                 ) : (
+                  <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -72,6 +86,7 @@ const RefundsPage = () => {
                       ))}
                     </TableBody>
                   </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -81,9 +96,12 @@ const RefundsPage = () => {
             <Card className="border-0 shadow-sm">
               <CardHeader><CardTitle className="text-base">{t("refunds.failedTitle")}</CardTitle></CardHeader>
               <CardContent>
-                {mockImpayes.length === 0 ? (
+                {loadingImpayes ? (
+                  <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+                ) : impayes.length === 0 ? (
                   <p className="text-center py-8 text-muted-foreground">{t("refunds.noImpayes")}</p>
                 ) : (
+                  <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -93,7 +111,7 @@ const RefundsPage = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {mockImpayes.map((imp) => (
+                      {impayes.map((imp) => (
                         <TableRow key={imp.id}>
                           <TableCell className="font-medium">{getSaleName(imp.saleId)}</TableCell>
                           <TableCell>{fmt(imp.amount)}</TableCell>
@@ -102,6 +120,7 @@ const RefundsPage = () => {
                       ))}
                     </TableBody>
                   </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -117,7 +136,9 @@ const RefundsPage = () => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-            <AlertDialogAction onClick={() => confirmId && toggleRefund(confirmId)}>{t("common.confirm")}</AlertDialogAction>
+            <AlertDialogAction onClick={() => confirmId && handleToggle(confirmId)} disabled={updateStatus.isPending}>
+              {updateStatus.isPending ? t("common.loading") : t("common.confirm")}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

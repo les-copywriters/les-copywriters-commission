@@ -13,13 +13,20 @@ class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
+      // Class components can't use hooks — detect language from localStorage directly
+      const lang = typeof localStorage !== "undefined"
+        ? localStorage.getItem("locale") ?? "fr"
+        : "fr";
+      const isFr = lang === "fr";
       return (
-        <div className="flex min-h-screen items-center justify-center p-6">
-          <div className="text-center space-y-4">
-            <h1 className="text-2xl font-bold text-destructive">Something went wrong</h1>
-            <p className="text-muted-foreground text-sm max-w-md">{this.state.error?.message}</p>
+        <div className="flex min-h-screen items-center justify-center p-6 bg-background">
+          <div className="text-center space-y-4 max-w-md">
+            <h1 className="text-2xl font-bold text-destructive">
+              {isFr ? "Une erreur est survenue" : "Something went wrong"}
+            </h1>
+            <p className="text-muted-foreground text-sm">{this.state.error?.message}</p>
             <Button onClick={() => { this.setState({ hasError: false }); window.location.href = "/"; }}>
-              Return Home
+              {isFr ? "Retour à l'accueil" : "Return Home"}
             </Button>
           </div>
         </div>

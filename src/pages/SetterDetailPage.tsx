@@ -1,11 +1,14 @@
+import { useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
-import { mockSales } from "@/data/mock";
+import { useSales } from "@/hooks/useSales";
 import { useLanguage } from "@/i18n";
+import { formatCurrency } from "@/lib/formatCurrency";
 import AppLayout from "@/components/AppLayout";
+import SaleStatusBadge from "@/components/SaleStatusBadge";
 import StatCard from "@/components/StatCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, TrendingUp, DollarSign, ShoppingCart, AlertTriangle } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
@@ -13,23 +16,39 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 const SetterDetailPage = () => {
   const { name } = useParams<{ name: string }>();
   const { t, locale } = useLanguage();
+  const { data: allSales = [], isLoading } = useSales();
+
   const decodedName = decodeURIComponent(name || "");
 
-  const sales = mockSales.filter(s => s.setter === decodedName);
-  const totalComm = sales.reduce((a, s) => a + s.setterCommission, 0);
-  const totalSales = sales.reduce((a, s) => a + s.amount, 0);
-  const refundedSales = sales.filter(s => s.refunded);
-  const unpaidSales = sales.filter(s => s.impaye);
-  const avgCommission = sales.length > 0 ? totalComm / sales.length : 0;
+  const { sales, totalComm, totalSales, refundedSales, unpaidSales, avgCommission, productData } = useMemo(() => {
+    const sales = allSales.filter(s => s.setter === decodedName);
+    let totalComm = 0, totalSales = 0, paidCount = 0;
+    const refundedSales: typeof sales = [], unpaidSales: typeof sales = [];
+    const productMap = new Map<string, number>();
 
-  const fmt = (n: number) =>
-    new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-US", { style: "currency", currency: "EUR" }).format(n);
+    for (const s of sales) {
+      totalSales += s.amount;
+      if (s.refunded) { refundedSales.push(s); }
+      else if (s.impaye) { unpaidSales.push(s); }
+      else {
+        totalComm += s.setterCommission;
+        paidCount++;
+        productMap.set(s.product, (productMap.get(s.product) || 0) + s.setterCommission);
+      }
+    }
 
-  const productMap = new Map<string, number>();
-  sales.forEach(s => {
-    productMap.set(s.product, (productMap.get(s.product) || 0) + s.setterCommission);
-  });
-  const productData = Array.from(productMap, ([name, commission]) => ({ name, commission }));
+    return {
+      sales,
+      totalComm,
+      totalSales,
+      refundedSales,
+      unpaidSales,
+      avgCommission: paidCount > 0 ? totalComm / paidCount : 0,
+      productData: Array.from(productMap, ([name, commission]) => ({ name, commission })),
+    };
+  }, [allSales, decodedName]);
+
+  const fmt = (n: number) => formatCurrency(n, locale);
 
   return (
     <AppLayout>
@@ -40,16 +59,22 @@ const SetterDetailPage = () => {
           </Button>
           <div>
             <h1 className="text-3xl font-bold">{decodedName}</h1>
-            <p className="text-sm text-muted-foreground">Setter — {t("detail.performance")}</p>
+            <p className="text-sm text-muted-foreground">{t("role.setter")} — {t("detail.performance")}</p>
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard title={t("detail.totalComm")} value={fmt(totalComm)} icon={<DollarSign className="h-5 w-5" />} />
-          <StatCard title={t("detail.totalSales")} value={String(sales.length)} subtitle={fmt(totalSales)} icon={<ShoppingCart className="h-5 w-5" />} />
-          <StatCard title={t("detail.avgComm")} value={fmt(avgCommission)} icon={<TrendingUp className="h-5 w-5" />} />
-          <StatCard title={t("detail.refundsUnpaid")} value={`${refundedSales.length} / ${unpaidSales.length}`} subtitle={t("detail.refundsUnpaidSub")} trend="down" icon={<AlertTriangle className="h-5 w-5" />} />
-        </div>
+        {isLoading ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard title={t("detail.totalComm")} value={fmt(totalComm)} icon={<DollarSign className="h-5 w-5" />} />
+            <StatCard title={t("detail.totalSales")} value={String(sales.length)} subtitle={fmt(totalSales)} icon={<ShoppingCart className="h-5 w-5" />} />
+            <StatCard title={t("detail.avgComm")} value={fmt(avgCommission)} icon={<TrendingUp className="h-5 w-5" />} />
+            <StatCard title={t("detail.refundsUnpaid")} value={`${refundedSales.length} / ${unpaidSales.length}`} subtitle={t("detail.refundsUnpaidSub")} trend="down" icon={<AlertTriangle className="h-5 w-5" />} />
+          </div>
+        )}
 
         {productData.length > 0 && (
           <Card className="border-0 shadow-sm">
@@ -71,9 +96,12 @@ const SetterDetailPage = () => {
         <Card className="border-0 shadow-sm">
           <CardHeader><CardTitle className="text-base">{t("detail.salesHistory")}</CardTitle></CardHeader>
           <CardContent>
-            {sales.length === 0 ? (
+            {isLoading ? (
+              <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+            ) : sales.length === 0 ? (
               <p className="text-center py-8 text-muted-foreground">{t("dashboard.noData")}</p>
             ) : (
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -94,18 +122,13 @@ const SetterDetailPage = () => {
                       <TableCell className="text-right">{fmt(sale.amount)}</TableCell>
                       <TableCell className="text-right font-medium">{fmt(sale.setterCommission)}</TableCell>
                       <TableCell>
-                        {sale.refunded ? (
-                          <Badge variant="destructive">{t("status.refunded")}</Badge>
-                        ) : sale.impaye ? (
-                          <Badge className="bg-warning text-warning-foreground hover:bg-warning/90">{t("status.unpaid")}</Badge>
-                        ) : (
-                          <Badge className="bg-success text-success-foreground hover:bg-success/90">{t("status.paid")}</Badge>
-                        )}
+                        <SaleStatusBadge refunded={sale.refunded} impaye={sale.impaye} />
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>
