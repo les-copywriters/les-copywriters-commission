@@ -51,7 +51,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    if (!data.name || !data.role) {
+    if (!data?.name || !data?.role) {
       toast.error("Your profile is incomplete. Please contact an administrator.");
       setUser(null);
       return;

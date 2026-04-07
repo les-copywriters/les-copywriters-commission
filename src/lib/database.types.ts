@@ -126,6 +126,23 @@ export interface Database {
           created_at?: string;
         };
       };
+      bonus_tiers: {
+        Row: {
+          id: string;
+          min_sales: number;
+          bonus_amount: number;
+        };
+        Insert: {
+          id?: string;
+          min_sales: number;
+          bonus_amount: number;
+        };
+        Update: {
+          id?: string;
+          min_sales?: number;
+          bonus_amount?: number;
+        };
+      };
       impayes: {
         Row: {
           id: string;
