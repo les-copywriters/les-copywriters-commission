@@ -9,17 +9,21 @@ import { useAuth } from "@/context/AuthContext";
 import { monthlyBonusBreakdown, formatMonth } from "@/lib/bonusCalculation";
 import AppLayout from "@/components/AppLayout";
 import StatCard from "@/components/StatCard";
+import SetterTag from "@/components/SetterTag";
+import { Button } from "@/components/ui/button";
 import SaleStatusBadge from "@/components/SaleStatusBadge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, TrendingDown, AlertTriangle, Wallet, DollarSign, ShoppingCart, Gift, LayoutDashboard } from "lucide-react";
+import { TrendingUp, TrendingDown, AlertTriangle, Wallet, DollarSign, ShoppingCart, Gift, LayoutDashboard, RefreshCw } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line,
 } from "recharts";
 import { cn } from "@/lib/utils";
+import { useSyncJotform } from "@/hooks/useSyncJotform";
+import { toast } from "sonner";
 
 // ─── Shared skeleton loader ───────────────────────────────────────────────────
 const CardSkeletons = ({ n = 4 }: { n?: number }) => (
@@ -51,6 +55,7 @@ const DashboardPage = () => {
   const { data: allRefunds = [], isLoading: loadingRefunds } = useRefunds();
   const { data: allImpayes = [], isLoading: loadingImpayes } = useImpayes();
   const { data: tiers = [] } = useBonusTiers();
+  const sync = useSyncJotform();
 
   const isAdmin  = user?.role === "admin";
   const isCloser = user?.role === "closer";
@@ -215,7 +220,7 @@ const DashboardPage = () => {
                           <TableCell className="text-muted-foreground">{s.date}</TableCell>
                           <TableCell className="font-medium">{s.clientName}</TableCell>
                           <TableCell>{s.closer}</TableCell>
-                          <TableCell>{s.setter}</TableCell>
+                          <TableCell><SetterTag setterId={s.setterId} setterName={s.setter} /></TableCell>
                           <TableCell className="text-right font-medium">{fmt(s.closerCommission)}</TableCell>
                           <TableCell className="text-right font-medium">{fmt(s.setterCommission)}</TableCell>
                           <TableCell><SaleStatusBadge refunded={s.refunded} impaye={s.impaye} /></TableCell>
@@ -239,11 +244,36 @@ const DashboardPage = () => {
     <AppLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold">{user?.name}</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {t(`role.${user?.role}`)} — {t("dashboard.salesSource")}
-          </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold">{user?.name}</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {t(`role.${user?.role}`)} — {t("dashboard.salesSource")}
+            </p>
+          </div>
+          {isCloser && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={sync.isPending}
+              className="shrink-0 mt-1"
+              onClick={() =>
+                sync.mutate(undefined, {
+                  onSuccess: (res) => {
+                    if (res.imported > 0) {
+                      toast.success(`${res.imported} ${t("sync.imported")}`);
+                    } else {
+                      toast.info(t("sync.upToDate"));
+                    }
+                  },
+                  onError: (e) => toast.error(`${t("sync.error")}: ${e.message}`),
+                })
+              }
+            >
+              <RefreshCw className={cn("h-4 w-4 mr-2", sync.isPending && "animate-spin")} />
+              {sync.isPending ? t("sync.syncing") : t("sync.button")}
+            </Button>
+          )}
         </div>
 
         {/* Stat cards */}
@@ -403,7 +433,11 @@ const DashboardPage = () => {
                       <TableRow key={s.id}>
                         <TableCell className="text-muted-foreground">{s.date}</TableCell>
                         <TableCell className="font-medium">{s.clientName}</TableCell>
-                        <TableCell>{isCloser ? s.setter : s.closer}</TableCell>
+                        <TableCell>
+                          {isCloser
+                            ? <SetterTag setterId={s.setterId} setterName={s.setter} />
+                            : s.closer}
+                        </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1.5">
                             <SaleStatusBadge refunded={s.refunded} impaye={s.impaye} />

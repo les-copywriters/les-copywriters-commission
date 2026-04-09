@@ -5,10 +5,10 @@ export type Sale = {
   clientName: string;
   clientEmail: string;
   product: string;
-  closer: string;       // display name
-  setter: string;       // display name
-  closerId: string;     // profiles.id
-  setterId: string;     // profiles.id
+  closer: string;            // display name
+  setter: string | null;     // display name (null when no setter)
+  closerId: string;          // profiles.id
+  setterId: string | null;   // profiles.id (null when no setter)
   amount: number;       // HT (ex-tax)
   amountTTC?: number;
   taxAmount?: number;

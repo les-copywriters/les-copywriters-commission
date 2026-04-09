@@ -13,11 +13,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Sale } from "@/types";
-import { Download, Shield, FileSpreadsheet } from "lucide-react";
+import { Download, Shield, FileSpreadsheet, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useSales, useUpdateCommission, useDeleteSale } from "@/hooks/useSales";
 import { useProfiles } from "@/hooks/useProfiles";
 import { Badge } from "@/components/ui/badge";
+import { useSyncJotform } from "@/hooks/useSyncJotform";
+import { cn } from "@/lib/utils";
 
 const AdminPage = () => {
   const { t, locale } = useLanguage();
@@ -25,6 +27,7 @@ const AdminPage = () => {
   const { data: profiles = [] } = useProfiles();
   const updateCommission = useUpdateCommission();
   const deleteSale = useDeleteSale();
+  const sync = useSyncJotform();
 
   const closers = profiles.filter(p => p.role === "closer");
   const setters = profiles.filter(p => p.role === "setter");
@@ -100,6 +103,32 @@ const AdminPage = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={sync.isPending}
+              onClick={() =>
+                sync.mutate(undefined, {
+                  onSuccess: (res) => {
+                    if (res.imported > 0) {
+                      toast.success(`${res.imported} ${t("sync.imported")}`);
+                    } else {
+                      toast.info(t("sync.upToDate"));
+                    }
+                    if (res.errors.length > 0) {
+                      toast.warning(`${res.errors.length} submission(s) skipped`, {
+                        description: res.errors.slice(0, 3).join("\n"),
+                      });
+                    }
+                  },
+                  onError: (e) => toast.error(`${t("sync.error")}: ${e.message}`),
+                })
+              }
+              className="gap-2"
+            >
+              <RefreshCw className={cn("h-4 w-4", sync.isPending && "animate-spin")} />
+              {sync.isPending ? t("sync.syncing") : t("sync.button")}
+            </Button>
             <Button variant="outline" size="sm" onClick={exportCSV} disabled={sales.length === 0} className="gap-2">
               <Download className="h-4 w-4" />{t("admin.exportCSV")}
             </Button>

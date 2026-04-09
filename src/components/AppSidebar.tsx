@@ -1,37 +1,36 @@
-import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/i18n";
 import {
-  LayoutDashboard, AlertTriangle, Shield, Users,
-  UserCog, Settings, LogOut, Menu, X,
+  LayoutDashboard, BarChart2, AlertTriangle, Shield,
+  Users, UserCog, Settings, LogOut, Menu, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-const allNavItems = [
-  { to: "/dashboard",   labelKey: "nav.dashboard",   icon: LayoutDashboard, adminOnly: false },
-  { to: "/team",        labelKey: "nav.team",        icon: Users,           adminOnly: true  },
-  { to: "/refunds",     labelKey: "nav.refunds",     icon: AlertTriangle,   adminOnly: true  },
-  { to: "/admin",       labelKey: "nav.admin",       icon: Shield,          adminOnly: true  },
-  { to: "/team/manage", labelKey: "nav.teamManage",  icon: UserCog,         adminOnly: true  },
-  { to: "/settings",    labelKey: "nav.settings",    icon: Settings,        adminOnly: false },
+// ─── Nav structure ────────────────────────────────────────────────────────────
+type NavItem = { to: string; labelKey: string; icon: React.ElementType };
+
+const mainItems: NavItem[] = [
+  { to: "/dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
+  { to: "/analytics", labelKey: "nav.analytics", icon: BarChart2        },
 ];
 
-function UserAvatar({ name, role }: { name: string; role: string }) {
-  const initials = name
-    .split(" ")
-    .map(n => n[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
+const adminItems: NavItem[] = [
+  { to: "/refunds",     labelKey: "nav.refunds",   icon: AlertTriangle },
+  { to: "/admin",       labelKey: "nav.admin",     icon: Shield        },
+  { to: "/team",        labelKey: "nav.team",      icon: Users         },
+  { to: "/team/manage", labelKey: "nav.teamManage", icon: UserCog      },
+];
 
+// ─── Sub-components ───────────────────────────────────────────────────────────
+function UserAvatar({ name, role }: { name: string; role: string }) {
+  const initials = name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
   const roleColor: Record<string, string> = {
     admin:  "bg-primary/20 text-primary",
     closer: "bg-success/20 text-success",
     setter: "bg-warning/20 text-warning",
   };
-
   return (
     <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-sidebar-accent/60">
       <div className={cn(
@@ -48,18 +47,61 @@ function UserAvatar({ name, role }: { name: string; role: string }) {
   );
 }
 
+function NavGroup({
+  label,
+  items,
+  pathname,
+  onNavigate,
+}: {
+  label?: string;
+  items: NavItem[];
+  pathname: string;
+  onNavigate: () => void;
+}) {
+  const { t } = useLanguage();
+  return (
+    <div className="space-y-0.5">
+      {label && (
+        <p className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-white/30 select-none">
+          {label}
+        </p>
+      )}
+      {items.map(({ to, labelKey, icon: Icon }) => {
+        const active = pathname === to || (to !== "/dashboard" && to !== "/analytics" && pathname.startsWith(to));
+        return (
+          <Link
+            key={to}
+            to={to}
+            onClick={onNavigate}
+            className={cn(
+              "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-150",
+              active
+                ? "bg-primary text-white shadow-sm"
+                : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            )}
+          >
+            <Icon className="h-4 w-4 shrink-0" />
+            {t(labelKey)}
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Main sidebar ─────────────────────────────────────────────────────────────
 const AppSidebar = ({ open, onToggle }: { open: boolean; onToggle: () => void }) => {
   const { pathname } = useLocation();
   const { logout, user } = useAuth();
   const navigate = useNavigate();
   const { t } = useLanguage();
 
-  const navItems = allNavItems.filter(item => !item.adminOnly || user?.role === "admin");
-
+  const isAdmin = user?.role === "admin";
   const handleLogout = () => { logout(); navigate("/"); };
 
   return (
     <>
+      {/* Mobile backdrop */}
       {open && (
         <div
           className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm lg:hidden"
@@ -67,6 +109,7 @@ const AppSidebar = ({ open, onToggle }: { open: boolean; onToggle: () => void })
         />
       )}
 
+      {/* Mobile toggle button */}
       <Button
         variant="ghost"
         size="icon"
@@ -82,8 +125,9 @@ const AppSidebar = ({ open, onToggle }: { open: boolean; onToggle: () => void })
         "transition-transform duration-200 ease-in-out",
         open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
       )}>
+
         {/* Logo */}
-        <div className="flex h-16 items-center gap-3 px-5 border-b border-sidebar-border">
+        <div className="flex h-16 items-center gap-3 px-5 border-b border-sidebar-border shrink-0">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary shadow-sm">
             <span className="text-sm font-black text-white">LC</span>
           </div>
@@ -94,31 +138,32 @@ const AppSidebar = ({ open, onToggle }: { open: boolean; onToggle: () => void })
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 space-y-0.5 px-3 py-4 overflow-y-auto">
-          {navItems.map(({ to, labelKey, icon: Icon }) => {
-            const active = pathname === to || (to !== "/dashboard" && pathname.startsWith(to));
-            return (
-              <Link
-                key={to}
-                to={to}
-                onClick={onToggle}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium",
-                  "transition-colors duration-150",
-                  active
-                    ? "bg-primary text-white shadow-sm"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                )}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                {t(labelKey)}
-              </Link>
-            );
-          })}
+        <nav className="flex-1 px-3 py-3 overflow-y-auto space-y-1">
+          <NavGroup
+            items={mainItems}
+            pathname={pathname}
+            onNavigate={onToggle}
+          />
+
+          {isAdmin && (
+            <NavGroup
+              label={t("nav.adminSection")}
+              items={adminItems}
+              pathname={pathname}
+              onNavigate={onToggle}
+            />
+          )}
+
+          <NavGroup
+            label={t("nav.accountSection")}
+            items={[{ to: "/settings", labelKey: "nav.settings", icon: Settings }]}
+            pathname={pathname}
+            onNavigate={onToggle}
+          />
         </nav>
 
-        {/* User section */}
-        <div className="px-3 pb-3 space-y-2 border-t border-sidebar-border pt-3">
+        {/* User card + logout */}
+        <div className="px-3 pb-3 space-y-2 border-t border-sidebar-border pt-3 shrink-0">
           {user && <UserAvatar name={user.name} role={user.role} />}
           <Button
             variant="ghost"
@@ -129,6 +174,7 @@ const AppSidebar = ({ open, onToggle }: { open: boolean; onToggle: () => void })
             {t("nav.logout")}
           </Button>
         </div>
+
       </aside>
     </>
   );

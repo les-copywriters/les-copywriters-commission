@@ -15,6 +15,7 @@ import CloserDetailPage from "@/pages/CloserDetailPage";
 import SetterDetailPage from "@/pages/SetterDetailPage";
 import TeamManagePage from "@/pages/TeamManagePage";
 import SettingsPage from "@/pages/SettingsPage";
+import AnalyticsPage from "@/pages/AnalyticsPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -41,8 +42,18 @@ const queryClient = new QueryClient({
 });
 
 const LoadingScreen = () => (
-  <div className="flex min-h-screen items-center justify-center bg-background">
-    <span className="text-muted-foreground text-sm">Chargement...</span>
+  <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background gap-5 animate-fade-in">
+    {/* Spinning ring around the logo */}
+    <div className="relative flex h-16 w-16 items-center justify-center">
+      <div className="absolute inset-0 rounded-full border-2 border-primary/15" />
+      <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-primary animate-spin" />
+      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary shadow-md">
+        <span className="text-lg font-black text-white">LC</span>
+      </div>
+    </div>
+    <p className="text-sm text-muted-foreground animate-pulse tracking-wide">
+      Les Copywriters
+    </p>
   </div>
 );
 
@@ -71,6 +82,7 @@ const AppRoutes = () => (
     <Route path="/team/manage" element={<AdminRoute><TeamManagePage /></AdminRoute>} />
     <Route path="/team/closer/:name" element={<ProtectedRoute><CloserDetailPage /></ProtectedRoute>} />
     <Route path="/team/setter/:name" element={<ProtectedRoute><SetterDetailPage /></ProtectedRoute>} />
+    <Route path="/analytics" element={<ProtectedRoute><AnalyticsPage /></ProtectedRoute>} />
     <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
   </Routes>
