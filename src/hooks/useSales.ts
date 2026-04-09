@@ -82,7 +82,7 @@ export type NewSaleInput = {
   clientEmail: string;
   product: string;
   closerId: string;
-  setterId: string;
+  setterId: string | null;
   amountTTC: number;
   taxAmount: number;
   paymentPlatform: string;
@@ -102,12 +102,12 @@ export const useAddSale = () => {
         client_email: input.clientEmail,
         product: input.product,
         closer_id: input.closerId,
-        setter_id: input.setterId,
+        setter_id: input.setterId || null,
         amount: amountHT,
         amount_ttc: input.amountTTC,
         tax_amount: input.taxAmount,
         closer_commission: Math.round(amountHT * CLOSER_RATE * 100) / 100,
-        setter_commission: Math.round(amountHT * SETTER_RATE * 100) / 100,
+        setter_commission: input.setterId ? Math.round(amountHT * SETTER_RATE * 100) / 100 : 0,
         refunded: false,
         impaye: false,
         payment_platform: input.paymentPlatform || null,

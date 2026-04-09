@@ -13,7 +13,6 @@ import { toast } from "sonner";
 import { NewSaleInput, useAddSale } from "@/hooks/useSales";
 import { User } from "@/types";
 
-const PRODUCTS = ["Formation Pro", "Coaching Premium", "Mastermind"];
 const PLATFORMS = ["Stripe", "PayPal", "Other"];
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -23,7 +22,7 @@ const emptyForm = (): NewSaleInput => ({
   clientEmail: "",
   product: "",
   closerId: "",
-  setterId: "",
+  setterId: null,
   amountTTC: 0,
   taxAmount: 0,
   paymentPlatform: "",
@@ -34,9 +33,10 @@ const emptyForm = (): NewSaleInput => ({
 type Props = {
   closers: User[];
   setters: User[];
+  products: string[];
 };
 
-const AddSaleDialog = ({ closers, setters }: Props) => {
+const AddSaleDialog = ({ closers, setters, products }: Props) => {
   const { t, locale } = useLanguage();
   const addSale = useAddSale();
   const [open, setOpen] = useState(false);
@@ -55,7 +55,7 @@ const AddSaleDialog = ({ closers, setters }: Props) => {
     if (!form.clientEmail.trim() || !EMAIL_REGEX.test(form.clientEmail.trim())) { toast.error(t("admin.validation.clientEmail")); return; }
     if (!form.product) { toast.error(t("admin.validation.product")); return; }
     if (!form.closerId) { toast.error(t("admin.validation.closer")); return; }
-    if (!form.setterId) { toast.error(t("admin.validation.setter")); return; }
+    // setter is optional
     if (form.amountTTC <= 0) { toast.error(t("admin.validation.amount")); return; }
     if (form.taxAmount < 0 || form.taxAmount >= form.amountTTC) { toast.error(t("admin.validation.tax")); return; }
     if (!form.paymentPlatform) { toast.error(t("admin.validation.platform")); return; }
@@ -108,7 +108,7 @@ const AddSaleDialog = ({ closers, setters }: Props) => {
               <Select value={form.product} onValueChange={v => set("product", v)}>
                 <SelectTrigger><SelectValue placeholder={t("admin.selectProduct")} /></SelectTrigger>
                 <SelectContent>
-                  {PRODUCTS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                  {products.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -126,10 +126,11 @@ const AddSaleDialog = ({ closers, setters }: Props) => {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-muted-foreground">{t("table.setter")}</Label>
-              <Select value={form.setterId} onValueChange={v => set("setterId", v)}>
+              <Label className="text-xs font-medium text-muted-foreground">{t("table.setter")} <span className="text-muted-foreground/60">(optional)</span></Label>
+              <Select value={form.setterId ?? "__none__"} onValueChange={v => set("setterId", v === "__none__" ? "" : v)}>
                 <SelectTrigger><SelectValue placeholder={t("admin.selectSetter")} /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="__none__">— No setter —</SelectItem>
                   {setters.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>

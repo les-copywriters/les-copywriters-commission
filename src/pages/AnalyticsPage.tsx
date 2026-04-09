@@ -51,7 +51,6 @@ const CHART_COLORS = {
   border:  "hsl(var(--border))",
   line:    "hsl(213,50%,25%)",
 };
-const PRODUCTS = ["Formation Pro", "Coaching Premium", "Mastermind"];
 
 // ─── Main component ───────────────────────────────────────────────────────────
 const AnalyticsPage = () => {
@@ -75,9 +74,10 @@ const AnalyticsPage = () => {
   const [filterCloser,     setFilterCloser]     = useState("all");
   const [filterSetter,     setFilterSetter]     = useState("all");
 
-  const closers = profiles.filter(p => p.role === "closer");
-  const setters = profiles.filter(p => p.role === "setter");
-  const fmt     = (n: number) => formatCurrency(n, locale);
+  const closers  = profiles.filter(p => p.role === "closer");
+  const setters  = profiles.filter(p => p.role === "setter");
+  const products = useMemo(() => [...new Set(allSales.map(s => s.product).filter(Boolean))].sort(), [allSales]);
+  const fmt      = (n: number) => formatCurrency(n, locale);
 
   const hasActiveFilters =
     filterProduct !== "all" || filterType !== "all" || filterStatus !== "all" ||
@@ -235,7 +235,7 @@ const AnalyticsPage = () => {
             <SelectTrigger className="h-9 w-44"><SelectValue placeholder={t("analytics.filter.product")} /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("analytics.filter.allProducts")}</SelectItem>
-              {PRODUCTS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              {products.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
             </SelectContent>
           </Select>
 

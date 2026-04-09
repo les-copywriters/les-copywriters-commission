@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useLanguage } from "@/i18n";
 import { formatCurrency } from "@/lib/formatCurrency";
 import AppLayout from "@/components/AppLayout";
@@ -31,6 +31,12 @@ const AdminPage = () => {
 
   const closers = profiles.filter(p => p.role === "closer");
   const setters = profiles.filter(p => p.role === "setter");
+
+  // Derive unique product names from real sales data
+  const products = useMemo(
+    () => [...new Set(sales.map(s => s.product).filter(Boolean))].sort(),
+    [sales]
+  );
 
   const [editing, setEditing] = useState<Sale | null>(null);
   const [commOverride, setCommOverride] = useState("");
@@ -121,7 +127,7 @@ const AdminPage = () => {
                     } else {
                       toast.info(t("sync.upToDate"));
                     }
-                    if (res.errors.length > 0) {
+                    if ((res.errors?.length ?? 0) > 0) {
                       toast.warning(`${res.errors.length} submission(s) skipped`, {
                         description: res.errors.slice(0, 3).join("\n"),
                       });
@@ -138,7 +144,7 @@ const AdminPage = () => {
             <Button variant="outline" size="sm" onClick={exportCSV} disabled={sales.length === 0} className="gap-2">
               <Download className="h-4 w-4" />{t("admin.exportCSV")}
             </Button>
-            <AddSaleDialog closers={closers} setters={setters} />
+            <AddSaleDialog closers={closers} setters={setters} products={products} />
           </div>
         </div>
 
