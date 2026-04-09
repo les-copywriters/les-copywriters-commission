@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 export type SyncResult = {
   total:    number;
   imported: number;
+  updated:  number;
   errors:   string[];
 };
 
@@ -23,7 +24,8 @@ export const useSyncJotform = () => {
       return data as SyncResult;
     },
     onSuccess: (data) => {
-      if (data.imported > 0) {
+      // Invalidate whenever anything changed (new imports OR setter updates)
+      if (data.imported > 0 || (data.updated ?? 0) > 0) {
         qc.invalidateQueries({ queryKey: ["sales"] });
       }
     },

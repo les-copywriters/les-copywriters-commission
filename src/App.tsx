@@ -80,8 +80,8 @@ const AppRoutes = () => (
     <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
     <Route path="/team" element={<AdminRoute><TeamPage /></AdminRoute>} />
     <Route path="/team/manage" element={<AdminRoute><TeamManagePage /></AdminRoute>} />
-    <Route path="/team/closer/:name" element={<ProtectedRoute><CloserDetailPage /></ProtectedRoute>} />
-    <Route path="/team/setter/:name" element={<ProtectedRoute><SetterDetailPage /></ProtectedRoute>} />
+    <Route path="/team/closer/:name" element={<AdminRoute><CloserDetailPage /></AdminRoute>} />
+    <Route path="/team/setter/:name" element={<AdminRoute><SetterDetailPage /></AdminRoute>} />
     <Route path="/analytics" element={<ProtectedRoute><AnalyticsPage /></ProtectedRoute>} />
     <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />

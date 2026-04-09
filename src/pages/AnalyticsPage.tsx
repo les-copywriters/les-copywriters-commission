@@ -9,7 +9,7 @@ import { formatMonth } from "@/lib/bonusCalculation";
 import AppLayout from "@/components/AppLayout";
 import StatCard from "@/components/StatCard";
 import SaleStatusBadge from "@/components/SaleStatusBadge";
-import SetterTag from "@/components/SetterTag";
+import ProfileTag from "@/components/ProfileTag";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -482,13 +482,13 @@ const AnalyticsPage = () => {
                         <TableCell className="text-muted-foreground text-sm">{s.date}</TableCell>
                         <TableCell className="font-medium">{s.clientName}</TableCell>
                         <TableCell className="text-sm">{s.product}</TableCell>
-                        {isAdmin  && <TableCell className="text-sm">{s.closer}</TableCell>}
-                        {isAdmin  && <TableCell><SetterTag setterId={s.setterId} setterName={s.setter} /></TableCell>}
+                        {isAdmin  && <TableCell><ProfileTag role="closer" personId={s.closerId} personName={s.closer} /></TableCell>}
+                        {isAdmin  && <TableCell><ProfileTag role="setter" personId={s.setterId} personName={s.setter} /></TableCell>}
                         {!isAdmin && (
                           <TableCell>
                             {isCloser
-                              ? <SetterTag setterId={s.setterId} setterName={s.setter} />
-                              : <span className="text-sm">{s.closer}</span>}
+                              ? <ProfileTag role="setter" personId={s.setterId} personName={s.setter} />
+                              : <ProfileTag role="closer" personId={s.closerId} personName={s.closer} />}
                           </TableCell>
                         )}
                         <TableCell>

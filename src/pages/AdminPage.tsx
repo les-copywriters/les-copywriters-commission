@@ -110,8 +110,14 @@ const AdminPage = () => {
               onClick={() =>
                 sync.mutate(undefined, {
                   onSuccess: (res) => {
-                    if (res.imported > 0) {
-                      toast.success(`${res.imported} ${t("sync.imported")}`);
+                    const updated = res.updated ?? 0;
+                    if (res.imported > 0 || updated > 0) {
+                      toast.success(
+                        [
+                          res.imported > 0 ? `${res.imported} ${t("sync.imported")}` : null,
+                          updated > 0 ? `${updated} setter(s) updated` : null,
+                        ].filter(Boolean).join(" · ")
+                      );
                     } else {
                       toast.info(t("sync.upToDate"));
                     }

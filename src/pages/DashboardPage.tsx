@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { formatCurrency } from "@/lib/formatCurrency";
 import { useSales } from "@/hooks/useSales";
 import { useRefunds } from "@/hooks/useRefunds";
@@ -9,7 +9,7 @@ import { useAuth } from "@/context/AuthContext";
 import { monthlyBonusBreakdown, formatMonth } from "@/lib/bonusCalculation";
 import AppLayout from "@/components/AppLayout";
 import StatCard from "@/components/StatCard";
-import SetterTag from "@/components/SetterTag";
+import ProfileTag from "@/components/ProfileTag";
 import { Button } from "@/components/ui/button";
 import SaleStatusBadge from "@/components/SaleStatusBadge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,6 +60,10 @@ const DashboardPage = () => {
   const isAdmin  = user?.role === "admin";
   const isCloser = user?.role === "closer";
   const isSetter = user?.role === "setter";
+
+  const PAGE_SIZE = 10;
+  const [adminVisible,  setAdminVisible]  = useState(PAGE_SIZE);
+  const [memberVisible, setMemberVisible] = useState(PAGE_SIZE);
 
   // Scope sales/refunds/impayes to the current user if not admin
   const sales = useMemo(() =>
@@ -215,12 +219,12 @@ const DashboardPage = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {sales.map(s => (
+                      {sales.slice(0, adminVisible).map(s => (
                         <TableRow key={s.id}>
                           <TableCell className="text-muted-foreground">{s.date}</TableCell>
                           <TableCell className="font-medium">{s.clientName}</TableCell>
-                          <TableCell>{s.closer}</TableCell>
-                          <TableCell><SetterTag setterId={s.setterId} setterName={s.setter} /></TableCell>
+                          <TableCell><ProfileTag role="closer" personId={s.closerId} personName={s.closer} /></TableCell>
+                          <TableCell><ProfileTag role="setter" personId={s.setterId} personName={s.setter} /></TableCell>
                           <TableCell className="text-right font-medium">{fmt(s.closerCommission)}</TableCell>
                           <TableCell className="text-right font-medium">{fmt(s.setterCommission)}</TableCell>
                           <TableCell><SaleStatusBadge refunded={s.refunded} impaye={s.impaye} /></TableCell>
@@ -228,6 +232,13 @@ const DashboardPage = () => {
                       ))}
                     </TableBody>
                   </Table>
+                  {sales.length > adminVisible && (
+                    <div className="mt-3 text-center">
+                      <Button variant="ghost" size="sm" onClick={() => setAdminVisible(v => v + PAGE_SIZE)}>
+                        Show more ({sales.length - adminVisible} remaining)
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </ChartCard>
@@ -260,10 +271,21 @@ const DashboardPage = () => {
               onClick={() =>
                 sync.mutate(undefined, {
                   onSuccess: (res) => {
-                    if (res.imported > 0) {
-                      toast.success(`${res.imported} ${t("sync.imported")}`);
+                    const updated = res.updated ?? 0;
+                    if (res.imported > 0 || updated > 0) {
+                      toast.success(
+                        [
+                          res.imported > 0 ? `${res.imported} ${t("sync.imported")}` : null,
+                          updated > 0 ? `${updated} setter(s) updated` : null,
+                        ].filter(Boolean).join(" · ")
+                      );
                     } else {
                       toast.info(t("sync.upToDate"));
+                    }
+                    if (res.errors?.length > 0) {
+                      toast.warning(`${res.errors.length} setter(s) not matched`, {
+                        description: res.errors.slice(0, 3).join("\n"),
+                      });
                     }
                   },
                   onError: (e) => toast.error(`${t("sync.error")}: ${e.message}`),
@@ -429,14 +451,14 @@ const DashboardPage = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {sales.map(s => (
+                    {sales.slice(0, memberVisible).map(s => (
                       <TableRow key={s.id}>
                         <TableCell className="text-muted-foreground">{s.date}</TableCell>
                         <TableCell className="font-medium">{s.clientName}</TableCell>
                         <TableCell>
                           {isCloser
-                            ? <SetterTag setterId={s.setterId} setterName={s.setter} />
-                            : s.closer}
+                            ? <ProfileTag role="setter" personId={s.setterId} personName={s.setter} />
+                            : <ProfileTag role="closer" personId={s.closerId} personName={s.closer} />}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1.5">
@@ -454,6 +476,13 @@ const DashboardPage = () => {
                     ))}
                   </TableBody>
                 </Table>
+                {sales.length > memberVisible && (
+                  <div className="mt-3 text-center">
+                    <Button variant="ghost" size="sm" onClick={() => setMemberVisible(v => v + PAGE_SIZE)}>
+                      Show more ({sales.length - memberVisible} remaining)
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

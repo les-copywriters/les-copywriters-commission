@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
+import ProfileTag from "@/components/ProfileTag";
 import { useSales } from "@/hooks/useSales";
 import { useBonusTiers } from "@/hooks/useBonusTiers";
 import { useLanguage } from "@/i18n";
@@ -218,7 +219,7 @@ const CloserDetailPage = () => {
                       <TableRow key={sale.id}>
                         <TableCell className="text-muted-foreground">{sale.date}</TableCell>
                         <TableCell className="font-medium">{sale.clientName}</TableCell>
-                        <TableCell>{sale.setter}</TableCell>
+                        <TableCell><ProfileTag role="setter" personId={sale.setterId} personName={sale.setter} /></TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1.5">
                             <SaleStatusBadge refunded={sale.refunded} impaye={sale.impaye} />

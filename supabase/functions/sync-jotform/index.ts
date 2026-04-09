@@ -30,6 +30,29 @@ function json(body: unknown, status = 200) {
   });
 }
 
+// ─── Fuzzy name matching ───────────────────────────────────────────────────────
+/** Lowercase + strip accents */
+function norm(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+}
+
+type Profile = { id: string; name: string; role: string };
+
+/**
+ * Match a name from JotForm against profiles in the DB.
+ * Tries (in order): exact → accent-insensitive → first-name only.
+ */
+function findProfile(name: string, role: string, profiles: Profile[]): Profile | undefined {
+  const n = norm(name);
+  // 1. Exact (case + accent insensitive)
+  const exact = profiles.find(p => p.role === role && norm(p.name) === n);
+  if (exact) return exact;
+  // 2. First-name only (handles "Céline Dupont" matching profile "Céline")
+  const first = n.split(/\s+/)[0];
+  return profiles.find(p => p.role === role && norm(p.name).split(/\s+/)[0] === first);
+}
+
+// ─── JotForm answer extractor ─────────────────────────────────────────────────
 function getAnswer(answers: Record<string, unknown>, fieldName: string): string {
   const entry = Object.values(answers).find(
     (a) => a !== null && typeof a === "object" && (a as Record<string, unknown>).name === fieldName,
@@ -43,117 +66,109 @@ function getAnswer(answers: Record<string, unknown>, fieldName: string): string 
   return String(ans).trim();
 }
 
+// ─── Handler ──────────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
-  console.log("[sync-jotform] request received, method:", req.method);
+  console.log("[sync-jotform] request received");
 
-  // ── Check secrets are configured ──────────────────────────────────────────
   if (!JOTFORM_API_KEY || !JOTFORM_FORM_ID) {
-    console.error("[sync-jotform] missing secrets — JOTFORM_API_KEY or JOTFORM_FORM_ID not set");
+    console.error("[sync-jotform] missing secrets");
     return json({ error: "JOTFORM_API_KEY and JOTFORM_FORM_ID secrets are not set" }, 500);
   }
-  console.log("[sync-jotform] secrets OK, form ID:", JOTFORM_FORM_ID);
 
-  // ── Auth header ────────────────────────────────────────────────────────────
   const authHeader = req.headers.get("Authorization");
-  if (!authHeader) {
-    console.error("[sync-jotform] no Authorization header");
-    return json({ error: "Missing Authorization header" }, 401);
-  }
-  console.log("[sync-jotform] auth header present");
+  if (!authHeader) return json({ error: "Missing Authorization header" }, 401);
 
   try {
-    // ── Service role client ──────────────────────────────────────────────────
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // ── Verify JWT ───────────────────────────────────────────────────────────
+    // Verify JWT
     const { data: { user }, error: authError } = await supabase.auth.getUser(
       authHeader.replace("Bearer ", ""),
     );
-    if (authError || !user) {
-      console.error("[sync-jotform] JWT verification failed:", authError?.message);
-      return json({ error: `Unauthorized: ${authError?.message ?? "invalid token"}` }, 401);
-    }
-    console.log("[sync-jotform] user verified:", user.id);
+    if (authError || !user) return json({ error: "Unauthorized" }, 401);
 
-    // ── Caller profile ────────────────────────────────────────────────────────
+    // Caller profile
     const { data: callerProfile } = await supabase
-      .from("profiles")
-      .select("id, name, role")
-      .eq("id", user.id)
-      .single();
-
+      .from("profiles").select("id, name, role").eq("id", user.id).single();
     const callerRole = callerProfile?.role ?? "";
-    console.log("[sync-jotform] caller role:", callerRole, "name:", callerProfile?.name);
+    console.log("[sync-jotform] caller:", callerProfile?.name, callerRole);
 
-    if (callerRole === "setter") {
-      return json({ ok: true, total: 0, imported: 0, errors: [] });
-    }
+    if (callerRole === "setter") return json({ ok: true, total: 0, imported: 0, errors: [] });
 
-    // ── Load all profiles ─────────────────────────────────────────────────────
+    // All profiles for fuzzy lookup
     const { data: allProfiles } = await supabase.from("profiles").select("id, name, role");
-    const profileMap = new Map(
-      (allProfiles ?? []).map((p) => [`${p.name}:${p.role}`, p]),
-    );
-    console.log("[sync-jotform] loaded", allProfiles?.length, "profiles");
+    const profiles: Profile[] = allProfiles ?? [];
+    console.log("[sync-jotform] profiles loaded:", profiles.map(p => `${p.name}(${p.role})`).join(", "));
 
-    // ── Existing submission IDs ───────────────────────────────────────────────
+    // Existing submission IDs (to skip already-imported, but we'll also check null-setter ones)
     const { data: existingRows } = await supabase
       .from("sales")
-      .select("jotform_submission_id")
+      .select("id, jotform_submission_id, setter_id")
       .not("jotform_submission_id", "is", null);
-    const existingIds = new Set((existingRows ?? []).map((r) => r.jotform_submission_id));
-    console.log("[sync-jotform] existing submission IDs in DB:", existingIds.size);
 
-    // ── Fetch from JotForm API ────────────────────────────────────────────────
+    // Two sets: already fully imported (has setter or legitimately no setter) vs needs setter update
+    const existingIds    = new Set<string>();
+    const nullSetterIds  = new Map<string, string>(); // submissionId → sale row id
+
+    for (const row of existingRows ?? []) {
+      if (row.setter_id !== null) {
+        existingIds.add(row.jotform_submission_id);  // complete — skip
+      } else {
+        nullSetterIds.set(row.jotform_submission_id, row.id); // may need setter filled in
+      }
+    }
+
+    console.log("[sync-jotform] existing complete:", existingIds.size, "| null-setter to retry:", nullSetterIds.size);
+
+    // Paginate JotForm
     const allSubs: Record<string, unknown>[] = [];
     let offset = 0;
-    const pageSize = 100;
-
     while (offset < 1000) {
       const url =
         `https://api.jotform.com/form/${JOTFORM_FORM_ID}/submissions` +
-        `?apiKey=${JOTFORM_API_KEY}&limit=${pageSize}&offset=${offset}&orderby=created_at,DESC`;
-
-      console.log("[sync-jotform] fetching page offset:", offset);
-      const res = await fetch(url);
-      const responseText = await res.text();
-
+        `?apiKey=${JOTFORM_API_KEY}&limit=100&offset=${offset}&orderby=created_at,DESC`;
+      const res  = await fetch(url);
+      const text = await res.text();
       if (!res.ok) {
-        console.error("[sync-jotform] JotForm API error:", res.status, responseText.slice(0, 300));
-        return json({ error: `JotForm API returned ${res.status}: ${responseText.slice(0, 200)}` }, 500);
+        console.error("[sync-jotform] JotForm API error:", res.status, text.slice(0, 200));
+        return json({ error: `JotForm API ${res.status}: ${text.slice(0, 200)}` }, 500);
       }
-
-      const jfData = JSON.parse(responseText);
-      const page: Record<string, unknown>[] = jfData.content ?? [];
-      console.log("[sync-jotform] page returned", page.length, "submissions");
+      const page: Record<string, unknown>[] = JSON.parse(text).content ?? [];
       allSubs.push(...page);
-      if (page.length < pageSize) break;
-      offset += pageSize;
+      if (page.length < 100) break;
+      offset += 100;
     }
+    console.log("[sync-jotform] fetched from JotForm:", allSubs.length);
 
-    console.log("[sync-jotform] total submissions from JotForm:", allSubs.length);
-
-    // ── Process each submission ───────────────────────────────────────────────
-    let imported = 0;
+    let imported = 0, updated = 0;
     const errors: string[] = [];
 
     for (const sub of allSubs) {
       if (sub.status !== "ACTIVE") continue;
 
-      const subId = String(sub.id ?? "");
-      if (!subId || existingIds.has(subId)) continue;
+      const subId   = String(sub.id ?? "");
+      if (!subId) continue;
 
-      const answers  = (sub.answers ?? {}) as Record<string, unknown>;
-      const get      = (f: keyof typeof FIELD_MAP) => getAnswer(answers, FIELD_MAP[f]);
+      const isNew         = !existingIds.has(subId) && !nullSetterIds.has(subId);
+      const needsUpdate   = nullSetterIds.has(subId);
+      if (!isNew && !needsUpdate) continue; // already complete
+
+      const answers    = (sub.answers ?? {}) as Record<string, unknown>;
+      const get        = (f: keyof typeof FIELD_MAP) => getAnswer(answers, FIELD_MAP[f]);
       const closerName = get("closer");
+      const setterName = get("setter");
 
-      if (!closerName || closerName.toLowerCase() === "autre") continue;
-      if (callerRole === "closer" && closerName !== callerProfile?.name) continue;
+      console.log(`[sync-jotform] sub ${subId} — closer: "${closerName}" setter: "${setterName}"`);
+
+      if (!closerName || norm(closerName) === "autre") continue;
+
+      // Scope: closers only process their own submissions
+      if (callerRole === "closer" && norm(closerName) !== norm(callerProfile?.name ?? "")) continue;
 
       const product = get("product");
       if (!product) continue;
@@ -161,27 +176,48 @@ Deno.serve(async (req) => {
       const totalRaw = parseFloat(get("totalAmount"));
       const nowRaw   = parseFloat(get("amountNow"));
       const amountHT = !isNaN(totalRaw) && totalRaw > 0 ? totalRaw
-                     : !isNaN(nowRaw)   && nowRaw   > 0 ? nowRaw
-                     : NaN;
+                     : !isNaN(nowRaw)   && nowRaw   > 0 ? nowRaw : NaN;
       if (isNaN(amountHT) || amountHT <= 0) continue;
 
       const ptRaw = get("paymentType").toLowerCase();
       const paymentType: "pif" | "installments" =
         ptRaw.includes("sequra") || ptRaw.includes("séqura") ? "installments" : "pif";
 
-      const closerProfile = profileMap.get(`${closerName}:closer`);
+      const closerProfile = findProfile(closerName, "closer", profiles);
       if (!closerProfile) { errors.push(`Closer not found: "${closerName}"`); continue; }
 
-      const setterName   = get("setter");
-      const noSetter     = !setterName ||
-        setterName.toLowerCase() === "aucun" ||
-        setterName.toLowerCase() === "autre";
-      const setterProfile = noSetter ? null : profileMap.get(`${setterName}:setter`);
+      const noSetter = !setterName ||
+        norm(setterName) === "aucun" || norm(setterName) === "autre" || setterName === "";
+      const setterProfile = noSetter ? null : findProfile(setterName, "setter", profiles);
+
+      if (!noSetter && !setterProfile) {
+        console.warn(`[sync-jotform] setter not matched: "${setterName}"`);
+        errors.push(`Setter not matched: "${setterName}"`);
+      }
 
       const createdAt  = typeof sub.created_at === "string" ? sub.created_at : "";
-      const dateOfSale = createdAt
-        ? createdAt.split(" ")[0]
-        : new Date().toISOString().split("T")[0];
+      const dateOfSale = createdAt ? createdAt.split(" ")[0] : new Date().toISOString().split("T")[0];
+
+      if (needsUpdate && setterProfile) {
+        // Fill in the missing setter on an existing record
+        const saleRowId = nullSetterIds.get(subId)!;
+        const { error: updErr } = await supabase
+          .from("sales")
+          .update({
+            setter_id:          setterProfile.id,
+            setter_commission:  Math.round(amountHT * SETTER_RATE * 100) / 100,
+          })
+          .eq("id", saleRowId);
+        if (updErr) {
+          errors.push(`Update ${subId}: ${updErr.message}`);
+        } else {
+          updated++;
+          existingIds.add(subId);
+        }
+        continue;
+      }
+
+      if (!isNew) continue;
 
       const { error: insertError } = await supabase.from("sales").insert({
         jotform_submission_id: subId,
@@ -195,7 +231,7 @@ Deno.serve(async (req) => {
         amount_ttc:         amountHT,
         tax_amount:         0,
         closer_commission:  Math.round(amountHT * CLOSER_RATE * 100) / 100,
-        setter_commission:  noSetter ? 0 : Math.round(amountHT * SETTER_RATE * 100) / 100,
+        setter_commission:  setterProfile ? Math.round(amountHT * SETTER_RATE * 100) / 100 : 0,
         refunded:           false,
         impaye:             false,
         payment_platform:   get("paymentPlatform") || null,
@@ -203,19 +239,18 @@ Deno.serve(async (req) => {
       });
 
       if (insertError) {
-        errors.push(`Sub ${subId}: ${insertError.message}`);
-        console.error("[sync-jotform] insert error for sub", subId, ":", insertError.message);
+        errors.push(`Insert ${subId}: ${insertError.message}`);
       } else {
         imported++;
         existingIds.add(subId);
       }
     }
 
-    console.log(`[sync-jotform] done — total: ${allSubs.length}, imported: ${imported}, errors: ${errors.length}`);
-    return json({ ok: true, total: allSubs.length, imported, errors });
+    console.log(`[sync-jotform] done — imported: ${imported}, updated: ${updated}, errors: ${errors.length}`);
+    return json({ ok: true, total: allSubs.length, imported, updated, errors });
 
   } catch (err) {
-    console.error("[sync-jotform] uncaught error:", err);
+    console.error("[sync-jotform] uncaught:", err);
     return json({ error: String(err) }, 500);
   }
 });

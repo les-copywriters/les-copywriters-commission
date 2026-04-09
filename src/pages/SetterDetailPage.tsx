@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
+import ProfileTag from "@/components/ProfileTag";
 import { useSales } from "@/hooks/useSales";
 import { useLanguage } from "@/i18n";
 import { formatCurrency } from "@/lib/formatCurrency";
@@ -118,7 +119,7 @@ const SetterDetailPage = () => {
                     <TableRow key={sale.id}>
                       <TableCell className="text-muted-foreground">{sale.date}</TableCell>
                       <TableCell className="font-medium">{sale.clientName}</TableCell>
-                      <TableCell>{sale.closer}</TableCell>
+                      <TableCell><ProfileTag role="closer" personId={sale.closerId} personName={sale.closer} /></TableCell>
                       <TableCell className="text-right">{fmt(sale.amount)}</TableCell>
                       <TableCell className="text-right font-medium">{fmt(sale.setterCommission)}</TableCell>
                       <TableCell>
