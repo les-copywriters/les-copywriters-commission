@@ -7,7 +7,8 @@ import ProfileTag from "@/components/ProfileTag";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, Eye } from "lucide-react";
+import SaleDetailsDialog from "@/components/SaleDetailsDialog";
 
 const PAGE_SIZE = 15;
 
@@ -21,6 +22,7 @@ const SalesTable = ({ sales, onEdit, onDelete }: Props) => {
   const { t, locale } = useLanguage();
   const fmt = (n: number) => formatCurrency(n, locale);
   const [visible, setVisible] = useState(PAGE_SIZE);
+  const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
 
   return (
     <div>
@@ -73,6 +75,9 @@ const SalesTable = ({ sales, onEdit, onDelete }: Props) => {
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(sale)}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedSale(sale)}>
+                      <Eye className="h-3.5 w-3.5" />
+                    </Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-destructive/10" onClick={() => onDelete(sale.id)}>
                       <Trash2 className="h-3.5 w-3.5 text-destructive" />
                     </Button>
@@ -91,6 +96,7 @@ const SalesTable = ({ sales, onEdit, onDelete }: Props) => {
           </Button>
         </div>
       )}
+      <SaleDetailsDialog sale={selectedSale} open={!!selectedSale} onOpenChange={(open) => !open && setSelectedSale(null)} />
     </div>
   );
 };

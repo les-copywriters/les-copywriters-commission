@@ -3,7 +3,6 @@ import { useLanguage } from "@/i18n";
 import { formatCurrency } from "@/lib/formatCurrency";
 import AppLayout from "@/components/AppLayout";
 import SalesTable from "@/components/admin/SalesTable";
-import AddSaleDialog from "@/components/admin/AddSaleDialog";
 import BonusTiersCard from "@/components/admin/BonusTiersCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,9 +18,10 @@ import { useSales, useUpdateCommission, useDeleteSale } from "@/hooks/useSales";
 import { useProfiles } from "@/hooks/useProfiles";
 import { Badge } from "@/components/ui/badge";
 import { useSyncJotform } from "@/hooks/useSyncJotform";
+import { useCommissionHealthReport } from "@/hooks/useCommissionHealthReport";
 import { cn } from "@/lib/utils";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, BellRing } from "lucide-react";
 
 const AdminPage = () => {
   const { t, locale } = useLanguage();
@@ -41,14 +41,15 @@ const AdminPage = () => {
   const updateCommission = useUpdateCommission();
   const deleteSale = useDeleteSale();
   const sync = useSyncJotform();
+  const healthReport = useCommissionHealthReport();
 
-  const closers = profiles.filter(p => p.role === "closer");
-  const setters = profiles.filter(p => p.role === "setter");
-
-  // Derive unique product names from real sales data
-  const products = useMemo(
-    () => [...new Set(sales.map(s => s.product).filter(Boolean))].sort(),
-    [sales]
+  const closerIds = useMemo(
+    () => new Set(profiles.filter((p) => p.role === "closer").map((p) => p.id)),
+    [profiles]
+  );
+  const setterIds = useMemo(
+    () => new Set(profiles.filter((p) => p.role === "setter").map((p) => p.id)),
+    [profiles]
   );
 
   const [editing, setEditing] = useState<Sale | null>(null);
@@ -106,10 +107,48 @@ const AdminPage = () => {
 
   const paidSales = sales.filter(s => !s.refunded && !s.impaye);
   const totalComm = paidSales.reduce((a, s) => a + s.closerCommission + s.setterCommission, 0);
+  const discrepancies = useMemo(() => {
+    return sales.flatMap((sale) => {
+      const issues: Array<{ category: string; issue: string }> = [];
+      if (!sale.jotformSubmissionId) issues.push({ category: "sync", issue: "Missing JotForm submission ID" });
+      if (!sale.clientEmail) issues.push({ category: "required_field", issue: "Missing client email" });
+      if (sale.amount <= 0) issues.push({ category: "amount", issue: "Invalid amount" });
+      if (!closerIds.has(sale.closerId)) issues.push({ category: "mapping", issue: "Closer profile mismatch" });
+      if (sale.setterId && !setterIds.has(sale.setterId)) issues.push({ category: "mapping", issue: "Setter profile mismatch" });
+      if (sale.paymentType === "installments" && (!sale.numInstallments || !sale.installmentAmount)) {
+        issues.push({ category: "installments", issue: "Installment fields incomplete" });
+      }
+      return issues.map((entry) => ({ saleId: sale.id, client: sale.clientName, ...entry }));
+    });
+  }, [sales, closerIds, setterIds]);
+  const discrepancyCounts = useMemo(
+    () =>
+      discrepancies.reduce<Record<string, number>>((acc, item) => {
+        acc[item.category] = (acc[item.category] ?? 0) + 1;
+        return acc;
+      }, {}),
+    [discrepancies]
+  );
   const showLoadError = salesLoadFailed || profilesLoadFailed;
   const loadErrorMessage = salesLoadFailed
     ? salesError instanceof Error ? salesError.message : "Failed to load commission data."
     : profilesError instanceof Error ? profilesError.message : "Failed to load profiles.";
+
+  const exportDiscrepancies = () => {
+    if (discrepancies.length === 0) return;
+    const headers = ["sale_id", "client", "category", "issue"];
+    const rows = discrepancies.map((item) => [item.saleId, item.client, item.category, item.issue]);
+    const csv = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `discrepancies_${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <AppLayout>
@@ -161,7 +200,26 @@ const AdminPage = () => {
             <Button variant="outline" size="sm" onClick={exportCSV} disabled={sales.length === 0} className="gap-2">
               <Download className="h-4 w-4" />{t("admin.exportCSV")}
             </Button>
-            <AddSaleDialog closers={closers} setters={setters} products={products} />
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={healthReport.isPending}
+              className="gap-2"
+              onClick={() =>
+                healthReport.mutate(
+                  { notifySlack: false },
+                  {
+                    onSuccess: (report) => {
+                      toast.success(`Health report generated (${report.totalDiscrepancies} discrepancies)`);
+                    },
+                    onError: (error) => toast.error(error.message),
+                  }
+                )
+              }
+            >
+              <BellRing className={cn("h-4 w-4", healthReport.isPending && "animate-pulse")} />
+              {healthReport.isPending ? "Running..." : "Run health report"}
+            </Button>
           </div>
         </div>
 
@@ -184,6 +242,57 @@ const AdminPage = () => {
             <p className="text-2xl font-bold mt-1 text-destructive">{sales.filter(s => s.refunded).length}</p>
           </div>
         </div>
+
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Automation mode enabled</AlertTitle>
+          <AlertDescription>
+            Sales should be synced from JotForm. Manual admin sale entry is intentionally disabled.
+          </AlertDescription>
+        </Alert>
+
+        <Card className="border border-border/60 shadow-card">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Data quality checks</CardTitle>
+            <div className="flex items-center gap-2">
+              <Badge variant={discrepancies.length === 0 ? "secondary" : "destructive"}>
+                {discrepancies.length} issue{discrepancies.length === 1 ? "" : "s"}
+              </Badge>
+              <Button variant="outline" size="sm" onClick={exportDiscrepancies} disabled={discrepancies.length === 0}>
+                Export issues
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {discrepancies.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No discrepancies detected in current sales data.</p>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(discrepancyCounts).map(([category, count]) => (
+                    <Badge key={category} variant="outline" className="text-xs">
+                      {category}: {count}
+                    </Badge>
+                  ))}
+                </div>
+                <div className="space-y-2">
+                {discrepancies.slice(0, 12).map((item) => (
+                  <div key={`${item.saleId}-${item.issue}`} className="rounded-md border border-border/60 p-3 text-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-medium">{item.client}</p>
+                      <Badge variant="secondary" className="text-[10px] uppercase">{item.category}</Badge>
+                    </div>
+                    <p className="text-muted-foreground">{item.issue}</p>
+                  </div>
+                ))}
+                {discrepancies.length > 12 && (
+                  <p className="text-xs text-muted-foreground">Showing first 12 issues.</p>
+                )}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Sales table */}
         <Card className="border border-border/60 shadow-card">

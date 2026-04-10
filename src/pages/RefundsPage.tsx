@@ -5,6 +5,7 @@ import AppLayout from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -48,6 +49,17 @@ const RefundsPage = () => {
   const refundsErrorMessage = refundsError instanceof Error ? refundsError.message : "Failed to load refunds.";
   const impayesErrorMessage = impayesError instanceof Error ? impayesError.message : "Failed to load unpaid records.";
   const salesErrorMessage = salesError instanceof Error ? salesError.message : "Failed to load sales.";
+  const now = new Date();
+  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - now.getDay());
+  weekStart.setHours(0, 0, 0, 0);
+
+  const monthlyRefundCount = refunds.filter((refund) => refund.date.startsWith(monthKey)).length;
+  const weeklyImpayesCount = impayes.filter((impaye) => {
+    const impayeDate = new Date(impaye.date);
+    return !Number.isNaN(impayeDate.getTime()) && impayeDate >= weekStart;
+  }).length;
 
   const handleToggle = (id: string) => {
     const refund = refunds.find(r => r.id === id);
@@ -63,6 +75,20 @@ const RefundsPage = () => {
     <AppLayout>
       <div className="space-y-6">
         <h1 className="text-3xl font-bold">{t("refunds.title")}</h1>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Card className="border border-border/60">
+            <CardContent className="p-4">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Refunds this month</p>
+              <p className="mt-1 text-2xl font-semibold">{monthlyRefundCount}</p>
+            </CardContent>
+          </Card>
+          <Card className="border border-border/60">
+            <CardContent className="p-4">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Failed payments this week</p>
+              <p className="mt-1 text-2xl font-semibold">{weeklyImpayesCount}</p>
+            </CardContent>
+          </Card>
+        </div>
 
         <Tabs defaultValue="refunds">
           <TabsList>

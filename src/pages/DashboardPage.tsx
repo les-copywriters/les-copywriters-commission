@@ -24,6 +24,8 @@ import {
 import { cn } from "@/lib/utils";
 import { useSyncJotform } from "@/hooks/useSyncJotform";
 import { toast } from "sonner";
+import SaleDetailsDialog from "@/components/SaleDetailsDialog";
+import { Sale } from "@/types";
 
 // ─── Shared skeleton loader ───────────────────────────────────────────────────
 const CardSkeletons = ({ n = 4 }: { n?: number }) => (
@@ -64,6 +66,7 @@ const DashboardPage = () => {
   const PAGE_SIZE = 10;
   const [adminVisible,  setAdminVisible]  = useState(PAGE_SIZE);
   const [memberVisible, setMemberVisible] = useState(PAGE_SIZE);
+  const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
 
   // Scope sales/refunds/impayes to the current user if not admin
   const sales = useMemo(() =>
@@ -216,6 +219,7 @@ const DashboardPage = () => {
                         <TableHead className="text-right">{t("table.closerComm")}</TableHead>
                         <TableHead className="text-right">{t("table.setterComm")}</TableHead>
                         <TableHead>{t("table.status")}</TableHead>
+                        <TableHead className="text-right">Details</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -228,6 +232,11 @@ const DashboardPage = () => {
                           <TableCell className="text-right font-medium">{fmt(s.closerCommission)}</TableCell>
                           <TableCell className="text-right font-medium">{fmt(s.setterCommission)}</TableCell>
                           <TableCell><SaleStatusBadge refunded={s.refunded} impaye={s.impaye} /></TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="sm" onClick={() => setSelectedSale(s)}>
+                              View
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -448,6 +457,7 @@ const DashboardPage = () => {
                       <TableHead>{t("table.status")}</TableHead>
                       <TableHead className="text-right">{t("table.amount")}</TableHead>
                       <TableHead className="text-right">{commLabel}</TableHead>
+                      <TableHead className="text-right">Details</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -472,6 +482,11 @@ const DashboardPage = () => {
                         <TableCell className="text-right font-medium">
                           {fmt(isCloser ? s.closerCommission : s.setterCommission)}
                         </TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="ghost" size="sm" onClick={() => setSelectedSale(s)}>
+                            View
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -488,6 +503,7 @@ const DashboardPage = () => {
           </CardContent>
         </Card>
       </div>
+      <SaleDetailsDialog sale={selectedSale} open={!!selectedSale} onOpenChange={(open) => !open && setSelectedSale(null)} />
     </AppLayout>
   );
 };

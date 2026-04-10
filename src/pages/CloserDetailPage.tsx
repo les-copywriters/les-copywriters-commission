@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import ProfileTag from "@/components/ProfileTag";
 import { useSales } from "@/hooks/useSales";
@@ -18,6 +18,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ArrowLeft, TrendingUp, DollarSign, ShoppingCart, AlertTriangle, Gift } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
+import SaleDetailsDialog from "@/components/SaleDetailsDialog";
+import { Sale } from "@/types";
 
 const CloserDetailPage = () => {
   const { name } = useParams<{ name: string }>();
@@ -37,6 +39,7 @@ const CloserDetailPage = () => {
   } = useBonusTiers();
 
   const decodedName = decodeURIComponent(name || "");
+  const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
 
   const { sales, totalComm, totalSales, refundedSales, unpaidSales, avgCommission, productData } = useMemo(() => {
     const sales = allSales.filter(s => s.closer === decodedName);
@@ -249,6 +252,7 @@ const CloserDetailPage = () => {
                       <TableHead>{t("table.status")}</TableHead>
                       <TableHead className="text-right">{t("table.amount")}</TableHead>
                       <TableHead className="text-right">{t("table.closerComm")}</TableHead>
+                      <TableHead className="text-right">Details</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -267,6 +271,11 @@ const CloserDetailPage = () => {
                         </TableCell>
                         <TableCell className="text-right">{fmt(sale.amount)}</TableCell>
                         <TableCell className="text-right font-medium">{fmt(sale.closerCommission)}</TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="ghost" size="sm" onClick={() => setSelectedSale(sale)}>
+                            View
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -276,6 +285,7 @@ const CloserDetailPage = () => {
           </CardContent>
         </Card>
       </div>
+      <SaleDetailsDialog sale={selectedSale} open={!!selectedSale} onOpenChange={(open) => !open && setSelectedSale(null)} />
     </AppLayout>
   );
 };
