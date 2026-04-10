@@ -20,11 +20,24 @@ import { useProfiles } from "@/hooks/useProfiles";
 import { Badge } from "@/components/ui/badge";
 import { useSyncJotform } from "@/hooks/useSyncJotform";
 import { cn } from "@/lib/utils";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertTriangle } from "lucide-react";
 
 const AdminPage = () => {
   const { t, locale } = useLanguage();
-  const { data: sales = [], isLoading } = useSales();
-  const { data: profiles = [] } = useProfiles();
+  const {
+    data: sales = [],
+    isLoading,
+    isError: salesLoadFailed,
+    error: salesError,
+    refetch: refetchSales,
+  } = useSales();
+  const {
+    data: profiles = [],
+    isError: profilesLoadFailed,
+    error: profilesError,
+    refetch: refetchProfiles,
+  } = useProfiles();
   const updateCommission = useUpdateCommission();
   const deleteSale = useDeleteSale();
   const sync = useSyncJotform();
@@ -93,6 +106,10 @@ const AdminPage = () => {
 
   const paidSales = sales.filter(s => !s.refunded && !s.impaye);
   const totalComm = paidSales.reduce((a, s) => a + s.closerCommission + s.setterCommission, 0);
+  const showLoadError = salesLoadFailed || profilesLoadFailed;
+  const loadErrorMessage = salesLoadFailed
+    ? salesError instanceof Error ? salesError.message : "Failed to load commission data."
+    : profilesError instanceof Error ? profilesError.message : "Failed to load profiles.";
 
   return (
     <AppLayout>
@@ -180,7 +197,25 @@ const AdminPage = () => {
             </Badge>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
+            {showLoadError ? (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Unable to load admin data</AlertTitle>
+                <AlertDescription className="space-y-3">
+                  <p>{loadErrorMessage}</p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      refetchSales();
+                      refetchProfiles();
+                    }}
+                  >
+                    Retry
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            ) : isLoading ? (
               <div className="space-y-3">
                 {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
               </div>

@@ -59,6 +59,13 @@ function NavGroup({
   onNavigate: () => void;
 }) {
   const { t } = useLanguage();
+  const getScore = (to: string) => {
+    if (pathname === to) return 1000 + to.length;
+    if (pathname.startsWith(`${to}/`)) return to.length;
+    return -1;
+  };
+  const bestScore = items.reduce((max, item) => Math.max(max, getScore(item.to)), -1);
+
   return (
     <div className="space-y-0.5">
       {label && (
@@ -67,19 +74,27 @@ function NavGroup({
         </p>
       )}
       {items.map(({ to, labelKey, icon: Icon }) => {
-        const active = pathname === to || (to !== "/dashboard" && to !== "/analytics" && pathname.startsWith(to));
+        const active = bestScore >= 0 && getScore(to) === bestScore;
         return (
           <Link
             key={to}
             to={to}
             onClick={onNavigate}
+            aria-current={active ? "page" : undefined}
             className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-150",
+              "relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
               active
-                ? "bg-primary text-white shadow-sm"
+                ? "bg-primary text-white shadow-sm pl-4"
                 : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
             )}
           >
+            <span
+              aria-hidden="true"
+              className={cn(
+                "absolute left-1.5 top-1/2 h-5 w-1 -translate-y-1/2 rounded-full transition-all duration-200",
+                active ? "bg-white/90 opacity-100" : "opacity-0"
+              )}
+            />
             <Icon className="h-4 w-4 shrink-0" />
             {t(labelKey)}
           </Link>
@@ -90,14 +105,22 @@ function NavGroup({
 }
 
 // ─── Main sidebar ─────────────────────────────────────────────────────────────
-const AppSidebar = ({ open, onToggle }: { open: boolean; onToggle: () => void }) => {
+const AppSidebar = ({
+  open,
+  onToggle,
+  onNavigate,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  onNavigate: () => void;
+}) => {
   const { pathname } = useLocation();
   const { logout, user } = useAuth();
   const navigate = useNavigate();
   const { t } = useLanguage();
 
   const isAdmin = user?.role === "admin";
-  const handleLogout = () => { logout(); navigate("/"); };
+  const handleLogout = () => { onNavigate(); logout(); navigate("/"); };
 
   return (
     <>
@@ -142,7 +165,7 @@ const AppSidebar = ({ open, onToggle }: { open: boolean; onToggle: () => void })
           <NavGroup
             items={mainItems}
             pathname={pathname}
-            onNavigate={onToggle}
+            onNavigate={onNavigate}
           />
 
           {isAdmin && (
@@ -150,7 +173,7 @@ const AppSidebar = ({ open, onToggle }: { open: boolean; onToggle: () => void })
               label={t("nav.adminSection")}
               items={adminItems}
               pathname={pathname}
-              onNavigate={onToggle}
+              onNavigate={onNavigate}
             />
           )}
 
@@ -158,7 +181,7 @@ const AppSidebar = ({ open, onToggle }: { open: boolean; onToggle: () => void })
             label={t("nav.accountSection")}
             items={[{ to: "/settings", labelKey: "nav.settings", icon: Settings }]}
             pathname={pathname}
-            onNavigate={onToggle}
+            onNavigate={onNavigate}
           />
         </nav>
 

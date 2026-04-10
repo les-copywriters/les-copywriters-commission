@@ -23,11 +23,54 @@ const CORS = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const JOTFORM_PAGE_SIZE = 100;
+const JOTFORM_MAX_PAGES = 100;
+const JOTFORM_FETCH_TIMEOUT_MS = 15000;
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...CORS, "Content-Type": "application/json" },
   });
+}
+
+async function fetchJotformPage(offset: number): Promise<Record<string, unknown>[]> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), JOTFORM_FETCH_TIMEOUT_MS);
+
+  try {
+    const url =
+      `https://api.jotform.com/form/${JOTFORM_FORM_ID}/submissions` +
+      `?apiKey=${JOTFORM_API_KEY}&limit=${JOTFORM_PAGE_SIZE}&offset=${offset}&orderby=created_at,DESC`;
+
+    const res = await fetch(url, { signal: controller.signal });
+    const text = await res.text();
+
+    if (!res.ok) {
+      console.error("[sync-jotform] JotForm API error:", res.status, text.slice(0, 200));
+      throw new Error(`JotForm API ${res.status}: ${text.slice(0, 200)}`);
+    }
+
+    let parsed: { content?: unknown };
+    try {
+      parsed = JSON.parse(text) as { content?: unknown };
+    } catch {
+      throw new Error("JotForm returned invalid JSON.");
+    }
+
+    if (!Array.isArray(parsed.content)) {
+      throw new Error("JotForm response missing content array.");
+    }
+
+    return parsed.content as Record<string, unknown>[];
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("JotForm request timed out.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 // ─── Fuzzy name matching ───────────────────────────────────────────────────────
@@ -69,6 +112,7 @@ function getAnswer(answers: Record<string, unknown>, fieldName: string): string 
 // ─── Handler ──────────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+  if (req.method !== "POST") return json({ ok: false, error: "Method not allowed" }, 405);
 
   console.log("[sync-jotform] request received");
 
@@ -98,18 +142,26 @@ Deno.serve(async (req) => {
     const callerRole = callerProfile?.role ?? "";
     console.log("[sync-jotform] caller:", callerProfile?.name, callerRole);
 
-    if (callerRole === "setter") return json({ ok: true, total: 0, imported: 0, errors: [] });
+    if (callerRole !== "admin") {
+      return json({ ok: false, error: "Admin access required" }, 403);
+    }
 
     // All profiles for fuzzy lookup
-    const { data: allProfiles } = await supabase.from("profiles").select("id, name, role");
+    const { data: allProfiles, error: profilesError } = await supabase.from("profiles").select("id, name, role");
+    if (profilesError) {
+      return json({ ok: false, error: `Profiles lookup failed: ${profilesError.message}` }, 500);
+    }
     const profiles: Profile[] = allProfiles ?? [];
     console.log("[sync-jotform] profiles loaded:", profiles.map(p => `${p.name}(${p.role})`).join(", "));
 
     // Existing submission IDs (to skip already-imported, but we'll also check null-setter ones)
-    const { data: existingRows } = await supabase
+    const { data: existingRows, error: existingRowsError } = await supabase
       .from("sales")
       .select("id, jotform_submission_id, setter_id")
       .not("jotform_submission_id", "is", null);
+    if (existingRowsError) {
+      return json({ ok: false, error: `Sales preload failed: ${existingRowsError.message}` }, 500);
+    }
 
     // Two sets: already fully imported (has setter or legitimately no setter) vs needs setter update
     const existingIds    = new Set<string>();
@@ -128,20 +180,16 @@ Deno.serve(async (req) => {
     // Paginate JotForm
     const allSubs: Record<string, unknown>[] = [];
     let offset = 0;
-    while (offset < 1000) {
-      const url =
-        `https://api.jotform.com/form/${JOTFORM_FORM_ID}/submissions` +
-        `?apiKey=${JOTFORM_API_KEY}&limit=100&offset=${offset}&orderby=created_at,DESC`;
-      const res  = await fetch(url);
-      const text = await res.text();
-      if (!res.ok) {
-        console.error("[sync-jotform] JotForm API error:", res.status, text.slice(0, 200));
-        return json({ error: `JotForm API ${res.status}: ${text.slice(0, 200)}` }, 500);
-      }
-      const page: Record<string, unknown>[] = JSON.parse(text).content ?? [];
+    let pageCount = 0;
+    while (true) {
+      const page = await fetchJotformPage(offset);
       allSubs.push(...page);
-      if (page.length < 100) break;
-      offset += 100;
+      if (page.length < JOTFORM_PAGE_SIZE) break;
+      offset += JOTFORM_PAGE_SIZE;
+      pageCount += 1;
+      if (pageCount > JOTFORM_MAX_PAGES) {
+        return json({ ok: false, error: "JotForm pagination safety limit reached" }, 500);
+      }
     }
     console.log("[sync-jotform] fetched from JotForm:", allSubs.length);
 
@@ -251,6 +299,6 @@ Deno.serve(async (req) => {
 
   } catch (err) {
     console.error("[sync-jotform] uncaught:", err);
-    return json({ error: String(err) }, 500);
+    return json({ ok: false, error: String(err) }, 500);
   }
 });

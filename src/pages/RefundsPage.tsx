@@ -13,12 +13,31 @@ import { toast } from "sonner";
 import { useRefunds, useUpdateRefundStatus } from "@/hooks/useRefunds";
 import { useImpayes } from "@/hooks/useImpayes";
 import { useSales } from "@/hooks/useSales";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertTriangle } from "lucide-react";
 
 const RefundsPage = () => {
   const { t, locale } = useLanguage();
-  const { data: refunds = [], isLoading: loadingRefunds } = useRefunds();
-  const { data: impayes = [], isLoading: loadingImpayes } = useImpayes();
-  const { data: sales = [] } = useSales();
+  const {
+    data: refunds = [],
+    isLoading: loadingRefunds,
+    isError: refundsLoadFailed,
+    error: refundsError,
+    refetch: refetchRefunds,
+  } = useRefunds();
+  const {
+    data: impayes = [],
+    isLoading: loadingImpayes,
+    isError: impayesLoadFailed,
+    error: impayesError,
+    refetch: refetchImpayes,
+  } = useImpayes();
+  const {
+    data: sales = [],
+    isError: salesLoadFailed,
+    error: salesError,
+    refetch: refetchSales,
+  } = useSales();
   const updateStatus = useUpdateRefundStatus();
 
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -26,6 +45,9 @@ const RefundsPage = () => {
   const fmt = (n: number) => formatCurrency(n, locale);
   const saleNameMap = useMemo(() => new Map(sales.map(s => [s.id, s.clientName])), [sales]);
   const getSaleName = (saleId: string) => saleNameMap.get(saleId) ?? saleId;
+  const refundsErrorMessage = refundsError instanceof Error ? refundsError.message : "Failed to load refunds.";
+  const impayesErrorMessage = impayesError instanceof Error ? impayesError.message : "Failed to load unpaid records.";
+  const salesErrorMessage = salesError instanceof Error ? salesError.message : "Failed to load sales.";
 
   const handleToggle = (id: string) => {
     const refund = refunds.find(r => r.id === id);
@@ -52,7 +74,25 @@ const RefundsPage = () => {
             <Card className="border-0 shadow-sm">
               <CardHeader><CardTitle className="text-base">{t("refunds.requestsTitle")}</CardTitle></CardHeader>
               <CardContent>
-                {loadingRefunds ? (
+                {refundsLoadFailed || salesLoadFailed ? (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Unable to load refunds</AlertTitle>
+                    <AlertDescription className="space-y-3">
+                      <p>{refundsLoadFailed ? refundsErrorMessage : salesErrorMessage}</p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          refetchRefunds();
+                          refetchSales();
+                        }}
+                      >
+                        Retry
+                      </Button>
+                    </AlertDescription>
+                  </Alert>
+                ) : loadingRefunds ? (
                   <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
                 ) : refunds.length === 0 ? (
                   <p className="text-center py-8 text-muted-foreground">{t("refunds.noRefunds")}</p>
@@ -96,7 +136,25 @@ const RefundsPage = () => {
             <Card className="border-0 shadow-sm">
               <CardHeader><CardTitle className="text-base">{t("refunds.failedTitle")}</CardTitle></CardHeader>
               <CardContent>
-                {loadingImpayes ? (
+                {impayesLoadFailed || salesLoadFailed ? (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Unable to load failed payments</AlertTitle>
+                    <AlertDescription className="space-y-3">
+                      <p>{impayesLoadFailed ? impayesErrorMessage : salesErrorMessage}</p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          refetchImpayes();
+                          refetchSales();
+                        }}
+                      >
+                        Retry
+                      </Button>
+                    </AlertDescription>
+                  </Alert>
+                ) : loadingImpayes ? (
                   <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
                 ) : impayes.length === 0 ? (
                   <p className="text-center py-8 text-muted-foreground">{t("refunds.noImpayes")}</p>

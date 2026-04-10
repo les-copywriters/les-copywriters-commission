@@ -11,13 +11,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ArrowLeft, TrendingUp, DollarSign, ShoppingCart, AlertTriangle } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 const SetterDetailPage = () => {
   const { name } = useParams<{ name: string }>();
   const { t, locale } = useLanguage();
-  const { data: allSales = [], isLoading } = useSales();
+  const {
+    data: allSales = [],
+    isLoading,
+    isError: salesLoadFailed,
+    error: salesError,
+    refetch: refetchSales,
+  } = useSales();
 
   const decodedName = decodeURIComponent(name || "");
 
@@ -50,6 +57,7 @@ const SetterDetailPage = () => {
   }, [allSales, decodedName]);
 
   const fmt = (n: number) => formatCurrency(n, locale);
+  const loadErrorMessage = salesError instanceof Error ? salesError.message : "Failed to load setter details.";
 
   return (
     <AppLayout>
@@ -64,7 +72,17 @@ const SetterDetailPage = () => {
           </div>
         </div>
 
-        {isLoading ? (
+        {salesLoadFailed ? (
+          <Alert variant="destructive">
+            <AlertTitle>Unable to load setter data</AlertTitle>
+            <AlertDescription className="space-y-3">
+              <p>{loadErrorMessage}</p>
+              <Button size="sm" variant="outline" onClick={() => refetchSales()}>
+                Retry
+              </Button>
+            </AlertDescription>
+          </Alert>
+        ) : isLoading ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
           </div>
@@ -97,7 +115,9 @@ const SetterDetailPage = () => {
         <Card className="border-0 shadow-sm">
           <CardHeader><CardTitle className="text-base">{t("detail.salesHistory")}</CardTitle></CardHeader>
           <CardContent>
-            {isLoading ? (
+            {salesLoadFailed ? (
+              <p className="text-center py-8 text-muted-foreground">Unable to load sales history.</p>
+            ) : isLoading ? (
               <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
             ) : sales.length === 0 ? (
               <p className="text-center py-8 text-muted-foreground">{t("dashboard.noData")}</p>

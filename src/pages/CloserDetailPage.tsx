@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ArrowLeft, TrendingUp, DollarSign, ShoppingCart, AlertTriangle, Gift } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
@@ -21,8 +22,19 @@ import { cn } from "@/lib/utils";
 const CloserDetailPage = () => {
   const { name } = useParams<{ name: string }>();
   const { t, locale } = useLanguage();
-  const { data: allSales = [], isLoading } = useSales();
-  const { data: tiers = [] } = useBonusTiers();
+  const {
+    data: allSales = [],
+    isLoading,
+    isError: salesLoadFailed,
+    error: salesError,
+    refetch: refetchSales,
+  } = useSales();
+  const {
+    data: tiers = [],
+    isError: tiersLoadFailed,
+    error: tiersError,
+    refetch: refetchTiers,
+  } = useBonusTiers();
 
   const decodedName = decodeURIComponent(name || "");
 
@@ -64,6 +76,10 @@ const CloserDetailPage = () => {
   const isCurrentMonth  = currentMonthBonus?.month === currentMonthKey;
 
   const fmt = (n: number) => formatCurrency(n, locale);
+  const loadError = salesLoadFailed || tiersLoadFailed;
+  const loadErrorMessage = salesLoadFailed
+    ? salesError instanceof Error ? salesError.message : "Failed to load closer details."
+    : tiersError instanceof Error ? tiersError.message : "Failed to load bonus tiers.";
 
   return (
     <AppLayout>
@@ -78,7 +94,24 @@ const CloserDetailPage = () => {
           </div>
         </div>
 
-        {isLoading ? (
+        {loadError ? (
+          <Alert variant="destructive">
+            <AlertTitle>Unable to load closer data</AlertTitle>
+            <AlertDescription className="space-y-3">
+              <p>{loadErrorMessage}</p>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  refetchSales();
+                  refetchTiers();
+                }}
+              >
+                Retry
+              </Button>
+            </AlertDescription>
+          </Alert>
+        ) : isLoading ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
           </div>
@@ -147,7 +180,9 @@ const CloserDetailPage = () => {
           <Card className="border border-border/60 shadow-card">
             <CardHeader><CardTitle className="text-base">{t("bonus.history")}</CardTitle></CardHeader>
             <CardContent>
-              {bonusHistory.length === 0 ? (
+              {loadError ? (
+                <p className="text-sm text-muted-foreground py-2">Unable to load bonus history.</p>
+              ) : bonusHistory.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-2">{t("common.noData")}</p>
               ) : (
                 <Table>
@@ -197,7 +232,9 @@ const CloserDetailPage = () => {
         <Card className="border-0 shadow-sm">
           <CardHeader><CardTitle className="text-base">{t("detail.salesHistory")}</CardTitle></CardHeader>
           <CardContent>
-            {isLoading ? (
+            {loadError ? (
+              <p className="text-center py-8 text-muted-foreground">Unable to load sales history.</p>
+            ) : isLoading ? (
               <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
             ) : sales.length === 0 ? (
               <p className="text-center py-8 text-muted-foreground">{t("dashboard.noData")}</p>

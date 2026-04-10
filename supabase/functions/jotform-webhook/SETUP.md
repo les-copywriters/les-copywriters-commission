@@ -35,6 +35,14 @@ npx supabase functions deploy jotform-webhook --project-ref YOUR_PROJECT_REF
 
 Replace `YOUR_PROJECT_REF` with your Supabase project ref (Settings → General).
 
+Optional but recommended security hardening:
+
+```bash
+npx supabase secrets set JOTFORM_WEBHOOK_SECRET="your-long-random-secret" --project-ref YOUR_PROJECT_REF
+```
+
+If `JOTFORM_WEBHOOK_SECRET` is set, the webhook requires header `x-webhook-secret` to match.
+
 ---
 
 ## Step 2 — Add the Webhook URL in JotForm
@@ -46,6 +54,10 @@ Replace `YOUR_PROJECT_REF` with your Supabase project ref (Settings → General)
    https://YOUR_PROJECT_REF.supabase.co/functions/v1/jotform-webhook
    ```
 4. Save
+
+If you enabled `JOTFORM_WEBHOOK_SECRET`, configure your webhook sender to include:
+
+`x-webhook-secret: your-long-random-secret`
 
 ---
 

@@ -1,5 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import { useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -24,14 +26,13 @@ const queryClient = new QueryClient({
       // Only retry once — retrying 3 times on a broken Supabase query wastes time
       // and makes the UI feel unresponsive
       retry: 1,
-      // Data is considered fresh for 2 minutes — avoids hammering Supabase
-      // on every navigation while keeping data reasonably up to date
-      staleTime: 1000 * 60 * 2,
+      // Keep freshness tighter for collaborative admin workflows.
+      staleTime: 1000 * 60,
       // Keep unused data in cache for 10 minutes
       gcTime: 1000 * 60 * 10,
-      // Don't refetch when the window regains focus — prevents surprise reloads
-      // while an admin is mid-edit
-      refetchOnWindowFocus: false,
+      // Refetch on focus/reconnect to reduce stale admin views across users.
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
     },
     mutations: {
       // Never retry mutations — a failed insert/update should be explicit,
@@ -56,6 +57,16 @@ const LoadingScreen = () => (
     </p>
   </div>
 );
+
+const ScrollToTop = () => {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+  }, [pathname]);
+
+  return null;
+};
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -97,6 +108,7 @@ const App = () => (
         <AuthProvider>
           <ErrorBoundary>
             <BrowserRouter>
+              <ScrollToTop />
               <AppRoutes />
             </BrowserRouter>
           </ErrorBoundary>

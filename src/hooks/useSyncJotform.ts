@@ -15,18 +15,33 @@ export const useSyncJotform = () => {
       const { data, error } = await supabase.functions.invoke("sync-jotform");
 
       if (error) {
-        // supabase-js wraps the real response body — extract it
-        const body = await (error as any).context?.json?.().catch?.(() => null);
+        const body = await (error as { context?: { json?: () => Promise<{ error?: string }> } })
+          .context
+          ?.json
+          ?.()
+          .catch?.(() => null);
         throw new Error(body?.error ?? error.message);
       }
 
-      if (!data?.ok) throw new Error(data?.error ?? "Sync failed");
-      return data as SyncResult;
+      if (!data || typeof data !== "object") {
+        throw new Error("Invalid sync response.");
+      }
+
+      const result = data as SyncResult & { ok?: boolean; error?: string };
+      if (!result.ok) throw new Error(result.error ?? "Sync failed");
+
+      return {
+        total: result.total ?? 0,
+        imported: result.imported ?? 0,
+        updated: result.updated ?? 0,
+        errors: Array.isArray(result.errors) ? result.errors : [],
+      };
     },
     onSuccess: (data) => {
-      // Invalidate whenever anything changed (new imports OR setter updates)
-      if (data.imported > 0 || (data.updated ?? 0) > 0) {
-        qc.invalidateQueries({ queryKey: ["sales"] });
+      // Always refetch sales post-sync to keep admin views deterministic.
+      qc.invalidateQueries({ queryKey: ["sales"] });
+      if ((data.updated ?? 0) > 0) {
+        qc.invalidateQueries({ queryKey: ["profiles"] });
       }
     },
   });

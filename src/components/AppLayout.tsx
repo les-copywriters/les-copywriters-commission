@@ -5,13 +5,15 @@ import LoadingBar from "@/components/LoadingBar";
 /** Layout wrapper for authenticated pages — sidebar + top loading bar */
 const AppLayout = ({ children }: { children: ReactNode }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const closeSidebar = () => setSidebarOpen(false);
+  const toggleSidebar = () => setSidebarOpen((o) => !o);
 
   return (
     <div className="flex min-h-screen">
       {/* Global fetch indicator */}
       <LoadingBar />
 
-      <AppSidebar open={sidebarOpen} onToggle={() => setSidebarOpen((o) => !o)} />
+      <AppSidebar open={sidebarOpen} onToggle={toggleSidebar} onNavigate={closeSidebar} />
 
       {/* Page content fades in on every mount */}
       <main

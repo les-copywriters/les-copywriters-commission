@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useProfiles, useUpdateProfile } from "@/hooks/useProfiles";
 import { useLanguage } from "@/i18n";
 import { supabase } from "@/lib/supabase";
@@ -16,6 +16,8 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { User, UserRole } from "@/types";
 import { useAuth } from "@/context/AuthContext";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -28,7 +30,13 @@ const roleVariant: Record<UserRole, string> = {
 const TeamManagePage = () => {
   const { t } = useLanguage();
   const { user: currentUser } = useAuth();
-  const { data: profiles = [], isLoading } = useProfiles();
+  const {
+    data: profiles = [],
+    isLoading,
+    isError: profilesLoadFailed,
+    error: profilesError,
+    refetch: refetchProfiles,
+  } = useProfiles();
   const updateProfile = useUpdateProfile();
   const queryClient = useQueryClient();
 
@@ -45,6 +53,9 @@ const TeamManagePage = () => {
   const [invitePassword, setInvitePassword] = useState("");
   const [inviteRole, setInviteRole]       = useState<UserRole>("closer");
   const [inviting, setInviting]           = useState(false);
+  const [search, setSearch] = useState("");
+  const [activeFilter, setActiveFilter] = useState<"all" | UserRole>("all");
+  const loadErrorMessage = profilesError instanceof Error ? profilesError.message : "Failed to load team members.";
 
   const openEdit = (profile: User) => {
     setEditing(profile);
@@ -78,8 +89,16 @@ const TeamManagePage = () => {
       body: { name: inviteName.trim(), email: inviteEmail.trim().toLowerCase(), password: invitePassword, role: inviteRole },
     });
 
-    if (error || data?.error) {
-      toast.error(data?.error ?? t("teamManage.inviteError"));
+    let inviteErrorMessage: string | null = null;
+    if (error) {
+      const body = await (error as { context?: { json?: () => Promise<{ error?: string }> } }).context?.json?.().catch?.(() => null);
+      inviteErrorMessage = body?.error ?? error.message;
+    } else if (data && typeof data === "object" && "error" in data && data.error) {
+      inviteErrorMessage = String(data.error);
+    }
+
+    if (inviteErrorMessage) {
+      toast.error(inviteErrorMessage || t("teamManage.inviteError"));
     } else {
       toast.success(t("teamManage.inviteSuccess"));
       setInviteOpen(false);
@@ -89,9 +108,18 @@ const TeamManagePage = () => {
     setInviting(false);
   };
 
-  const closers = profiles.filter(p => p.role === "closer");
-  const setters = profiles.filter(p => p.role === "setter");
-  const admins  = profiles.filter(p => p.role === "admin");
+  const filteredProfiles = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return profiles.filter((profile) => {
+      if (activeFilter !== "all" && profile.role !== activeFilter) return false;
+      if (!q) return true;
+      return profile.name.toLowerCase().includes(q);
+    });
+  }, [profiles, search, activeFilter]);
+
+  const closers = filteredProfiles.filter((p) => p.role === "closer");
+  const setters = filteredProfiles.filter((p) => p.role === "setter");
+  const admins = filteredProfiles.filter((p) => p.role === "admin");
 
   const renderTable = (members: User[], title: string) => (
     <Card className="border-0 shadow-sm">
@@ -166,16 +194,73 @@ const TeamManagePage = () => {
           </Button>
         </div>
 
-        {isLoading ? (
+        <Card className="border border-border/60">
+          <CardContent className="p-4 space-y-4">
+            <div className="flex flex-col gap-3 md:flex-row">
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search team members..."
+                className="md:max-w-md"
+              />
+              <Tabs value={activeFilter} onValueChange={(value) => setActiveFilter(value as typeof activeFilter)}>
+                <TabsList>
+                  <TabsTrigger value="all">All</TabsTrigger>
+                  <TabsTrigger value="closer">{t("role.closer")}</TabsTrigger>
+                  <TabsTrigger value="setter">{t("role.setter")}</TabsTrigger>
+                  <TabsTrigger value="admin">{t("role.admin")}</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+              <div className="rounded-lg border border-border/60 p-3">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">Visible members</p>
+                <p className="text-xl font-semibold">{filteredProfiles.length}</p>
+              </div>
+              <div className="rounded-lg border border-border/60 p-3">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">{t("team.closers")}</p>
+                <p className="text-xl font-semibold">{closers.length}</p>
+              </div>
+              <div className="rounded-lg border border-border/60 p-3">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">{t("team.setters")}</p>
+                <p className="text-xl font-semibold">{setters.length}</p>
+              </div>
+              <div className="rounded-lg border border-border/60 p-3">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">{t("role.admins")}</p>
+                <p className="text-xl font-semibold">{admins.length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {profilesLoadFailed ? (
+          <Alert variant="destructive">
+            <AlertTitle>Unable to load team members</AlertTitle>
+            <AlertDescription className="space-y-3">
+              <p>{loadErrorMessage}</p>
+              <Button size="sm" variant="outline" onClick={() => refetchProfiles()}>
+                Retry
+              </Button>
+            </AlertDescription>
+          </Alert>
+        ) : isLoading ? (
           <div className="space-y-4">
             {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-40 rounded-xl" />)}
           </div>
         ) : (
-          <div className="space-y-6">
-            {renderTable(closers, t("team.closers"))}
-            {renderTable(setters, t("team.setters"))}
-            {renderTable(admins, t("role.admins"))}
-          </div>
+          filteredProfiles.length === 0 ? (
+            <Card className="border border-border/60">
+              <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                No team members match this filter.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-6">
+              {renderTable(closers, t("team.closers"))}
+              {renderTable(setters, t("team.setters"))}
+              {renderTable(admins, t("role.admins"))}
+            </div>
+          )
         )}
 
         <p className="text-xs text-muted-foreground">{t("teamManage.addNote")}</p>

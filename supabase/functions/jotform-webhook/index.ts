@@ -16,6 +16,7 @@ const FIELD_MAP = {
 // ─── COMMISSION RATES ─────────────────────────────────────────────────────────
 const CLOSER_RATE = 0.088;
 const SETTER_RATE = 0.01;
+const MAX_RAW_REQUEST_LENGTH = 250000;
 
 // ─── FUZZY NAME MATCHING ──────────────────────────────────────────────────────
 /** Lowercase + strip accents */
@@ -57,22 +58,45 @@ function parseName(form: Record<string, unknown>): string {
 
 // ─── HANDLER ──────────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { status: 200 });
+  }
+
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
   }
 
   try {
+    const expectedSecret = Deno.env.get("JOTFORM_WEBHOOK_SECRET");
+    if (expectedSecret) {
+      const providedSecret = req.headers.get("x-webhook-secret");
+      if (!providedSecret || providedSecret !== expectedSecret) {
+        return new Response("Unauthorized webhook request", { status: 401 });
+      }
+    }
+
     const body = await req.text();
+    if (body.length > MAX_RAW_REQUEST_LENGTH) {
+      return new Response("Payload too large", { status: 413 });
+    }
     const params = new URLSearchParams(body);
 
     const submissionId = params.get("submissionID") ?? "";
     const rawRequest = params.get("rawRequest");
+    if (!submissionId) {
+      return new Response("Missing submissionID", { status: 400 });
+    }
 
     if (!rawRequest) {
       return new Response("Missing rawRequest", { status: 400 });
     }
 
-    const form: Record<string, unknown> = JSON.parse(rawRequest);
+    let form: Record<string, unknown>;
+    try {
+      form = JSON.parse(rawRequest) as Record<string, unknown>;
+    } catch {
+      return new Response("Invalid rawRequest JSON", { status: 400 });
+    }
     const get = (key: keyof typeof FIELD_MAP): string =>
       getString(form, FIELD_MAP[key]);
 
