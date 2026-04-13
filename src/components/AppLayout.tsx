@@ -9,7 +9,7 @@ const AppLayout = ({ children }: { children: ReactNode }) => {
   const toggleSidebar = () => setSidebarOpen((o) => !o);
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-background">
       {/* Global fetch indicator */}
       <LoadingBar />
 
@@ -18,9 +18,11 @@ const AppLayout = ({ children }: { children: ReactNode }) => {
       {/* Page content fades in on every mount */}
       <main
         key={typeof window !== "undefined" ? window.location.pathname : undefined}
-        className="flex-1 p-6 pt-16 lg:ml-64 lg:pt-6 lg:p-8 animate-page-enter"
+        className="flex-1 p-6 pt-16 lg:ml-72 lg:pt-8 lg:p-12 animate-in fade-in duration-700 overflow-x-hidden"
       >
-        {children}
+        <div className="max-w-[1600px] mx-auto">
+          {children}
+        </div>
       </main>
     </div>
   );

@@ -20,46 +20,52 @@ const accentMap = {
 
 /** KPI stat card used on the dashboard */
 const StatCard = ({ title, value, subtitle, icon, trend, accent = "blue" }: Props) => {
-  const a = accentMap[accent];
+  const a = accentMap[accent] || accentMap.blue;
   const TrendIcon = trend === "up" ? TrendingUp : trend === "down" ? TrendingDown : Minus;
 
   return (
     <div className={cn(
-      "relative overflow-hidden rounded-xl bg-card border border-border/60 p-5 shadow-card",
-      "transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-md"
+      "group relative overflow-hidden rounded-[2rem] bg-background border border-border/50 p-6 shadow-premium transition-all duration-500",
+      "hover:-translate-y-2 hover:shadow-[0_22px_44px_-12px_rgba(0,0,0,0.12)]"
     )}>
-      {/* Accent bar */}
-      <div className={cn("absolute left-0 top-0 h-full w-1 rounded-l-xl", a.bar)} />
+      {/* Subtle Background Glow */}
+      <div className={cn("absolute -right-8 -top-8 h-24 w-24 rounded-full blur-[40px] opacity-[0.08] transition-opacity group-hover:opacity-20", a.bar)} />
 
-      <div className="flex items-start justify-between gap-3 pl-2">
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground truncate">
-            {title}
-          </p>
-          <p className="mt-2 text-2xl font-bold tracking-tight truncate">{value}</p>
-          {subtitle && (
-            <div className="mt-1.5 flex items-center gap-1">
-              <TrendIcon className={cn(
-                "h-3 w-3 shrink-0",
-                trend === "up" && "text-success",
-                trend === "down" && "text-destructive",
-                (!trend || trend === "neutral") && "text-muted-foreground"
-              )} />
-              <p className={cn(
-                "text-xs truncate",
-                trend === "up" && "text-success",
-                trend === "down" && "text-destructive",
-                (!trend || trend === "neutral") && "text-muted-foreground"
-              )}>
+      <div className="relative z-10 flex flex-col h-full justify-between gap-4">
+         <div className="flex items-start justify-between">
+           <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl shadow-sm transition-transform group-hover:scale-110", a.bg, a.text)}>
+             {icon}
+           </div>
+           {trend && (
+             <div className={cn(
+               "flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-widest",
+               trend === "up" && "bg-emerald-500/10 text-emerald-500",
+               trend === "down" && "bg-rose-500/10 text-rose-500",
+               trend === "neutral" && "bg-muted/20 text-muted-foreground"
+             )}>
+               <TrendIcon className="h-3 w-3" />
+               {trend === "up" ? "Gain" : trend === "down" ? "Loss" : "Flat"}
+             </div>
+           )}
+         </div>
+
+         <div className="space-y-1">
+            <p className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/60 leading-none">
+              {title}
+            </p>
+            <div className="flex items-baseline gap-2">
+              <p className="text-2xl font-black tracking-tight tabular-nums truncate">{value}</p>
+            </div>
+            {subtitle && (
+              <p className="text-xs font-bold text-muted-foreground/40 tracking-tight truncate">
                 {subtitle}
               </p>
-            </div>
-          )}
-        </div>
-        <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", a.bg, a.text)}>
-          {icon}
-        </div>
+            )}
+         </div>
       </div>
+      
+      {/* Activity Indicator Bar */}
+      <div className={cn("absolute bottom-0 left-6 right-6 h-1 rounded-t-full opacity-0 translate-y-2 transition-all group-hover:opacity-100 group-hover:translate-y-0", a.bar)} />
     </div>
   );
 };

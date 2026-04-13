@@ -58,6 +58,7 @@
     --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.06);
     --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.06);
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.05);
+    --shadow-premium: 0 10px 40px -10px rgba(0, 0, 0, 0.08), 0 20px 25px -5px rgba(0, 0, 0, 0.04);
   }
 
   .dark {
@@ -108,6 +109,7 @@
     --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.25), 0 1px 2px -1px rgb(0 0 0 / 0.2);
     --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.25), 0 2px 4px -2px rgb(0 0 0 / 0.2);
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.25), 0 4px 6px -4px rgb(0 0 0 / 0.2);
+    --shadow-premium: 0 20px 50px -12px rgba(0, 0, 0, 0.5);
   }
 }
 
@@ -159,18 +161,36 @@
   .shadow-card-lg {
     box-shadow: var(--shadow-lg);
   }
+  .shadow-premium {
+    box-shadow: var(--shadow-premium);
+  }
 
   /* Subtle hover lift */
   .hover-lift {
-    @apply transition-all duration-200;
+    @apply transition-all duration-300 ease-out;
   }
   .hover-lift:hover {
-    @apply -translate-y-0.5;
-    box-shadow: var(--shadow-md);
+    @apply -translate-y-1;
+    box-shadow: var(--shadow-premium);
   }
 
   /* Glass effect for overlays */
   .glass {
-    @apply bg-background/80 backdrop-blur-md;
+    @apply bg-background/80 backdrop-blur-xl border border-white/10;
+  }
+
+  /* Custom Scrollbar for Sidebar */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
   }
 }

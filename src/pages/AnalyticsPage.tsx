@@ -10,7 +10,7 @@ import AppLayout from "@/components/AppLayout";
 import StatCard from "@/components/StatCard";
 import SaleStatusBadge from "@/components/SaleStatusBadge";
 import ProfileTag from "@/components/ProfileTag";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,10 +19,10 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
-import { DollarSign, ShoppingCart, TrendingUp, AlertTriangle, Target, Percent, Gift, X } from "lucide-react";
+import { DollarSign, ShoppingCart, TrendingUp, AlertTriangle, Target, Percent, Gift, X, BarChart as BarChartIcon, Filter, Layers, Calendar, Check } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, LineChart, Line,
+  ResponsiveContainer, AreaChart, Area
 } from "recharts";
 import { cn } from "@/lib/utils";
 
@@ -48,9 +48,18 @@ function computeDateRange(preset: DatePreset, customStart: string, customEnd: st
 
 const CHART_COLORS = {
   primary: "hsl(var(--primary))",
-  border:  "hsl(var(--border))",
-  line:    "hsl(213,50%,25%)",
+  border:  "rgba(128,128,128,0.12)",
 };
+
+const ChartCard = ({ title, icon: Icon, children }: { title: string; icon?: any; children: React.ReactNode }) => (
+  <Card className="border-none shadow-sm bg-background/50 backdrop-blur-sm overflow-hidden rounded-3xl">
+    <div className="p-6 pb-0 flex items-center gap-2">
+      {Icon && <div className="p-2 rounded-lg bg-primary/10 text-primary"><Icon className="h-4 w-4" /></div>}
+      <h3 className="font-black text-sm uppercase tracking-widest text-muted-foreground">{title}</h3>
+    </div>
+    <CardContent className="p-6">{children}</CardContent>
+  </Card>
+);
 
 // ─── Main component ───────────────────────────────────────────────────────────
 const AnalyticsPage = () => {
@@ -189,80 +198,105 @@ const AnalyticsPage = () => {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="space-y-10 animate-in fade-in duration-500">
 
         {/* ── Header ────────────────────────────────────────────────────────── */}
-        <div>
-          <h1 className="text-3xl font-bold">{t("analytics.title")}</h1>
-          <p className="text-sm text-muted-foreground mt-1">{t("analytics.subtitle")}</p>
-        </div>
-
-        {/* ── Date range presets ─────────────────────────────────────────────── */}
-        <div className="flex flex-wrap gap-2">
-          {presets.map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setDatePreset(key)}
-              className={cn(
-                "rounded-full px-4 py-1.5 text-sm font-medium border transition-colors",
-                datePreset === key
-                  ? "bg-primary text-white border-primary shadow-sm"
-                  : "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
-              )}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 shadow-inner">
+              <BarChartIcon className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-black tracking-tight">{t("analytics.title")}</h1>
+              <p className="text-xs text-muted-foreground font-medium">{t("analytics.subtitle")}</p>
+            </div>
+          </div>
+          
+          <div className="bg-background/50 backdrop-blur-sm border border-border/40 p-1.5 rounded-2xl flex flex-wrap gap-1 shadow-sm">
+            {presets.map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setDatePreset(key)}
+                className={cn(
+                  "rounded-xl px-4 py-1.5 text-xs font-black uppercase tracking-widest transition-all active:scale-95",
+                  datePreset === key
+                    ? "bg-primary text-white shadow-lg shadow-primary/20"
+                    : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* ── Custom date inputs ─────────────────────────────────────────────── */}
         {datePreset === "custom" && (
-          <div className="flex flex-wrap gap-4 items-end">
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">{t("analytics.filter.from")}</Label>
-              <Input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="h-9 w-40" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">{t("analytics.filter.to")}</Label>
-              <Input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="h-9 w-40" />
-            </div>
+          <div className="flex flex-wrap gap-4 items-end bg-muted/20 p-6 rounded-3xl border border-border/40 animate-in slide-in-from-top-2 duration-300">
+             <div className="flex items-center gap-3">
+               <Calendar className="h-4 w-4 text-primary" />
+               <p className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Custom Range</p>
+             </div>
+             <div className="flex flex-wrap gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">From</Label>
+                  <Input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="h-10 w-40 rounded-xl" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">To</Label>
+                  <Input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="h-10 w-40 rounded-xl" />
+                </div>
+             </div>
           </div>
         )}
 
-        {/* ── Filter row ─────────────────────────────────────────────────────── */}
-        <div className="flex flex-wrap gap-2 items-center">
+        {/* ── Filter toolbar ─────────────────────────────────────────────────── */}
+        <div className="bg-background/30 backdrop-blur-sm border border-border/40 p-2 rounded-[2rem] flex flex-wrap gap-2 items-center shadow-sm">
+          <div className="flex items-center gap-2 pl-4 pr-2 border-r border-border/40 mr-2">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Filters</span>
+          </div>
+
           <Select value={filterProduct} onValueChange={setFilterProduct}>
-            <SelectTrigger className="h-9 w-44"><SelectValue placeholder={t("analytics.filter.product")} /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("analytics.filter.allProducts")}</SelectItem>
+            <SelectTrigger className="h-10 w-40 rounded-xl border-none bg-muted/20 text-xs font-bold ring-offset-background focus:ring-1 focus:ring-primary/20 transition-all">
+              <SelectValue placeholder="Product" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl border-none shadow-2xl">
+              <SelectItem value="all">All Products</SelectItem>
               {products.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
             </SelectContent>
           </Select>
 
           <Select value={filterType} onValueChange={v => setFilterType(v as PaymentFilter)}>
-            <SelectTrigger className="h-9 w-44"><SelectValue placeholder={t("analytics.filter.type")} /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("analytics.filter.allTypes")}</SelectItem>
+            <SelectTrigger className="h-10 w-32 rounded-xl border-none bg-muted/20 text-xs font-bold ring-offset-background focus:ring-1 focus:ring-primary/20 transition-all">
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl border-none shadow-2xl">
+              <SelectItem value="all">All Types</SelectItem>
               <SelectItem value="pif">PIF</SelectItem>
-              <SelectItem value="installments">{t("admin.installments")}</SelectItem>
+              <SelectItem value="installments">Installments</SelectItem>
             </SelectContent>
           </Select>
 
           <Select value={filterStatus} onValueChange={v => setFilterStatus(v as StatusFilter)}>
-            <SelectTrigger className="h-9 w-44"><SelectValue placeholder={t("analytics.filter.status")} /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("analytics.filter.allStatuses")}</SelectItem>
-              <SelectItem value="paid">{t("status.paid")}</SelectItem>
-              <SelectItem value="refunded">{t("status.refunded")}</SelectItem>
-              <SelectItem value="unpaid">{t("status.unpaid")}</SelectItem>
+            <SelectTrigger className="h-10 w-32 rounded-xl border-none bg-muted/20 text-xs font-bold ring-offset-background focus:ring-1 focus:ring-primary/20 transition-all">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl border-none shadow-2xl">
+              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="paid">Paid</SelectItem>
+              <SelectItem value="refunded">Refunded</SelectItem>
+              <SelectItem value="unpaid">Unpaid</SelectItem>
             </SelectContent>
           </Select>
 
           {isAdmin && (
             <Select value={filterCloser} onValueChange={setFilterCloser}>
-              <SelectTrigger className="h-9 w-44"><SelectValue placeholder={t("analytics.filter.closer")} /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("analytics.filter.allClosers")}</SelectItem>
+              <SelectTrigger className="h-10 w-40 rounded-xl border-none bg-muted/20 text-xs font-bold ring-offset-background focus:ring-1 focus:ring-primary/20 transition-all">
+                <SelectValue placeholder="Closer" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl border-none shadow-2xl">
+                <SelectItem value="all">All Closers</SelectItem>
                 {closers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -270,28 +304,30 @@ const AnalyticsPage = () => {
 
           {isAdmin && (
             <Select value={filterSetter} onValueChange={setFilterSetter}>
-              <SelectTrigger className="h-9 w-44"><SelectValue placeholder={t("analytics.filter.setter")} /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("analytics.filter.allSetters")}</SelectItem>
+              <SelectTrigger className="h-10 w-40 rounded-xl border-none bg-muted/20 text-xs font-bold ring-offset-background focus:ring-1 focus:ring-primary/20 transition-all">
+                <SelectValue placeholder="Setter" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl border-none shadow-2xl">
+                <SelectItem value="all">All Setters</SelectItem>
                 {setters.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
               </SelectContent>
             </Select>
           )}
 
           {hasActiveFilters && (
-            <Button variant="ghost" size="sm" className="h-9 gap-1.5 text-muted-foreground hover:text-foreground" onClick={resetFilters}>
-              <X className="h-3.5 w-3.5" />{t("analytics.filter.reset")}
+            <Button variant="ghost" size="sm" className="h-10 px-4 gap-2 text-muted-foreground hover:text-destructive hover:bg-destructive/5 font-bold rounded-xl" onClick={resetFilters}>
+              <X className="h-3.5 w-3.5" />Reset
             </Button>
           )}
         </div>
 
         {/* ── KPI cards ──────────────────────────────────────────────────────── */}
         {isLoading ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-3xl" />)}
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             <StatCard
               title={t("analytics.kpi.totalComm")}
               value={fmt(metrics.totalComm)}
@@ -331,7 +367,7 @@ const AnalyticsPage = () => {
             <StatCard
               title={t("analytics.kpi.pifRate")}
               value={`${metrics.pifRate.toFixed(1)}%`}
-              subtitle={`${filteredSales.filter(s => s.paymentType === "pif" && !s.refunded && !s.impaye).length} PIF`}
+              subtitle={`${filteredSales.filter(s => s.paymentType === "pif" && !s.refunded && !s.impaye).length} PIF Sales`}
               accent="orange"
               icon={<Percent className="h-5 w-5" />}
             />
@@ -340,168 +376,183 @@ const AnalyticsPage = () => {
 
         {/* ── Closer: bonus progress ─────────────────────────────────────────── */}
         {isCloser && (
-          <Card className="border border-border/60 shadow-card">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Gift className="h-4 w-4 text-primary" />
-                {t("analytics.bonus.progress")}
-                <Badge variant="outline" className="text-xs ml-auto">{formatMonth(currentMonthKey, locale)}</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {tiers.length === 0 ? (
-                <p className="text-sm text-muted-foreground">{t("analytics.bonus.noTiers")}</p>
-              ) : (
-                <>
-                  <div className="flex justify-between items-baseline">
-                    <span className="text-sm text-muted-foreground">{t("analytics.bonus.validatedThisMonth")}</span>
-                    <span className="text-2xl font-bold tabular-nums">
-                      {currentMonthValidated}
-                      {nextTier && <span className="text-base font-normal text-muted-foreground"> / {nextTier.minSales}</span>}
-                    </span>
+          <Card className="border-none shadow-sm bg-gradient-to-br from-background via-background to-primary/5 p-8 rounded-[2.5rem] relative overflow-hidden group">
+             <div className="absolute top-0 right-0 p-10 opacity-5 transform group-hover:scale-110 transition-transform">
+                <Gift className="h-32 w-32 text-primary" />
+             </div>
+             <div className="p-0 space-y-8 relative">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-primary text-white rounded-2xl shadow-lg shadow-primary/20">
+                      <Gift className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold tracking-tight">{t("analytics.bonus.progress")}</h3>
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">{formatMonth(currentMonthKey, locale)} Performance</p>
+                    </div>
                   </div>
-                  <Progress value={progressPct} className="h-2.5" />
-                  <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">
-                      {nextTier
-                        ? `${nextTier.minSales - currentMonthValidated} ${t("analytics.bonus.toUnlock")} +€${nextTier.bonusAmount}`
-                        : currentTier
-                          ? <span className="text-success font-semibold">{t("analytics.bonus.tierReached")} 🎉</span>
-                          : null
-                      }
-                    </span>
-                    {currentTier && (
-                      <span className="text-success font-semibold">
-                        {t("analytics.bonus.currentTier")}: +€{currentTier.bonusAmount}
-                      </span>
-                    )}
-                  </div>
+                  <Badge variant="outline" className="h-8 border-primary/20 text-primary font-black px-4 rounded-xl">
+                    {currentMonthValidated} Sales Validated
+                  </Badge>
+                </div>
 
-                  {/* Tier markers */}
-                  {sortedTiers.length > 0 && (
-                    <div className="flex gap-2 pt-1 flex-wrap">
+                {tiers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground font-medium italic">{t("analytics.bonus.noTiers")}</p>
+                ) : (
+                  <div className="space-y-6">
+                    <div className="space-y-2">
+                       <div className="flex justify-between items-end mb-2">
+                          <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Progress to target</p>
+                          <p className="text-sm font-black text-primary tabular-nums">{progressPct.toFixed(0)}% Complete</p>
+                       </div>
+                       <Progress value={progressPct} className="h-3 rounded-full bg-muted/40" />
+                    </div>
+
+                    <div className="flex flex-wrap gap-3">
                       {sortedTiers.map(tier => (
                         <div
                           key={tier.id}
                           className={cn(
-                            "flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium border",
+                            "flex flex-col items-center gap-1 flex-1 min-w-[120px] p-4 rounded-2xl border transition-all duration-300",
                             currentMonthValidated >= tier.minSales
-                              ? "bg-success/10 border-success/30 text-success"
-                              : "bg-muted border-border text-muted-foreground"
+                              ? "bg-emerald-500 border-emerald-500/20 text-white shadow-lg shadow-emerald-500/10"
+                              : "bg-muted/10 border-border/40 text-muted-foreground grayscale opacity-60"
                           )}
                         >
-                          {currentMonthValidated >= tier.minSales ? "✓" : "○"}
-                          {tier.minSales} {t("detail.totalSales").toLowerCase()} → +€{tier.bonusAmount}
+                          <p className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">Tier</p>
+                          <p className="text-lg font-black leading-none">{tier.minSales}</p>
+                          <p className="text-[9px] font-bold uppercase tracking-wide mt-1">+{fmt(tier.bonusAmount)}</p>
+                          {currentMonthValidated >= tier.minSales && <div className="mt-2 h-4 w-4 bg-white/20 rounded-full flex items-center justify-center"><Check className="h-2.5 w-2.5" /></div>}
                         </div>
                       ))}
                     </div>
-                  )}
-                </>
-              )}
-            </CardContent>
+
+                    {nextTier && (
+                      <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10 flex items-center justify-between">
+                         <p className="text-sm font-medium text-primary-foreground/80">
+                           <span className="font-black text-primary">{nextTier.minSales - currentMonthValidated}</span> more sales to unlock next bonus
+                         </p>
+                         <div className="h-8 w-8 bg-primary text-white rounded-lg flex items-center justify-center font-bold text-xs ring-4 ring-primary/10 animate-pulse">
+                           +€{nextTier.bonusAmount}
+                         </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+             </div>
           </Card>
         )}
 
         {/* ── Charts ─────────────────────────────────────────────────────────── */}
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Card className="border border-border/60 shadow-card">
-            <CardHeader><CardTitle className="text-base">{t("analytics.chart.trend")}</CardTitle></CardHeader>
-            <CardContent>
-              {metrics.monthlyData.every(d => d.commission === 0) ? (
-                <p className="text-center py-12 text-sm text-muted-foreground">{t("analytics.noData")}</p>
-              ) : (
-                <ResponsiveContainer width="100%" height={240}>
-                  <LineChart data={metrics.monthlyData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.border} />
-                    <XAxis dataKey="month" fontSize={12} />
-                    <YAxis fontSize={12} tickFormatter={v => fmt(v)} width={70} />
-                    <Tooltip formatter={(v: number) => [fmt(v), t("analytics.kpi.totalComm")]} />
-                    <Line type="monotone" dataKey="commission" stroke={CHART_COLORS.line} strokeWidth={2.5} dot={{ r: 4, fill: CHART_COLORS.line }} activeDot={{ r: 6 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <ChartCard title="Performance Trend" icon={TrendingUp}>
+            {metrics.monthlyData.every(d => d.commission === 0) ? (
+              <p className="text-center py-20 text-sm text-muted-foreground italic">No historical data available</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <AreaChart data={metrics.monthlyData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorCommAnal" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={CHART_COLORS.primary} stopOpacity={0.2}/>
+                      <stop offset="95%" stopColor={CHART_COLORS.primary} stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.border} vertical={false} />
+                  <XAxis dataKey="month" fontSize={10} font-weight="700" axisLine={false} tickLine={false} dy={10} />
+                  <YAxis fontSize={10} font-weight="700" axisLine={false} tickLine={false} tickFormatter={(v) => `€${v}`} />
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.15)', fontWeight: 'bold', background: 'hsl(var(--card))', color: 'hsl(var(--card-foreground))' }}
+                    formatter={(v: number) => [fmt(v), t("analytics.kpi.totalComm")]} 
+                  />
+                  <Area type="monotone" dataKey="commission" stroke={CHART_COLORS.primary} strokeWidth={3} fillOpacity={1} fill="url(#colorCommAnal)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </ChartCard>
 
-          <Card className="border border-border/60 shadow-card">
-            <CardHeader>
-              <CardTitle className="text-base">
-                {isAdmin ? t("analytics.chart.byCloser") : t("analytics.chart.byProduct")}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {(isAdmin ? metrics.closerData : metrics.productData).length === 0 ? (
-                <p className="text-center py-12 text-sm text-muted-foreground">{t("analytics.noData")}</p>
-              ) : (
-                <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={isAdmin ? metrics.closerData : metrics.productData} margin={{ bottom: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.border} />
-                    <XAxis dataKey="name" fontSize={11} tick={{ dy: 4 }} />
-                    <YAxis fontSize={12} tickFormatter={v => fmt(v)} width={70} />
-                    <Tooltip formatter={(v: number) => [fmt(v), t("analytics.kpi.totalComm")]} />
-                    <Bar dataKey="commission" fill={CHART_COLORS.primary} radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
+          <ChartCard title={isAdmin ? t("analytics.chart.byCloser") : t("analytics.chart.byProduct")} icon={Layers}>
+            {(isAdmin ? metrics.closerData : metrics.productData).length === 0 ? (
+              <p className="text-center py-20 text-sm text-muted-foreground italic">No distribution data available</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={isAdmin ? metrics.closerData : metrics.productData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.border} vertical={false} />
+                  <XAxis dataKey="name" fontSize={10} font-weight="700" axisLine={false} tickLine={false} dy={10} />
+                  <YAxis fontSize={10} font-weight="700" axisLine={false} tickLine={false} tickFormatter={(v) => `€${v}`} />
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.15)', fontWeight: 'bold', background: 'hsl(var(--card))', color: 'hsl(var(--card-foreground))' }}
+                    formatter={(v: number) => [fmt(v), t("analytics.kpi.totalComm")]} 
+                  />
+                  <Bar dataKey="commission" fill={CHART_COLORS.primary} radius={[6, 6, 0, 0]} barSize={20} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </ChartCard>
         </div>
 
         {/* ── Transactions table ─────────────────────────────────────────────── */}
-        <Card className="border border-border/60 shadow-card">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">{t("analytics.sales.title")}</CardTitle>
-            <Badge variant="outline">{filteredSales.length} {t("analytics.kpi.transactions")}</Badge>
-          </CardHeader>
-          <CardContent>
+        <Card className="border-none shadow-sm rounded-[2.5rem] overflow-hidden">
+          <div className="p-8 border-b border-border/40 flex items-center justify-between">
+            <h3 className="font-black text-sm uppercase tracking-widest text-muted-foreground">{t("analytics.sales.title")}</h3>
+            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 font-bold h-8 px-4">
+               {filteredSales.length} Total Records
+            </Badge>
+          </div>
+          <CardContent className="p-0">
             {isLoading ? (
-              <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+              <div className="p-8 space-y-4">
+                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full rounded-xl" />)}
+              </div>
             ) : filteredSales.length === 0 ? (
-              <p className="text-center py-10 text-sm text-muted-foreground">{t("analytics.noData")}</p>
+              <div className="text-center py-20">
+                 <p className="text-muted-foreground font-medium italic">{t("analytics.noData")}</p>
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("table.date")}</TableHead>
-                      <TableHead>{t("table.client")}</TableHead>
-                      <TableHead>{t("table.product")}</TableHead>
-                      {isAdmin  && <TableHead>{t("table.closer")}</TableHead>}
-                      {isAdmin  && <TableHead>{t("table.setter")}</TableHead>}
-                      {!isAdmin && <TableHead>{isCloser ? t("table.setter") : t("table.closer")}</TableHead>}
-                      <TableHead>{t("table.status")}</TableHead>
-                      <TableHead className="text-right">{t("table.amount")}</TableHead>
-                      <TableHead className="text-right">
-                        {isAdmin || isCloser ? t("table.closerComm") : t("table.setterComm")}
-                      </TableHead>
+                  <TableHeader className="bg-muted/30">
+                    <TableRow className="border-none">
+                      <TableHead className="py-4 pl-8 text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t("table.date")}</TableHead>
+                      <TableHead className="py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t("table.client")}</TableHead>
+                      <TableHead className="py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t("table.product")}</TableHead>
+                      {isAdmin  && <TableHead className="py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t("table.closer")}</TableHead>}
+                      {isAdmin  && <TableHead className="py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t("table.setter")}</TableHead>}
+                      {!isAdmin && <TableHead className="py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">{isCloser ? t("table.setter") : t("table.closer")}</TableHead>}
+                      <TableHead className="py-4 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t("table.amount")}</TableHead>
+                      <TableHead className="py-4 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground">Commission</TableHead>
+                      <TableHead className="py-4 pr-8 text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t("table.status")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredSales.map(s => (
-                      <TableRow key={s.id}>
-                        <TableCell className="text-muted-foreground text-sm">{s.date}</TableCell>
-                        <TableCell className="font-medium">{s.clientName}</TableCell>
-                        <TableCell className="text-sm">{s.product}</TableCell>
-                        {isAdmin  && <TableCell><ProfileTag role="closer" personId={s.closerId} personName={s.closer} /></TableCell>}
-                        {isAdmin  && <TableCell><ProfileTag role="setter" personId={s.setterId} personName={s.setter} /></TableCell>}
+                      <TableRow key={s.id} className="group hover:bg-muted/10 transition-colors border-border/30">
+                        <TableCell className="py-5 pl-8 text-xs font-medium text-muted-foreground tabular-nums">{s.date}</TableCell>
+                        <TableCell className="py-5">
+                            <p className="font-bold text-sm tracking-tight">{s.clientName}</p>
+                        </TableCell>
+                        <TableCell className="py-5">
+                            <Badge variant="outline" className="text-[10px] font-bold border-border/40 hover:bg-muted/50">{s.product}</Badge>
+                        </TableCell>
+                        {isAdmin && <TableCell className="py-5"><ProfileTag role="closer" personId={s.closerId} personName={s.closer} /></TableCell>}
+                        {isAdmin && <TableCell className="py-5"><ProfileTag role="setter" personId={s.setterId} personName={s.setter} /></TableCell>}
                         {!isAdmin && (
-                          <TableCell>
+                          <TableCell className="py-5">
                             {isCloser
                               ? <ProfileTag role="setter" personId={s.setterId} personName={s.setter} />
                               : <ProfileTag role="closer" personId={s.closerId} personName={s.closer} />}
                           </TableCell>
                         )}
-                        <TableCell>
-                          <div className="flex items-center gap-1.5">
+                        <TableCell className="py-5 text-right font-medium text-sm tabular-nums">{fmt(s.amount)}</TableCell>
+                        <TableCell className="py-5 text-right font-black text-primary tabular-nums">
+                          {fmt(isCloser ? s.closerCommission : isSetter ? s.setterCommission : s.closerCommission)}
+                        </TableCell>
+                        <TableCell className="py-5 pr-8">
+                          <div className="flex items-center justify-end gap-2">
                             <SaleStatusBadge refunded={s.refunded} impaye={s.impaye} />
                             {s.paymentType === "pif" && (
-                              <Badge variant="outline" className="text-xs text-primary border-primary/30">PIF</Badge>
+                              <Badge variant="outline" className="text-[9px] font-black text-primary bg-primary/5 border-primary/20 h-5 px-1.5 uppercase">PIF</Badge>
                             )}
                           </div>
-                        </TableCell>
-                        <TableCell className="text-right text-sm">{fmt(s.amount)}</TableCell>
-                        <TableCell className="text-right font-semibold">
-                          {fmt(isCloser ? s.closerCommission : isSetter ? s.setterCommission : s.closerCommission)}
                         </TableCell>
                       </TableRow>
                     ))}

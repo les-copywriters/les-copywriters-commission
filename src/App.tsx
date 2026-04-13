@@ -20,41 +20,47 @@ import SettingsPage from "@/pages/SettingsPage";
 import AnalyticsPage from "@/pages/AnalyticsPage";
 import NotFound from "@/pages/NotFound";
 
+import { Sparkles } from "lucide-react";
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // Only retry once — retrying 3 times on a broken Supabase query wastes time
-      // and makes the UI feel unresponsive
       retry: 1,
-      // Keep freshness tighter for collaborative admin workflows.
       staleTime: 1000 * 60,
-      // Keep unused data in cache for 10 minutes
       gcTime: 1000 * 60 * 10,
-      // Refetch on focus/reconnect to reduce stale admin views across users.
       refetchOnWindowFocus: true,
       refetchOnReconnect: true,
     },
     mutations: {
-      // Never retry mutations — a failed insert/update should be explicit,
-      // not silently retried (risk of duplicate rows)
       retry: false,
     },
   },
 });
 
 const LoadingScreen = () => (
-  <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background gap-5 animate-fade-in">
-    {/* Spinning ring around the logo */}
-    <div className="relative flex h-16 w-16 items-center justify-center">
-      <div className="absolute inset-0 rounded-full border-2 border-primary/15" />
-      <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-primary animate-spin" />
-      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary shadow-md">
-        <span className="text-lg font-black text-white">LC</span>
+  <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background gap-6">
+    <div className="relative flex h-24 w-24 items-center justify-center">
+      {/* Outer Pulse */}
+      <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping duration-1000" />
+
+      {/* Spinning Ring */}
+      <div className="absolute inset-[-4px] rounded-full border-2 border-primary/20" />
+      <div className="absolute inset-[-4px] rounded-full border-2 border-transparent border-t-primary animate-spin" />
+
+      {/* Core Logo Container */}
+      <div className="relative z-10 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary shadow-2xl shadow-primary/40">
+        <Sparkles className="h-8 w-8 text-white" />
       </div>
     </div>
-    <p className="text-sm text-muted-foreground animate-pulse tracking-wide">
-      Les Copywriters
-    </p>
+
+    <div className="relative z-10 text-center space-y-1">
+      <p className="text-xl font-black text-foreground tracking-tight animate-in fade-in slide-in-from-bottom-2 duration-500">
+        Elite CP
+      </p>
+      <p className="text-[10px] font-black text-primary uppercase tracking-[0.3em] animate-pulse">
+        Initializing Workspace
+      </p>
+    </div>
   </div>
 );
 
