@@ -58,19 +58,42 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // 1. Initial Session Load
+    const initAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setSession(session);
+        if (session?.user) {
+          await loadProfile(session.user.id);
+        }
+      } catch (err) {
+        console.error("Auth init error:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initAuth();
+
+    // 2. Auth State Listener (Background updates)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setSession(session);
-      if (session?.user) {
+      
+      if (event === 'SIGNED_IN' && session?.user) {
         setLoading(true);
-        loadProfile(session.user.id).finally(() => setLoading(false));
-      } else {
+        await loadProfile(session.user.id);
+        setLoading(false);
+      } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setLoading(false);
+      } else if (session?.user && !user) {
+        // Handle cases where session exists but profile isn't loaded yet
+        await loadProfile(session.user.id);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [user]);
 
   const login = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
