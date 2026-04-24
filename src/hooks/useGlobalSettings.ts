@@ -32,11 +32,16 @@ export const useGlobalSettings = () =>
 export const useUpdateGlobalSetting = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ key, value }: { key: string; value: string | null }) => {
+    mutationFn: async ({ key, value, description, is_secret }: { key: string; value: string | null; description?: string; is_secret?: boolean }) => {
       const { error } = await supabase
         .from("global_settings")
-        .update({ value, updated_at: new Date().toISOString() })
-        .eq("key", key);
+        .upsert({ 
+          key, 
+          value, 
+          description, 
+          is_secret, 
+          updated_at: new Date().toISOString() 
+        }, { onConflict: "key" });
 
       if (error) throw new Error(error.message);
     },

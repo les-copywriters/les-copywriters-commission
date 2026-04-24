@@ -253,7 +253,7 @@ const CallsPage = () => {
           </div>
         </div>
 
-        {(isCloser || isAdmin) && (
+        {isCloser && (
           <Card className="border-none shadow-sm rounded-3xl overflow-hidden">
             <CardContent className="p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div>
@@ -495,7 +495,7 @@ const CallsPage = () => {
                             </div>
 
                             <div className="flex items-center gap-2 lg:pl-4 flex-wrap justify-end">
-                              {(isCloser || isAdmin) && (
+                              {isCloser && (
                                 <Button
                                   variant="ghost"
                                   size="sm"

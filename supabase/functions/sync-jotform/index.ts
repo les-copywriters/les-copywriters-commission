@@ -267,7 +267,11 @@ Deno.serve(async (req) => {
       }
 
       const noSetter = !setterName ||
-        norm(setterName) === "aucun" || norm(setterName) === "autre" || setterName === "";
+        norm(setterName) === "aucun" || 
+        norm(setterName) === "autre" || 
+        norm(setterName) === "je trouve pas" || 
+        norm(setterName) === "je sais pas" ||
+        setterName === "";
       const matchedSetter = noSetter ? null : findProfile(setterName, "setter", profiles);
       const fallbackSetter = noSetter || matchedSetter ? null : findProfileAnyRole(setterName, profiles);
       const setterProfile = matchedSetter ?? fallbackSetter;

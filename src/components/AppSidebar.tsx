@@ -125,7 +125,7 @@ const AppSidebar = ({
   const visibleMainItems = mainItems.filter((item) => {
     if (item.to === "/setter-dashboard") return canSeeSetterDashboard;
     if (item.to === "/calls") return canSeeCalls;
-    if (item.to === "/assistant") return canSeeAssistant;
+    if (item.to === "/assistant") return canSeeAssistant && !isAdmin;
     return true;
   });
 
@@ -181,7 +181,7 @@ const AppSidebar = ({
           {isAdmin && (
             <NavGroup
               label="Admin Hub"
-              items={adminItems}
+              items={adminItems.filter(item => item.to !== '/coaching')}
               pathname={pathname}
               onNavigate={onNavigate}
             />

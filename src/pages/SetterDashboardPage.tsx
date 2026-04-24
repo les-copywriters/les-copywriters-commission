@@ -281,14 +281,14 @@ const SetterDashboardPage = () => {
                 className="h-9 px-3.5 rounded-lg text-sm border-border/60 whitespace-nowrap"
                 onClick={() =>
                   syncAircall.mutate(
-                    { source: "aircall", profileId: scopedSetterId },
+                    { source: "aircall", profileId: scopedSetterId, startDate: start, endDate: end },
                     {
                       onSuccess: (data) => {
                         const r = (data as any)?.results?.[0];
                         if (r?.errors?.length) toast.error(`Aircall: ${r.errors[0]}`);
                         else if (r?.rows_written > 0) toast.success(`Aircall synced — ${r.rows_written} rows written`);
-                        else if (r?.records_seen > 0) toast.success(`Aircall sync complete — no calls found for this setter in the synced period.`);
-                        else toast.warning("Aircall sync found 0 calls for this date range. Try a wider date range or verify the API credentials.");
+                        else if (r?.records_seen > 0) toast.success(`Aircall sync complete — no calls found in the selected period.`);
+                        else toast.warning("Aircall sync found 0 calls for this date range.");
                       },
                       onError: (syncError) => toast.error(syncError.message),
                     },
@@ -306,13 +306,13 @@ const SetterDashboardPage = () => {
                 className="h-9 px-3.5 rounded-lg text-sm border-border/60 whitespace-nowrap"
                 onClick={() =>
                   syncIclosed.mutate(
-                    { source: "iclosed", profileId: scopedSetterId },
+                    { source: "iclosed", profileId: scopedSetterId, startDate: start, endDate: end },
                     {
                       onSuccess: (data) => {
                         const r = (data as any)?.results?.[0];
                         if (r?.errors?.length) toast.error(`iClosed: ${r.errors[0]}`);
                         else if (r?.rows_written > 0) toast.success(`iClosed synced — ${r.rows_written} rows written`);
-                        else toast.success(`iClosed sync complete — no events found for this setter in the synced period.`);
+                        else toast.success(`iClosed sync complete — no events found in the selected period.`);
                       },
                       onError: (syncError) => toast.error(syncError.message),
                     },

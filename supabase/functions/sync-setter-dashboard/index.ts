@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
     try {
       const key = global.iclosed_api_key;
       const base = global.iclosed_api_base_url || "https://api.iclosed.io/v1";
-      if (!key) throw new Error("Missing credentials");
+      if (!key) throw new Error("iClosed Global API Key not set in database");
       const res = await fetch(`${base.replace(/\/$/, "")}/users?limit=1`, {
         headers: { Authorization: `Bearer ${key}` },
       });

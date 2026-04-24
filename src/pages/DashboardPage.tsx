@@ -239,9 +239,11 @@ const DashboardPage = () => {
                 {funnelSync.isPending ? "Syncing..." : "Sync Performance"}
               </Button>
             )}
-            <Badge className="h-12 px-6 rounded-2xl bg-muted/40 text-muted-foreground border-none font-black uppercase tracking-widest text-[10px] hidden sm:flex">
-               Real-time Intelligence Active
-            </Badge>
+            {!isAdmin && (
+              <Badge className="h-12 px-6 rounded-2xl bg-muted/40 text-muted-foreground border-none font-black uppercase tracking-widest text-[10px] hidden sm:flex">
+                Real-time Intelligence Active
+              </Badge>
+            )}
           </div>
         </div>
 

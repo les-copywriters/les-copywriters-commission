@@ -457,6 +457,10 @@ export async function runSetterDashboardSync(options: {
 
   const { data: mappings, error: mappingError } = await mappingQuery;
   if (mappingError) throw new Error(mappingError.message);
+
+  if (!mappings || mappings.length === 0) {
+    throw new Error("No setter mappings found. Please go to Settings -> Setter Integrations and add your team members (at least their Aircall/iClosed User IDs) to enable syncing.");
+  }
   
   const global = await getGlobalSettings(supabase);
   const rows = ((mappings ?? []) as SetterMapping[]).map(m => ({
@@ -600,7 +604,10 @@ export async function runSetterDashboardSync(options: {
       } else if (selectedSource === "iclosed") {
         const allFunnelRows: FunnelAggregate[] = [];
         for (const mapping of rows) {
-          if (!mapping.iclosed_api_key || !mapping.iclosed_api_base_url) continue;
+          if (!mapping.iclosed_api_key || !mapping.iclosed_api_base_url) {
+            errors.push(`${mapping.profile_id}: Missing iClosed API key or Base URL (check Global Settings)`);
+            continue;
+          }
           try {
             const synced = await syncIClosedForSetter(mapping, startDate, endDate);
             allFunnelRows.push(...synced.rows);

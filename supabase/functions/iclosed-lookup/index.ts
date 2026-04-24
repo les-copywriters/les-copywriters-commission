@@ -47,7 +47,12 @@ Deno.serve(async (req) => {
   const apiKey = body.apiKey || global.iclosed_api_key;
   const baseUrl = body.baseUrl || global.iclosed_api_base_url;
 
-  if (!apiKey || !baseUrl) return json({ error: "iClosed API key not configured (Global or Profile)" }, 400);
+  if (!apiKey) {
+    return json({ error: "iClosed API key is missing. Admin must configure the Global API Key in Settings → Global Integrations, or you can provide a personal override below." }, 400);
+  }
+  if (!baseUrl) {
+    return json({ error: "iClosed API Base URL is missing. Please configure it in Global Settings." }, 400);
+  }
 
   const base = baseUrl.replace(/\/$/, "");
 

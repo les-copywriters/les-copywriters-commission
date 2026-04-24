@@ -17,6 +17,7 @@ import { User, Shield, Sliders, Moon, Sun, Globe, CheckCircle2, AlertCircle, Log
 import { useQuery } from "@tanstack/react-query";
 import { useUpdateFathomKey } from "@/hooks/useCallAnalysis";
 import { useSetterIntegrationMappings, useUpsertSetterIntegrationMapping } from "@/hooks/useSetterDashboard";
+import { useGlobalSettings } from "@/hooks/useGlobalSettings";
 import SetterIntegrationManager from "@/components/SetterIntegrationManager";
 import GlobalIntegrationSettings from "@/components/GlobalIntegrationSettings";
 
@@ -164,6 +165,7 @@ const SettingsPage = () => {
   const { user, session, logout, refreshProfile } = useAuth();
   const { t, locale, setLocale } = useLanguage();
   const updateProfile = useUpdateProfile();
+  const { data: globalSettings = [] } = useGlobalSettings();
 
   // Profile tab
   const [displayName, setDisplayName] = useState(user?.name ?? "");
@@ -194,6 +196,8 @@ const SettingsPage = () => {
     aircallEmail: "",
     iclosedUserId: "",
     iclosedEmail: "",
+    iclosedApiKey: "",
+    iclosedApiBaseUrl: "https://api.iclosed.io/v1",
   });
   const [setterIdsLoaded, setSetterIdsLoaded] = useState(false);
   const [savingSetterIds, setSavingSetterIds] = useState(false);
@@ -206,6 +210,8 @@ const SettingsPage = () => {
       aircallEmail: myMapping.aircallEmail ?? "",
       iclosedUserId: myMapping.iclosedUserId ?? "",
       iclosedEmail: myMapping.iclosedEmail ?? "",
+      iclosedApiKey: myMapping.iclosedApiKey ?? "",
+      iclosedApiBaseUrl: myMapping.iclosedApiBaseUrl ?? "https://api.iclosed.io/v1",
     });
     setSetterIdsLoaded(true);
   }
@@ -262,15 +268,15 @@ const SettingsPage = () => {
     try {
       const { data, error } = await supabase.functions.invoke("iclosed-lookup", {
         body: {
-          // We pass null/undefined if empty, Edge function will fall back to global
-          apiKey: myMapping?.iclosedApiKey || null,
-          baseUrl: myMapping?.iclosedApiBaseUrl || null
+          apiKey: setterIds.iclosedApiKey?.trim() || globalSettings.find(s => s.key === 'iclosed_api_key')?.value || null,
+          baseUrl: setterIds.iclosedApiBaseUrl?.trim() || globalSettings.find(s => s.key === 'iclosed_api_base_url')?.value || null
         },
       });
       if (error) {
         const ctx = error as { context?: { json?: () => Promise<{ error?: string }> } };
         const body = await ctx.context?.json?.().catch(() => null);
-        throw new Error((body as { error?: string })?.error ?? error.message);
+        const msg = (body as { error?: string })?.error ?? error.message;
+        throw new Error(msg);
       }
       const users = ((data as { users?: Array<{ id: number; firstName?: string; lastName?: string; email?: string }> })?.users ?? []);
       if (!users.length) { toast.error("No users found in your iClosed account."); return; }
@@ -301,6 +307,8 @@ const SettingsPage = () => {
         pipedriveEmail: myMapping?.pipedriveEmail ?? null,
         iclosedUserId: setterIds.iclosedUserId.trim() || null,
         iclosedEmail: setterIds.iclosedEmail.trim() || null,
+        iclosedApiKey: setterIds.iclosedApiKey.trim() || null,
+        iclosedApiBaseUrl: setterIds.iclosedApiBaseUrl.trim() || null,
         notes: myMapping?.notes ?? null,
       },
       {
@@ -622,9 +630,8 @@ const SettingsPage = () => {
                   </Button>
                 </IntegrationRow>}
 
-                {/* ── Aircall (setters only) ── */}
-                {isSetter && (
-                  <IntegrationRow
+                {/* ── Aircall ── */}
+                <IntegrationRow
                     color="violet"
                     name="Aircall"
                     description="Connect your Aircall account to sync call volume and talk time to your dashboard."
@@ -650,11 +657,8 @@ const SettingsPage = () => {
                       {savingSetterIds ? t("common.loading") : t("settings.saveMapping")}
                     </Button>
                   </IntegrationRow>
-                )}
-
-                {/* ── iClosed (setters only) ── */}
-                {isSetter && (
-                  <IntegrationRow
+                {/* ── iClosed ── */}
+                <IntegrationRow
                     color="amber"
                     name="iClosed"
                     description="Connect your iClosed account to sync leads, show-ups, and closes to your dashboard."
@@ -675,12 +679,19 @@ const SettingsPage = () => {
                         <Label htmlFor="iclosedEmail" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">{t("settings.iclosedEmail")}</Label>
                         <Input id="iclosedEmail" type="email" value={setterIds.iclosedEmail} onChange={(e) => setSetterIds((p) => ({ ...p, iclosedEmail: e.target.value }))} placeholder="you@company.com" className="h-12 rounded-xl border-2 bg-muted/20 text-sm px-5" autoComplete="off" />
                       </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="iclosedApiKey" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">{t("settings.iclosedApiKey")}</Label>
+                        <Input id="iclosedApiKey" type="password" value={setterIds.iclosedApiKey} onChange={(e) => setSetterIds((p) => ({ ...p, iclosedApiKey: e.target.value }))} placeholder="••••••••••••••••" className="h-12 rounded-xl border-2 bg-muted/20 font-mono text-sm px-5" autoComplete="off" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="iclosedApiBaseUrl" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">{t("settings.iclosedApiBaseUrl")}</Label>
+                        <Input id="iclosedApiBaseUrl" value={setterIds.iclosedApiBaseUrl} onChange={(e) => setSetterIds((p) => ({ ...p, iclosedApiBaseUrl: e.target.value }))} placeholder="https://api.iclosed.io/v1" className="h-12 rounded-xl border-2 bg-muted/20 font-mono text-sm px-5" autoComplete="off" />
+                      </div>
                     </div>
                     <Button onClick={handleSaveSetterIds} disabled={savingSetterIds} size="sm" className="h-12 rounded-xl font-black uppercase tracking-widest text-[10px] px-8 shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] active:scale-95">
                       {savingSetterIds ? t("common.loading") : t("settings.saveMapping")}
                     </Button>
                   </IntegrationRow>
-                )}
 
               </div>
             </Card>
@@ -688,7 +699,6 @@ const SettingsPage = () => {
             {user?.role === "admin" && (
               <div className="mt-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-300">
                 <GlobalIntegrationSettings />
-                <SetterIntegrationManager />
               </div>
             )}
           </TabsContent>
