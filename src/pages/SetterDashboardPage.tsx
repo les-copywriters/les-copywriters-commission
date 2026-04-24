@@ -287,7 +287,7 @@ const SetterDashboardPage = () => {
                         const r = (data as any)?.results?.[0];
                         if (r?.errors?.length) toast.error(`Aircall: ${r.errors[0]}`);
                         else if (r?.rows_written > 0) toast.success(`Aircall synced — ${r.rows_written} rows written`);
-                        else if (r?.records_seen > 0) toast.warning(`Aircall fetched ${r.records_seen} calls but none matched the Aircall User IDs in setter mappings. Check the User IDs in Settings.`);
+                        else if (r?.records_seen > 0) toast.success(`Aircall sync complete — no calls found for this setter in the synced period.`);
                         else toast.warning("Aircall sync found 0 calls for this date range. Try a wider date range or verify the API credentials.");
                       },
                       onError: (syncError) => toast.error(syncError.message),
@@ -312,7 +312,7 @@ const SetterDashboardPage = () => {
                         const r = (data as any)?.results?.[0];
                         if (r?.errors?.length) toast.error(`iClosed: ${r.errors[0]}`);
                         else if (r?.rows_written > 0) toast.success(`iClosed synced — ${r.rows_written} rows written`);
-                        else toast.warning("iClosed sync ran but wrote 0 rows. Check setter mappings and credentials in Settings.");
+                        else toast.success(`iClosed sync complete — no events found for this setter in the synced period.`);
                       },
                       onError: (syncError) => toast.error(syncError.message),
                     },
