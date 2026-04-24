@@ -198,6 +198,7 @@ const SettingsPage = () => {
   const [setterIdsLoaded, setSetterIdsLoaded] = useState(false);
   const [savingSetterIds, setSavingSetterIds] = useState(false);
   const [fetchingUserId, setFetchingUserId] = useState(false);
+  const [fetchingAircallUserId, setFetchingAircallUserId] = useState(false);
 
   if (isSetter && myMapping && !setterIdsLoaded) {
     setSetterIds({
@@ -224,6 +225,37 @@ const SettingsPage = () => {
     },
     enabled: !!user?.id,
   });
+
+  const handleFetchAircallUserId = async () => {
+    setFetchingAircallUserId(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("aircall-lookup");
+      if (error) {
+        const ctx = error as { context?: { json?: () => Promise<{ error?: string }> } };
+        const body = await ctx.context?.json?.().catch(() => null);
+        throw new Error((body as { error?: string })?.error ?? error.message);
+      }
+      const users = ((data as { users?: Array<{ id: number; name: string; email: string | null }> })?.users ?? []);
+      if (!users.length) { toast.error("No users found in your Aircall account."); return; }
+      const sessionEmail = session?.user?.email ?? "";
+      const match =
+        users.find(u => u.email === setterIds.aircallEmail) ??
+        users.find(u => u.email === sessionEmail) ??
+        users.find(u => u.name.toLowerCase().includes((user?.name ?? "").toLowerCase())) ??
+        null;
+      if (match) {
+        setSetterIds(p => ({ ...p, aircallUserId: String(match.id) }));
+        toast.success(`Matched: ${match.name} (${match.email ?? "no email"}) — ID ${match.id}`);
+      } else {
+        const list = users.map(u => `${u.name}: ${u.id}`).join(" | ");
+        toast.info(`No auto-match found. Available users — ${list}`);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to fetch Aircall users.");
+    } finally {
+      setFetchingAircallUserId(false);
+    }
+  };
 
   const handleFetchIclosedUserId = async () => {
     setFetchingUserId(true);
@@ -602,7 +634,12 @@ const SettingsPage = () => {
                     <div className="grid gap-6 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label htmlFor="aircallUserId" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">{t("settings.aircallUserId")}</Label>
-                        <Input id="aircallUserId" value={setterIds.aircallUserId} onChange={(e) => setSetterIds((p) => ({ ...p, aircallUserId: e.target.value }))} placeholder="e.g. 123456" className="h-12 rounded-xl border-2 bg-muted/20 font-mono text-sm px-5" autoComplete="off" />
+                        <div className="flex gap-3">
+                          <Input id="aircallUserId" value={setterIds.aircallUserId} onChange={(e) => setSetterIds((p) => ({ ...p, aircallUserId: e.target.value }))} placeholder="e.g. 123456" className="h-12 rounded-xl border-2 bg-muted/20 font-mono text-sm px-5 w-full" autoComplete="off" />
+                          <Button type="button" variant="outline" size="sm" className="h-12 rounded-xl px-4 shrink-0 font-black uppercase tracking-widest text-[10px] border-border/60 hover:bg-muted" disabled={fetchingAircallUserId} onClick={handleFetchAircallUserId}>
+                            {fetchingAircallUserId ? "..." : "Fetch"}
+                          </Button>
+                        </div>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="aircallEmail" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">{t("settings.aircallEmail")}</Label>
