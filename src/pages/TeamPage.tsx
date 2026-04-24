@@ -121,31 +121,24 @@ const TeamPage = () => {
   return (
     <AppLayout>
       <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 shadow-inner">
-              <Users className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">{t("team.title")}</h1>
-              <p className="text-muted-foreground">{t("team.subtitle")}</p>
-            </div>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">{t("team.title")}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{t("team.subtitle")}</p>
           </div>
-          
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative">
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search team..."
-                className="pl-4 h-11 w-full sm:w-64 rounded-xl border-border/40 focus-visible:ring-primary/20 bg-muted/30"
-              />
-            </div>
+
+          <div className="flex flex-col sm:flex-row gap-2.5">
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search team..."
+              className="h-9 w-full sm:w-56 rounded-lg border-border/50 text-sm bg-muted/20"
+            />
             <Select value={sortBy} onValueChange={(value) => setSortBy(value as typeof sortBy)}>
-              <SelectTrigger className="h-11 w-full sm:w-56 rounded-xl border-border/40 bg-muted/30">
+              <SelectTrigger className="h-9 w-full sm:w-48 rounded-lg border-border/50 text-sm bg-muted/20">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="rounded-xl border-border/40">
+              <SelectContent className="rounded-xl">
                 <SelectItem value="commission">Sort by commission</SelectItem>
                 <SelectItem value="sales">Sort by sales</SelectItem>
                 <SelectItem value="volume">Sort by volume</SelectItem>
@@ -170,29 +163,29 @@ const TeamPage = () => {
                   #{idx + 1}
                 </div>
                 <CardContent className="p-6">
-                  <div className="flex items-center gap-4 mb-6">
+                  <div className="flex items-center gap-3 mb-5">
                     <div className={cn(
-                      "flex h-14 w-14 items-center justify-center rounded-2xl font-black text-xl shadow-inner",
+                      "flex h-11 w-11 items-center justify-center rounded-xl font-bold text-base shadow-inner",
                       idx === 0 ? "bg-primary text-white" : "bg-background text-primary border border-border/40"
                     )}>
                       {performer.name.split(" ").map(n => n[0]).join("")}
                     </div>
                     <div>
-                      <p className="font-bold text-lg">{performer.name}</p>
-                      <Badge variant={performer.role === "closer" ? "default" : "secondary"} className="uppercase text-[9px] h-4">
+                      <p className="font-semibold text-base">{performer.name}</p>
+                      <Badge variant={performer.role === "closer" ? "default" : "secondary"} className="capitalize text-[10px] h-4 font-medium">
                         {performer.role}
                       </Badge>
                     </div>
                   </div>
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     <div className="flex justify-between items-end">
-                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Commission</p>
-                      <p className="text-2xl font-black text-primary">{fmt(performer.commission)}</p>
+                      <p className="text-xs font-medium text-muted-foreground">Commission</p>
+                      <p className="text-xl font-bold text-primary">{fmt(performer.commission)}</p>
                     </div>
                     <div className="w-full bg-muted/40 h-1.5 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-primary rounded-full transition-all duration-1000 ease-out" 
-                        style={{ width: `${(performer.volume / maxVolume) * 100}%` }} 
+                      <div
+                        className="h-full bg-primary rounded-full transition-all duration-1000 ease-out"
+                        style={{ width: `${(performer.volume / maxVolume) * 100}%` }}
                       />
                     </div>
                   </div>
@@ -237,7 +230,7 @@ const TeamPage = () => {
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {closerMembers.map(user => (
                   <Link key={user.id} to={`/team/closer/${encodeURIComponent(user.name)}`} className="group">
-                    <Card className="border-none shadow-sm hover:shadow-xl transition-all duration-300 rounded-3xl overflow-hidden group-hover:-translate-y-1">
+                    <Card className="border-none shadow-sm hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden group-hover:-translate-y-1">
                       <CardContent className="p-6">
                         <div className="flex items-center justify-between mb-4">
                           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary font-black group-hover:bg-primary group-hover:text-white transition-colors duration-300">
@@ -249,12 +242,12 @@ const TeamPage = () => {
                           <p className="font-bold text-lg mb-4">{user.name}</p>
                           <div className="grid grid-cols-2 gap-4">
                             <div className="p-3 bg-muted/30 rounded-2xl group-hover:bg-background transition-colors duration-300">
-                              <p className="text-[10px] font-bold text-muted-foreground uppercase">{t("team.sales")}</p>
-                              <p className="text-lg font-black mt-1 tabular-nums">{user.count}</p>
+                              <p className="text-xs font-medium text-muted-foreground">{t("team.sales")}</p>
+                              <p className="text-lg font-bold mt-1 tabular-nums">{user.count}</p>
                             </div>
                             <div className="p-3 bg-primary/5 rounded-2xl group-hover:bg-primary group-hover:shadow-lg group-hover:shadow-primary/20 transition-all duration-300">
                               <p className={cn("text-[10px] font-bold uppercase transition-colors duration-300", "text-primary group-hover:text-white/80")}>{t("team.commission")}</p>
-                              <p className={cn("text-lg font-black mt-1 tabular-nums transition-colors duration-300", "text-primary group-hover:text-white")}>{fmt(user.commission)}</p>
+                              <p className={cn("text-lg font-bold mt-1 tabular-nums transition-colors duration-300", "text-primary group-hover:text-white")}>{fmt(user.commission)}</p>
                             </div>
                           </div>
                         </div>
@@ -290,7 +283,7 @@ const TeamPage = () => {
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {setterMembers.map(user => (
                   <Link key={user.id} to={`/team/setter/${encodeURIComponent(user.name)}`} className="group">
-                    <Card className="border-none shadow-sm hover:shadow-xl transition-all duration-300 rounded-3xl overflow-hidden group-hover:-translate-y-1">
+                    <Card className="border-none shadow-sm hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden group-hover:-translate-y-1">
                       <CardContent className="p-6">
                         <div className="flex items-center justify-between mb-4">
                           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 font-black group-hover:bg-emerald-500 group-hover:text-white transition-colors duration-300">
@@ -302,12 +295,12 @@ const TeamPage = () => {
                           <p className="font-bold text-lg mb-4">{user.name}</p>
                           <div className="grid grid-cols-2 gap-4">
                             <div className="p-3 bg-muted/30 rounded-2xl group-hover:bg-background transition-colors duration-300">
-                              <p className="text-[10px] font-bold text-muted-foreground uppercase">{t("team.sales")}</p>
-                              <p className="text-lg font-black mt-1 tabular-nums">{user.count}</p>
+                              <p className="text-xs font-medium text-muted-foreground">{t("team.sales")}</p>
+                              <p className="text-lg font-bold mt-1 tabular-nums">{user.count}</p>
                             </div>
                             <div className="p-3 bg-emerald-500/5 rounded-2xl group-hover:bg-emerald-500 group-hover:shadow-lg group-hover:shadow-emerald-500/20 transition-all duration-300">
                               <p className={cn("text-[10px] font-bold uppercase transition-colors duration-300", "text-emerald-600 group-hover:text-white/80")}>{t("team.commission")}</p>
-                              <p className={cn("text-lg font-black mt-1 tabular-nums transition-colors duration-300", "text-emerald-600 group-hover:text-white")}>{fmt(user.commission)}</p>
+                              <p className={cn("text-lg font-bold mt-1 tabular-nums transition-colors duration-300", "text-emerald-600 group-hover:text-white")}>{fmt(user.commission)}</p>
                             </div>
                           </div>
                         </div>

@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
-import { DollarSign, ShoppingCart, TrendingUp, AlertTriangle, Target, Percent, Gift, X, BarChart as BarChartIcon, Filter, Layers, Calendar, Check } from "lucide-react";
+import { DollarSign, ShoppingCart, TrendingUp, AlertTriangle, Target, Percent, Gift, X, Layers, Calendar, Check, Search } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, AreaChart, Area
@@ -52,12 +52,12 @@ const CHART_COLORS = {
 };
 
 const ChartCard = ({ title, icon: Icon, children }: { title: string; icon?: any; children: React.ReactNode }) => (
-  <Card className="border-none shadow-sm bg-background/50 backdrop-blur-sm overflow-hidden rounded-3xl">
-    <div className="p-6 pb-0 flex items-center gap-2">
-      {Icon && <div className="p-2 rounded-lg bg-primary/10 text-primary"><Icon className="h-4 w-4" /></div>}
-      <h3 className="font-black text-sm uppercase tracking-widest text-muted-foreground">{title}</h3>
+  <Card className="border-none shadow-sm bg-background/50 backdrop-blur-sm overflow-hidden rounded-2xl">
+    <div className="px-6 pt-5 pb-0 flex items-center gap-2.5">
+      {Icon && <div className="p-1.5 rounded-md bg-primary/10 text-primary"><Icon className="h-3.5 w-3.5" /></div>}
+      <h3 className="font-semibold text-sm text-foreground/70">{title}</h3>
     </div>
-    <CardContent className="p-6">{children}</CardContent>
+    <CardContent className="p-6 pt-4">{children}</CardContent>
   </Card>
 );
 
@@ -82,6 +82,7 @@ const AnalyticsPage = () => {
   const [filterStatus,     setFilterStatus]     = useState<StatusFilter>("all");
   const [filterCloser,     setFilterCloser]     = useState("all");
   const [filterSetter,     setFilterSetter]     = useState("all");
+  const [search,           setSearch]           = useState("");
 
   const closers  = profiles.filter(p => p.role === "closer");
   const setters  = profiles.filter(p => p.role === "setter");
@@ -90,11 +91,11 @@ const AnalyticsPage = () => {
 
   const hasActiveFilters =
     filterProduct !== "all" || filterType !== "all" || filterStatus !== "all" ||
-    filterCloser !== "all"  || filterSetter !== "all";
+    filterCloser !== "all"  || filterSetter !== "all" || search !== "";
 
   const resetFilters = () => {
     setFilterProduct("all"); setFilterType("all"); setFilterStatus("all");
-    setFilterCloser("all");  setFilterSetter("all");
+    setFilterCloser("all");  setFilterSetter("all"); setSearch("");
   };
 
   // ── Scope to current user if not admin ──────────────────────────────────────
@@ -119,8 +120,17 @@ const AnalyticsPage = () => {
     if (filterStatus === "unpaid"   && !s.impaye)                  return false;
     if (filterCloser !== "all" && s.closerId !== filterCloser)     return false;
     if (filterSetter !== "all" && s.setterId !== filterSetter)     return false;
+    if (search.trim() !== "") {
+      const q = search.toLowerCase();
+      return (
+        s.clientName?.toLowerCase().includes(q) ||
+        s.product?.toLowerCase().includes(q) ||
+        s.closer?.toLowerCase().includes(q) ||
+        s.setter?.toLowerCase().includes(q)
+      );
+    }
     return true;
-  }), [scopedSales, startDate, endDate, filterProduct, filterType, filterStatus, filterCloser, filterSetter]);
+  }), [scopedSales, startDate, endDate, filterProduct, filterType, filterStatus, filterCloser, filterSetter, search]);
 
   // ── Computed metrics ────────────────────────────────────────────────────────
   const metrics = useMemo(() => {
@@ -201,27 +211,22 @@ const AnalyticsPage = () => {
       <div className="space-y-10 animate-in fade-in duration-500">
 
         {/* ── Header ────────────────────────────────────────────────────────── */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 shadow-inner">
-              <BarChartIcon className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black tracking-tight">{t("analytics.title")}</h1>
-              <p className="text-xs text-muted-foreground font-medium">{t("analytics.subtitle")}</p>
-            </div>
+        <div className="space-y-5">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">{t("analytics.title")}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{t("analytics.subtitle")}</p>
           </div>
-          
-          <div className="bg-background/50 backdrop-blur-sm border border-border/40 p-1.5 rounded-2xl flex flex-wrap gap-1 shadow-sm">
+
+          <div className="flex flex-wrap gap-1.5">
             {presets.map(({ key, label }) => (
               <button
                 key={key}
                 onClick={() => setDatePreset(key)}
                 className={cn(
-                  "rounded-xl px-4 py-1.5 text-xs font-black uppercase tracking-widest transition-all active:scale-95",
+                  "rounded-lg px-3.5 py-1.5 text-xs font-medium transition-all",
                   datePreset === key
-                    ? "bg-primary text-white shadow-lg shadow-primary/20"
-                    : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                    ? "bg-primary text-white shadow-sm"
+                    : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >
                 {label}
@@ -232,93 +237,102 @@ const AnalyticsPage = () => {
 
         {/* ── Custom date inputs ─────────────────────────────────────────────── */}
         {datePreset === "custom" && (
-          <div className="flex flex-wrap gap-4 items-end bg-muted/20 p-6 rounded-3xl border border-border/40 animate-in slide-in-from-top-2 duration-300">
-             <div className="flex items-center gap-3">
-               <Calendar className="h-4 w-4 text-primary" />
-               <p className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Custom Range</p>
-             </div>
-             <div className="flex flex-wrap gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">From</Label>
-                  <Input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="h-10 w-40 rounded-xl" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">To</Label>
-                  <Input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="h-10 w-40 rounded-xl" />
-                </div>
-             </div>
+          <div className="flex flex-wrap gap-5 items-end bg-muted/10 px-5 py-4 rounded-xl border border-border/40 animate-in slide-in-from-top-2 duration-200">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Calendar className="h-3.5 w-3.5" />
+              <span>Custom range</span>
+            </div>
+            <div className="flex flex-wrap gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">From</Label>
+                <Input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="h-9 w-40 rounded-lg text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">To</Label>
+                <Input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="h-9 w-40 rounded-lg text-sm" />
+              </div>
+            </div>
           </div>
         )}
 
         {/* ── Filter toolbar ─────────────────────────────────────────────────── */}
-        <div className="bg-background/30 backdrop-blur-sm border border-border/40 p-2 rounded-[2rem] flex flex-wrap gap-2 items-center shadow-sm">
-          <div className="flex items-center gap-2 pl-4 pr-2 border-r border-border/40 mr-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Filters</span>
+        <div className="rounded-2xl border border-border/40 bg-muted/10 p-4 space-y-3">
+          <div className="flex flex-wrap gap-3 items-center">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Search client or deal..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="h-9 w-56 pl-9 rounded-lg text-sm bg-background border-border/50"
+              />
+            </div>
+
+            <div className="h-5 w-px bg-border/50 hidden sm:block" />
+
+            <Select value={filterProduct} onValueChange={setFilterProduct}>
+              <SelectTrigger className="h-9 w-40 rounded-lg text-sm bg-background border-border/50">
+                <SelectValue placeholder="Product" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl shadow-lg">
+                <SelectItem value="all">All Products</SelectItem>
+                {products.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              </SelectContent>
+            </Select>
+
+            <Select value={filterType} onValueChange={v => setFilterType(v as PaymentFilter)}>
+              <SelectTrigger className="h-9 w-36 rounded-lg text-sm bg-background border-border/50">
+                <SelectValue placeholder="Type" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl shadow-lg">
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="pif">PIF</SelectItem>
+                <SelectItem value="installments">Installments</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={filterStatus} onValueChange={v => setFilterStatus(v as StatusFilter)}>
+              <SelectTrigger className="h-9 w-36 rounded-lg text-sm bg-background border-border/50">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl shadow-lg">
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="paid">Paid</SelectItem>
+                <SelectItem value="refunded">Refunded</SelectItem>
+                <SelectItem value="unpaid">Unpaid</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {isAdmin && (
+              <Select value={filterCloser} onValueChange={setFilterCloser}>
+                <SelectTrigger className="h-9 w-40 rounded-lg text-sm bg-background border-border/50">
+                  <SelectValue placeholder="Closer" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl shadow-lg">
+                  <SelectItem value="all">All Closers</SelectItem>
+                  {closers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
+
+            {isAdmin && (
+              <Select value={filterSetter} onValueChange={setFilterSetter}>
+                <SelectTrigger className="h-9 w-40 rounded-lg text-sm bg-background border-border/50">
+                  <SelectValue placeholder="Setter" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl shadow-lg">
+                  <SelectItem value="all">All Setters</SelectItem>
+                  {setters.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
+
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" className="h-9 px-3 gap-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-lg text-sm ml-auto" onClick={resetFilters}>
+                <X className="h-3.5 w-3.5" /> Clear
+              </Button>
+            )}
           </div>
-
-          <Select value={filterProduct} onValueChange={setFilterProduct}>
-            <SelectTrigger className="h-10 w-40 rounded-xl border-none bg-muted/20 text-xs font-bold ring-offset-background focus:ring-1 focus:ring-primary/20 transition-all">
-              <SelectValue placeholder="Product" />
-            </SelectTrigger>
-            <SelectContent className="rounded-xl border-none shadow-2xl">
-              <SelectItem value="all">All Products</SelectItem>
-              {products.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-            </SelectContent>
-          </Select>
-
-          <Select value={filterType} onValueChange={v => setFilterType(v as PaymentFilter)}>
-            <SelectTrigger className="h-10 w-32 rounded-xl border-none bg-muted/20 text-xs font-bold ring-offset-background focus:ring-1 focus:ring-primary/20 transition-all">
-              <SelectValue placeholder="Type" />
-            </SelectTrigger>
-            <SelectContent className="rounded-xl border-none shadow-2xl">
-              <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="pif">PIF</SelectItem>
-              <SelectItem value="installments">Installments</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={filterStatus} onValueChange={v => setFilterStatus(v as StatusFilter)}>
-            <SelectTrigger className="h-10 w-32 rounded-xl border-none bg-muted/20 text-xs font-bold ring-offset-background focus:ring-1 focus:ring-primary/20 transition-all">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent className="rounded-xl border-none shadow-2xl">
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="paid">Paid</SelectItem>
-              <SelectItem value="refunded">Refunded</SelectItem>
-              <SelectItem value="unpaid">Unpaid</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {isAdmin && (
-            <Select value={filterCloser} onValueChange={setFilterCloser}>
-              <SelectTrigger className="h-10 w-40 rounded-xl border-none bg-muted/20 text-xs font-bold ring-offset-background focus:ring-1 focus:ring-primary/20 transition-all">
-                <SelectValue placeholder="Closer" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl border-none shadow-2xl">
-                <SelectItem value="all">All Closers</SelectItem>
-                {closers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          )}
-
-          {isAdmin && (
-            <Select value={filterSetter} onValueChange={setFilterSetter}>
-              <SelectTrigger className="h-10 w-40 rounded-xl border-none bg-muted/20 text-xs font-bold ring-offset-background focus:ring-1 focus:ring-primary/20 transition-all">
-                <SelectValue placeholder="Setter" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl border-none shadow-2xl">
-                <SelectItem value="all">All Setters</SelectItem>
-                {setters.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          )}
-
-          {hasActiveFilters && (
-            <Button variant="ghost" size="sm" className="h-10 px-4 gap-2 text-muted-foreground hover:text-destructive hover:bg-destructive/5 font-bold rounded-xl" onClick={resetFilters}>
-              <X className="h-3.5 w-3.5" />Reset
-            </Button>
-          )}
         </div>
 
         {/* ── KPI cards ──────────────────────────────────────────────────────── */}

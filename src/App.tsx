@@ -18,9 +18,13 @@ import SetterDetailPage from "@/pages/SetterDetailPage";
 import TeamManagePage from "@/pages/TeamManagePage";
 import SettingsPage from "@/pages/SettingsPage";
 import AnalyticsPage from "@/pages/AnalyticsPage";
+import CallsPage from "@/pages/CallsPage";
+import SalesAssistantPage from "@/pages/SalesAssistantPage";
+import CoachingPage from "@/pages/CoachingPage";
+import SetterDashboardPage from "@/pages/SetterDashboardPage";
+import SetterCallDetailPage from "@/pages/SetterCallDetailPage";
 import NotFound from "@/pages/NotFound";
 
-import { Sparkles } from "lucide-react";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -48,14 +52,14 @@ const LoadingScreen = () => (
       <div className="absolute inset-[-4px] rounded-full border-2 border-transparent border-t-primary animate-spin" />
 
       {/* Core Logo Container */}
-      <div className="relative z-10 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary shadow-2xl shadow-primary/40">
-        <Sparkles className="h-8 w-8 text-white" />
+      <div className="relative z-10 flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-2xl shadow-primary/20 overflow-hidden border border-border/50">
+        <img src="/Les Copywriters Logo.jpg" alt="Logo" className="h-full w-full object-cover" />
       </div>
     </div>
 
     <div className="relative z-10 text-center space-y-1">
       <p className="text-xl font-black text-foreground tracking-tight animate-in fade-in slide-in-from-bottom-2 duration-500">
-        Elite CP
+        Les CopyWriters
       </p>
       <p className="text-[10px] font-black text-primary uppercase tracking-[0.3em] animate-pulse">
         Initializing Workspace
@@ -89,6 +93,14 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+const CloserOrAdminRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, loading } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (!user) return <Navigate to="/" replace />;
+  if (user.role !== "closer" && user.role !== "admin") return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+};
+
 const AppRoutes = () => (
   <Routes>
     <Route path="/" element={<LoginPage />} />
@@ -100,6 +112,11 @@ const AppRoutes = () => (
     <Route path="/team/closer/:name" element={<AdminRoute><CloserDetailPage /></AdminRoute>} />
     <Route path="/team/setter/:name" element={<AdminRoute><SetterDetailPage /></AdminRoute>} />
     <Route path="/analytics" element={<ProtectedRoute><AnalyticsPage /></ProtectedRoute>} />
+    <Route path="/setter-dashboard" element={<ProtectedRoute><SetterDashboardPage /></ProtectedRoute>} />
+    <Route path="/setter-dashboard/calls/:callId" element={<ProtectedRoute><SetterCallDetailPage /></ProtectedRoute>} />
+    <Route path="/calls" element={<CloserOrAdminRoute><CallsPage /></CloserOrAdminRoute>} />
+    <Route path="/assistant" element={<CloserOrAdminRoute><SalesAssistantPage /></CloserOrAdminRoute>} />
+    <Route path="/coaching" element={<AdminRoute><CoachingPage /></AdminRoute>} />
     <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
   </Routes>

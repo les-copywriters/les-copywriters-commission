@@ -75,14 +75,9 @@ const RefundsPage = () => {
   return (
     <AppLayout>
       <div className="space-y-10 animate-in fade-in duration-500">
-        <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-destructive/10 shadow-inner">
-            <Undo2 className="h-6 w-6 text-destructive" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">{t("refunds.title")}</h1>
-            <p className="text-muted-foreground">Manage service refunds and payment exceptions</p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">{t("refunds.title")}</h1>
+          <p className="text-sm text-muted-foreground mt-1">Manage service refunds and payment exceptions</p>
         </div>
 
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
@@ -90,18 +85,18 @@ const RefundsPage = () => {
             <div className="absolute top-0 right-0 p-6 opacity-5 text-destructive">
                <Undo2 className="h-20 w-20" />
             </div>
-            <CardContent className="p-8">
-              <p className="text-xs font-black uppercase tracking-widest text-destructive/60 mb-3">Refunds this month</p>
-              <p className="text-4xl font-black text-destructive tabular-nums">{monthlyRefundCount}</p>
+            <CardContent className="p-6">
+              <p className="text-xs font-medium text-destructive/60 mb-2">Refunds this month</p>
+              <p className="text-3xl font-bold text-destructive tabular-nums">{monthlyRefundCount}</p>
             </CardContent>
           </Card>
           <Card className="border-none shadow-sm rounded-2xl bg-amber-500/5 relative overflow-hidden">
             <div className="absolute top-0 right-0 p-6 opacity-5 text-amber-600">
                <CreditCard className="h-20 w-20" />
             </div>
-            <CardContent className="p-8">
-              <p className="text-xs font-black uppercase tracking-widest text-amber-600/60 mb-3">Failed payments this week</p>
-              <p className="text-4xl font-black text-amber-600 tabular-nums">{weeklyImpayesCount}</p>
+            <CardContent className="p-6">
+              <p className="text-xs font-medium text-amber-600/60 mb-2">Failed payments this week</p>
+              <p className="text-3xl font-bold text-amber-600 tabular-nums">{weeklyImpayesCount}</p>
             </CardContent>
           </Card>
         </div>

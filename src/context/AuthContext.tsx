@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { initTheme } from "@/lib/theme";
@@ -27,6 +27,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const loadedUserIdRef = useRef<string | null>(null);
 
   // Restore saved theme on first render
   useEffect(() => { initTheme(); }, []);
@@ -58,12 +59,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    // 1. Initial Session Load
+    // 1. Initial session load — runs once on mount
     const initAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         setSession(session);
         if (session?.user) {
+          loadedUserIdRef.current = session.user.id;
           await loadProfile(session.user.id);
         }
       } catch (err) {
@@ -75,25 +77,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     initAuth();
 
-    // 2. Auth State Listener (Background updates)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    // 2. Auth state listener — synchronous callback, never await inside
+    // SIGNED_IN fires on token refresh / tab focus too — skip if same user already loaded
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
-      
-      if (event === 'SIGNED_IN' && session?.user) {
+
+      if (event === "SIGNED_IN" && session?.user) {
+        if (loadedUserIdRef.current === session.user.id) return;
+        loadedUserIdRef.current = session.user.id;
         setLoading(true);
-        await loadProfile(session.user.id);
-        setLoading(false);
-      } else if (event === 'SIGNED_OUT') {
+        loadProfile(session.user.id).finally(() => setLoading(false));
+      } else if (event === "SIGNED_OUT") {
+        loadedUserIdRef.current = null;
         setUser(null);
         setLoading(false);
-      } else if (session?.user && !user) {
-        // Handle cases where session exists but profile isn't loaded yet
-        await loadProfile(session.user.id);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [user]);
+  }, []);
 
   const login = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });

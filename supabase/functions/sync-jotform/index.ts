@@ -95,16 +95,31 @@ function findProfile(name: string, role: string, profiles: Profile[]): Profile |
   return profiles.find(p => p.role === role && norm(p.name).split(/\s+/)[0] === first);
 }
 
+function findProfileAnyRole(name: string, profiles: Profile[]): Profile | undefined {
+  const n = norm(name);
+  const exact = profiles.find(p => norm(p.name) === n);
+  if (exact) return exact;
+  const first = n.split(/\s+/)[0];
+  return profiles.find(p => norm(p.name).split(/\s+/)[0] === first);
+}
+
 // ─── JotForm answer extractor ─────────────────────────────────────────────────
 function getAnswer(answers: Record<string, unknown>, fieldName: string): string {
   const entry = Object.values(answers).find(
     (a) => a !== null && typeof a === "object" && (a as Record<string, unknown>).name === fieldName,
-  ) as Record<string, unknown> | undefined;
+  ) as Record<string, any> | undefined;
+
   if (!entry?.answer) return "";
   const ans = entry.answer;
+
+  if (typeof ans === "string") return ans.trim();
+  if (Array.isArray(ans)) return String(ans[0] || "").trim();
   if (typeof ans === "object" && ans !== null) {
-    const n = ans as Record<string, string>;
-    if ("first" in n || "last" in n) return `${n.first ?? ""} ${n.last ?? ""}`.trim();
+    // Handle { first: "...", last: "..." } or generic { 0: "...", 1: "..." }
+    return Object.values(ans)
+      .filter(v => typeof v === "string")
+      .join(" ")
+      .trim();
   }
   return String(ans).trim();
 }
@@ -142,8 +157,8 @@ Deno.serve(async (req) => {
     const callerRole = callerProfile?.role ?? "";
     console.log("[sync-jotform] caller:", callerProfile?.name, callerRole);
 
-    if (callerRole !== "admin") {
-      return json({ ok: false, error: "Admin access required" }, 403);
+    if (callerRole !== "admin" && callerRole !== "closer" && callerRole !== "setter") {
+      return json({ ok: false, error: "Only admins, closers and setters can sync" }, 403);
     }
 
     // All profiles for fuzzy lookup
@@ -193,11 +208,11 @@ Deno.serve(async (req) => {
     }
     console.log("[sync-jotform] fetched from JotForm:", allSubs.length);
 
-    let imported = 0, updated = 0;
+    let imported = 0, updated = 0, skipped = 0, nonActive = 0;
     const errors: string[] = [];
 
     for (const sub of allSubs) {
-      if (sub.status !== "ACTIVE") continue;
+      if (sub.status !== "ACTIVE") { nonActive++; continue; }
 
       const subId   = String(sub.id ?? "");
       if (!subId) continue;
@@ -213,30 +228,53 @@ Deno.serve(async (req) => {
 
       console.log(`[sync-jotform] sub ${subId} — closer: "${closerName}" setter: "${setterName}"`);
 
-      if (!closerName || norm(closerName) === "autre") continue;
+      if (!closerName || norm(closerName) === "autre") {
+        skipped++;
+        errors.push(`Submission ${subId}: missing or unsupported closer`);
+        continue;
+      }
 
       // Scope: closers only process their own submissions
       if (callerRole === "closer" && norm(closerName) !== norm(callerProfile?.name ?? "")) continue;
 
       const product = get("product");
-      if (!product) continue;
+      if (!product) {
+        skipped++;
+        errors.push(`Submission ${subId}: missing product`);
+        continue;
+      }
 
       const totalRaw = parseFloat(get("totalAmount"));
       const nowRaw   = parseFloat(get("amountNow"));
       const amountHT = !isNaN(totalRaw) && totalRaw > 0 ? totalRaw
                      : !isNaN(nowRaw)   && nowRaw   > 0 ? nowRaw : NaN;
-      if (isNaN(amountHT) || amountHT <= 0) continue;
+      if (isNaN(amountHT) || amountHT <= 0) {
+        skipped++;
+        errors.push(`Submission ${subId}: invalid amount`);
+        continue;
+      }
 
       const ptRaw = get("paymentType").toLowerCase();
       const paymentType: "pif" | "installments" =
         ptRaw.includes("sequra") || ptRaw.includes("séqura") ? "installments" : "pif";
 
-      const closerProfile = findProfile(closerName, "closer", profiles);
-      if (!closerProfile) { errors.push(`Closer not found: "${closerName}"`); continue; }
+      // 1. Resolve Closer
+      const closerProfile = findProfileAnyRole(closerName, profiles);
+      if (!closerProfile) {
+        skipped++;
+        errors.push(`Submission ${subId}: closer not found "${closerName}"`);
+        continue;
+      }
 
       const noSetter = !setterName ||
         norm(setterName) === "aucun" || norm(setterName) === "autre" || setterName === "";
-      const setterProfile = noSetter ? null : findProfile(setterName, "setter", profiles);
+      const matchedSetter = noSetter ? null : findProfile(setterName, "setter", profiles);
+      const fallbackSetter = noSetter || matchedSetter ? null : findProfileAnyRole(setterName, profiles);
+      const setterProfile = matchedSetter ?? fallbackSetter;
+
+      if (fallbackSetter) {
+        console.log(`[sync-jotform] setter matched via role fallback: "${setterName}" -> ${fallbackSetter.name}(${fallbackSetter.role})`);
+      }
 
       if (!noSetter && !setterProfile) {
         console.warn(`[sync-jotform] setter not matched: "${setterName}"`);
@@ -262,6 +300,11 @@ Deno.serve(async (req) => {
           updated++;
           existingIds.add(subId);
         }
+        continue;
+      }
+
+      if (needsUpdate && !noSetter && !setterProfile) {
+        skipped++;
         continue;
       }
 
@@ -294,8 +337,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`[sync-jotform] done — imported: ${imported}, updated: ${updated}, errors: ${errors.length}`);
-    return json({ ok: true, total: allSubs.length, imported, updated, errors });
+    console.log(`[sync-jotform] done — imported: ${imported}, updated: ${updated}, skipped: ${skipped}, nonActive: ${nonActive}, errors: ${errors.length}`);
+    return json({ ok: true, total: allSubs.length, imported, updated, skipped, nonActive, errors });
 
   } catch (err) {
     console.error("[sync-jotform] uncaught:", err);

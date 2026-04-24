@@ -38,6 +38,14 @@ function findProfile(name: string, role: string, profiles: Profile[]): Profile |
   return profiles.find(p => p.role === role && norm(p.name).split(/\s+/)[0] === first);
 }
 
+function findProfileAnyRole(name: string, profiles: Profile[]): Profile | undefined {
+  const n = norm(name);
+  const exact = profiles.find(p => norm(p.name) === n);
+  if (exact) return exact;
+  const first = n.split(/\s+/)[0];
+  return profiles.find(p => norm(p.name).split(/\s+/)[0] === first);
+}
+
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 function getString(form: Record<string, unknown>, key: string): string {
   const val = form[key];
@@ -69,7 +77,8 @@ Deno.serve(async (req) => {
   try {
     const expectedSecret = Deno.env.get("JOTFORM_WEBHOOK_SECRET");
     if (expectedSecret) {
-      const providedSecret = req.headers.get("x-webhook-secret");
+      const url = new URL(req.url);
+      const providedSecret = url.searchParams.get("secret") ?? req.headers.get("x-webhook-secret");
       if (!providedSecret || providedSecret !== expectedSecret) {
         return new Response("Unauthorized webhook request", { status: 401 });
       }
@@ -166,11 +175,16 @@ Deno.serve(async (req) => {
     console.log("[jotform-webhook] profiles:", profiles.map(p => `${p.name}(${p.role})`).join(", "));
 
     const closerProfile = findProfile(closerName, "closer", profiles);
-    const setterProfile = noSetter ? null : findProfile(setterName, "setter", profiles);
+    const matchedSetter = noSetter ? null : findProfile(setterName, "setter", profiles);
+    const fallbackSetter = noSetter || matchedSetter ? null : findProfileAnyRole(setterName, profiles);
+    const setterProfile = matchedSetter ?? fallbackSetter;
 
     if (!closerProfile) {
       console.error(`[jotform-webhook] closer not found: "${closerName}"`);
       return new Response(`Closer not found in profiles: "${closerName}"`, { status: 422 });
+    }
+    if (fallbackSetter) {
+      console.log(`[jotform-webhook] setter matched via role fallback: "${setterName}" -> ${fallbackSetter.name}(${fallbackSetter.role})`);
     }
     if (!noSetter && !setterProfile) {
       console.warn(`[jotform-webhook] setter not matched: "${setterName}" — inserting without setter`);
@@ -189,7 +203,7 @@ Deno.serve(async (req) => {
         amount_ttc:         amountTTC,
         tax_amount:         taxAmount,
         closer_commission:  closerCommission,
-        setter_commission:  noSetter ? 0 : setterCommission,
+        setter_commission:  setterProfile ? setterCommission : 0,
         refunded:           false,
         impaye:             false,
         payment_platform:   paymentPlatform,

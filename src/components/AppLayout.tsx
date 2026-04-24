@@ -18,7 +18,7 @@ const AppLayout = ({ children }: { children: ReactNode }) => {
       {/* Page content fades in on every mount */}
       <main
         key={typeof window !== "undefined" ? window.location.pathname : undefined}
-        className="flex-1 p-6 pt-16 lg:ml-72 lg:pt-8 lg:p-12 animate-in fade-in duration-700 overflow-x-hidden"
+        className="flex-1 p-6 pt-16 lg:ml-64 lg:pt-8 lg:p-10 animate-in fade-in duration-500 overflow-x-hidden"
       >
         <div className="max-w-[1600px] mx-auto">
           {children}

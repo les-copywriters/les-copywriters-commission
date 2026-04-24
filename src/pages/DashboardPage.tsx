@@ -4,22 +4,24 @@ import { useSales } from "@/hooks/useSales";
 import { useRefunds } from "@/hooks/useRefunds";
 import { useImpayes } from "@/hooks/useImpayes";
 import { useBonusTiers } from "@/hooks/useBonusTiers";
+import { useSetterDashboardMetrics } from "@/hooks/useSetterDashboard";
+import { computeSetterDateRange } from "@/lib/setterDashboard";
 import { useLanguage } from "@/i18n";
 import { useAuth } from "@/context/AuthContext";
 import { monthlyBonusBreakdown, formatMonth } from "@/lib/bonusCalculation";
 import AppLayout from "@/components/AppLayout";
 import StatCard from "@/components/StatCard";
 import ProfileTag from "@/components/ProfileTag";
+import { useSyncSetterDashboard } from "@/hooks/useSetterDashboard";
 import { Button } from "@/components/ui/button";
 import SaleStatusBadge from "@/components/SaleStatusBadge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, TrendingDown, AlertTriangle, Wallet, DollarSign, ShoppingCart, Gift, LayoutDashboard, RefreshCw, Eye, ArrowRight, Activity } from "lucide-react";
+import { TrendingUp, TrendingDown, AlertTriangle, Wallet, DollarSign, ShoppingCart, Gift, RefreshCw, Eye, ArrowRight, Activity, Calendar, Trophy, BarChart3 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, AreaChart, Area
 } from "recharts";
 import { cn } from "@/lib/utils";
 import { useSyncJotform } from "@/hooks/useSyncJotform";
@@ -30,27 +32,34 @@ import { Sale } from "@/types";
 // ─── Shared skeleton loader ───────────────────────────────────────────────────
 const CardSkeletons = ({ n = 4 }: { n?: number }) => (
   <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-    {Array.from({ length: n }).map((_, i) => <Skeleton key={i} className="h-32 rounded-3xl" />)}
+    {Array.from({ length: n }).map((_, i) => <Skeleton key={i} className="h-32 rounded-[2rem]" />)}
+  </div>
+);
+
+const ChartSkeletons = () => (
+  <div className="grid gap-8 lg:grid-cols-2">
+    {Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-[420px] rounded-[2.5rem]" />)}
   </div>
 );
 
 // ─── Chart card wrapper ───────────────────────────────────────────────────────
-const ChartCard = ({ title, icon: Icon, children }: { title: string; icon?: any; children: React.ReactNode }) => (
-  <Card className="border-none shadow-sm bg-background/50 backdrop-blur-sm overflow-hidden rounded-3xl">
-    <div className="p-6 pb-0 flex items-center gap-2">
-      {Icon && <div className="p-2 rounded-lg bg-primary/10 text-primary"><Icon className="h-4 w-4" /></div>}
-      <h3 className="font-black text-sm uppercase tracking-widest text-muted-foreground">{title}</h3>
-    </div>
-    <CardContent className="p-6">{children}</CardContent>
+const ChartCard = ({ title, icon: Icon, children, badge }: { title: string; icon?: any; children: React.ReactNode; badge?: string }) => (
+  <Card className="border-none shadow-premium bg-background overflow-hidden rounded-[2.5rem]">
+    <CardHeader className="p-8 border-b border-border/40 flex flex-row items-center justify-between">
+      <div className="flex items-center gap-3">
+        {Icon && <div className="p-2 rounded-lg bg-primary/10 text-primary"><Icon className="h-4 w-4" /></div>}
+        <CardTitle className="font-black text-sm uppercase tracking-widest text-muted-foreground">{title}</CardTitle>
+      </div>
+      {badge && <Badge className="bg-primary/5 text-primary border-primary/20 font-black uppercase tracking-widest text-[8px] px-3 py-1 rounded-full">{badge}</Badge>}
+    </CardHeader>
+    <CardContent className="p-8">{children}</CardContent>
   </Card>
 );
 
 const CHART_COLORS = {
   primary: "hsl(var(--primary))",
   border:  "rgba(128,128,128,0.12)",
-  line:    "hsl(var(--primary))",
 };
-const PIE_COLORS = ["#3b82f6", "#10b981", "#ef4444", "#f59e0b"];
 
 // ─── Main component ───────────────────────────────────────────────────────────
 const DashboardPage = () => {
@@ -61,6 +70,7 @@ const DashboardPage = () => {
   const { data: allImpayes = [], isLoading: loadingImpayes } = useImpayes();
   const { data: tiers = [] } = useBonusTiers();
   const sync = useSyncJotform();
+  const funnelSync = useSyncSetterDashboard();
 
   const isAdmin  = user?.role === "admin";
   const isCloser = user?.role === "closer";
@@ -70,6 +80,13 @@ const DashboardPage = () => {
   const [adminVisible,  setAdminVisible]  = useState(PAGE_SIZE);
   const [memberVisible, setMemberVisible] = useState(PAGE_SIZE);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
+
+  const dateRange = useMemo(() => computeSetterDateRange("thisMonth"), []);
+  const { data: metrics } = useSetterDashboardMetrics({
+    profileId: isAdmin ? undefined : user?.id,
+    startDate: dateRange.start,
+    endDate: dateRange.end,
+  });
 
   // Scope sales/refunds/impayes to the current user if not admin
   const sales = useMemo(() =>
@@ -107,8 +124,9 @@ const DashboardPage = () => {
         const myComm = isCloser ? s.closerCommission : isSetter ? s.setterCommission : s.closerCommission + s.setterCommission;
         productMap.set(s.product, (productMap.get(s.product) ?? 0) + myComm);
         // monthly
-        const month = new Date(s.date).getMonth() + 1;
-        monthlyMap.set(month, (monthlyMap.get(month) ?? 0) + myComm);
+        const d = new Date(s.date);
+        const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        monthlyMap.set(monthKey, (monthlyMap.get(monthKey) ?? 0) + myComm);
       }
     }
 
@@ -121,7 +139,8 @@ const DashboardPage = () => {
     const monthlyData = Array.from({ length: 6 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
       const m = d.getMonth() + 1;
-      return { month: monthLabels[m], commission: monthlyMap.get(m) ?? 0 };
+      const key = `${d.getFullYear()}-${String(m).padStart(2, "0")}`;
+      return { month: monthLabels[m], commission: monthlyMap.get(key) ?? 0 };
     });
 
     return {
@@ -130,14 +149,8 @@ const DashboardPage = () => {
       closerCommData:  Array.from(closerCommMap, ([name, commission]) => ({ name, commission })),
       productData:     Array.from(productMap,    ([name, commission]) => ({ name, commission })),
       monthlyData,
-      pieData: [
-        { name: t("dashboard.closerComm"), value: totalCloserComm },
-        { name: t("dashboard.setterComm"), value: totalSetterComm },
-        { name: t("dashboard.refunds"),    value: totalRefunds },
-        { name: t("dashboard.impayes"),    value: totalImpayes },
-      ],
     };
-  }, [sales, refunds, impayes, isCloser, isSetter, locale, t]);
+  }, [sales, refunds, impayes, isCloser, isSetter, locale]);
 
   // Closer: monthly bonus history
   const bonusHistory     = useMemo(() => isCloser ? monthlyBonusBreakdown(sales, tiers) : [], [sales, tiers, isCloser]);
@@ -146,59 +159,98 @@ const DashboardPage = () => {
 
   return (
     <AppLayout>
-      <div className="space-y-10 animate-in fade-in duration-500">
+      <div className="space-y-12 animate-in fade-in duration-700">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 shadow-inner">
-              <LayoutDashboard className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black tracking-tight">{isAdmin ? t("dashboard.title") : user?.name}</h1>
-              <p className="text-sm text-muted-foreground font-medium">
-                {isAdmin ? t("dashboard.salesSource") : `${t(`role.${user?.role}`)} — ${t("dashboard.salesSource")}`}
-              </p>
-            </div>
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8">
+          <div className="flex items-center gap-5">
+             <div className="h-16 w-16 rounded-[1.5rem] bg-primary/10 flex items-center justify-center text-primary shadow-inner">
+                <BarChart3 className="h-8 w-8" />
+             </div>
+             <div>
+                <h1 className="text-3xl font-black tracking-tight">{isAdmin ? t("dashboard.title") : user?.name}</h1>
+                <p className="text-xs text-muted-foreground font-black uppercase tracking-widest mt-1.5 opacity-60">
+                  {isAdmin ? t("dashboard.salesSource") : `${t(`role.${user?.role}`)} • ${t("dashboard.salesSource")}`}
+                </p>
+             </div>
           </div>
           
-          {!isAdmin && isCloser && (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={sync.isPending}
-              className="rounded-xl h-10 px-4 font-bold border-border/60 hover:bg-primary/5 transition-all active:scale-95"
-              onClick={() =>
-                sync.mutate(undefined, {
-                  onSuccess: (res) => {
-                    const updated = res.updated ?? 0;
-                    if (res.imported > 0 || updated > 0) {
-                      toast.success(
-                        [
-                          res.imported > 0 ? `${res.imported} ${t("sync.imported")}` : null,
-                          updated > 0 ? `${updated} setter(s) updated` : null,
-                        ].filter(Boolean).join(" · ")
-                      );
-                    } else {
-                      toast.info(t("sync.upToDate"));
-                    }
-                  },
-                  onError: (e) => toast.error(`${t("sync.error")}: ${e.message}`),
-                })
-              }
-            >
-              <RefreshCw className={cn("h-4 w-4 mr-2", sync.isPending && "animate-spin")} />
-              {sync.isPending ? t("sync.syncing") : t("sync.button")}
-            </Button>
-          )}
+          <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+            {!isAdmin && (isCloser || isSetter) && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={sync.isPending}
+                className="rounded-2xl h-12 px-6 font-black uppercase tracking-widest text-[10px] border-border/60 hover:bg-primary/5 transition-all active:scale-95 shadow-lg shadow-primary/5"
+                onClick={() =>
+                  sync.mutate(undefined, {
+                    onSuccess: (res) => {
+                      const updated = res.updated ?? 0;
+                      const skipped = res.skipped ?? 0;
+                      const errorCount = res.errors?.length ?? 0;
+                      const total = res.total ?? 0;
+                      const nonActive = res.nonActive ?? 0;
+                      const checkedDesc = [
+                        total > 0 ? `Checked ${total} submission(s) from JotForm.` : null,
+                        nonActive > 0 ? `${nonActive} had non-active status.` : null,
+                      ].filter(Boolean).join(" ") || undefined;
+                      if (res.imported > 0 || updated > 0) {
+                        toast.success(
+                          [
+                            res.imported > 0 ? `${res.imported} ${t("sync.imported")}` : null,
+                            updated > 0 ? `${updated} ${t("sync.updated")}` : null,
+                          ].filter(Boolean).join(" · "),
+                          { description: checkedDesc }
+                        );
+                      } else if (skipped > 0 || errorCount > 0) {
+                        toast.warning(t("sync.completedWithIssues"), {
+                          description: [
+                            checkedDesc,
+                            skipped > 0 ? `${skipped} ${t("sync.skipped")}` : null,
+                            errorCount > 0 ? `${errorCount} ${t("sync.errors")}: ${res.errors.slice(0, 2).join(" | ")}` : null,
+                          ].filter(Boolean).join(" — "),
+                        });
+                      } else {
+                        toast.info(t("sync.upToDate"), { description: checkedDesc });
+                      }
+                    },
+                    onError: (e) => toast.error(`${t("sync.error")}: ${e.message}`),
+                  })
+                }
+              >
+                <RefreshCw className={cn("h-4 w-4 mr-2", sync.isPending && "animate-spin")} />
+                {sync.isPending ? t("sync.syncing") : t("sync.button")}
+              </Button>
+            )}
+
+            {!isAdmin && (isCloser || isSetter) && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={funnelSync.isPending}
+                className="rounded-2xl h-12 px-6 font-black uppercase tracking-widest text-[10px] border-border/60 hover:bg-primary/5 transition-all active:scale-95 shadow-lg shadow-primary/5"
+                onClick={() =>
+                  funnelSync.mutate({ profileId: user?.id }, {
+                    onSuccess: () => toast.success("Performance Data Synced", { description: "Meetings and call metrics have been updated from iClosed/Aircall." }),
+                    onError: (e) => toast.error(`Sync Error: ${e.message}`),
+                  })
+                }
+              >
+                <Activity className={cn("h-4 w-4 mr-2", funnelSync.isPending && "animate-spin")} />
+                {funnelSync.isPending ? "Syncing..." : "Sync Performance"}
+              </Button>
+            )}
+            <Badge className="h-12 px-6 rounded-2xl bg-muted/40 text-muted-foreground border-none font-black uppercase tracking-widest text-[10px] hidden sm:flex">
+               Real-time Intelligence Active
+            </Badge>
+          </div>
         </div>
 
         {/* Stat cards */}
         {loading ? <CardSkeletons /> : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard 
               title={isAdmin ? t("dashboard.totalCommissions") : t("detail.totalComm")} 
               value={fmt(computed.myComm)} 
-              subtitle={isAdmin ? t("dashboard.trendUp") : undefined}
               trend="up" 
               accent="blue" 
               icon={<Wallet className="h-5 w-5" />} 
@@ -219,50 +271,58 @@ const DashboardPage = () => {
               icon={isAdmin ? <AlertTriangle className="h-5 w-5" /> : <TrendingUp className="h-5 w-5" />} 
             />
             <StatCard 
-              title={isAdmin ? t("dashboard.impayes") : t("detail.refundsUnpaid")} 
-              value={isAdmin ? fmt(computed.totalImpayes) : `${refunds.length} / ${impayes.length}`} 
-              subtitle={isAdmin ? `${impayes.length} ${t("dashboard.ongoing")}` : t("detail.refundsUnpaidSub")} 
+              title={t("detail.refundsUnpaid")} 
+              value={`${refunds.length} / ${impayes.length}`} 
+              subtitle={t("detail.refundsUnpaidSub")} 
               trend="down" 
-              accent={isAdmin ? "orange" : "red"} 
-              icon={isAdmin ? <TrendingDown className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />} 
+              accent="red" 
+              icon={<AlertTriangle className="h-5 w-5" />} 
+            />
+            <StatCard 
+              title={isSetter ? "Meetings Set" : "Team Meetings"} 
+              value={String(sales.length)} 
+              subtitle="Imported from JotForm"
+              trend="up" 
+              accent="orange" 
+              icon={<Activity className="h-5 w-5" />} 
             />
           </div>
         )}
 
         {/* Bonus Highlights for Closers */}
         {!isAdmin && isCloser && (
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card className="border-none shadow-premium bg-primary text-white overflow-hidden rounded-[2.5rem] relative group transition-all duration-500 hover:shadow-primary/20">
-              <div className="absolute top-0 right-0 p-8 opacity-20 transform group-hover:scale-110 transition-transform">
-                <Gift className="h-32 w-32" />
+          <div className="grid gap-8 lg:grid-cols-2">
+            <Card className="border-none shadow-premium bg-primary text-white overflow-hidden rounded-[2.5rem] relative group transition-all duration-700 hover:shadow-2xl hover:shadow-primary/20">
+              <div className="absolute top-0 right-0 p-12 opacity-10 transform group-hover:scale-110 group-hover:rotate-12 transition-all duration-700">
+                <Trophy className="h-48 w-48" />
               </div>
-              <CardContent className="p-8 relative">
-                <div className="flex items-center gap-2 mb-6">
-                  <Badge className="bg-white/20 hover:bg-white/30 text-white border-none font-bold px-3 py-1">
+              <CardContent className="p-10 relative">
+                <div className="flex items-center gap-3 mb-10">
+                  <Badge className="bg-white/20 hover:bg-white/30 text-white border-none font-black uppercase tracking-widest text-[9px] px-4 py-1.5 rounded-full backdrop-blur-md">
                     {formatMonth(currentMonthBonus?.month || currentMonthKey, locale)}
                   </Badge>
-                  <p className="text-sm font-black uppercase tracking-widest text-primary-foreground/80">{t("bonus.currentMonth")}</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-primary-foreground/60">{t("bonus.currentMonth")}</p>
                 </div>
                 
                 {!currentMonthBonus || currentMonthBonus.total === 0 ? (
-                  <div className="py-2">
-                    <p className="text-xl font-bold opacity-80">{t("bonus.noBonus")}</p>
-                    <p className="mt-2 text-primary-foreground/60 text-sm">Keep up the good work to earn bonuses!</p>
+                  <div className="py-6">
+                    <p className="text-2xl font-black tracking-tight opacity-90">{t("bonus.noBonus")}</p>
+                    <p className="mt-2 text-primary-foreground/60 text-sm font-medium leading-relaxed max-w-xs italic">Accelerate your performance to unlock monthly rewards.</p>
                   </div>
                 ) : (
-                  <div className="space-y-6">
+                  <div className="space-y-10">
                     <div>
-                      <p className="text-4xl font-black tabular-nums tracking-tighter mb-2">{fmt(currentMonthBonus.total)}</p>
-                      <p className="text-[10px] font-bold text-primary-foreground/80 uppercase tracking-widest">Estimated Bonus</p>
+                      <p className="text-6xl font-black tabular-nums tracking-tighter mb-2 drop-shadow-lg">{fmt(currentMonthBonus.total)}</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-primary-foreground/50">Current Monthly Estimated Reward</p>
                     </div>
-                    <div className="grid grid-cols-2 gap-4 border-t border-white/10 pt-6">
+                    <div className="grid grid-cols-2 gap-8 border-t border-white/10 pt-8">
                       <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-primary-foreground/60 mb-1">PIF Bonus</p>
-                        <p className="font-bold text-lg">{fmt(currentMonthBonus.pifBonus)}</p>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-primary-foreground/40 mb-2">Validated PIF Bonus</p>
+                        <p className="font-black text-2xl tracking-tight">{fmt(currentMonthBonus.pifBonus)}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-primary-foreground/60 mb-1">Vol. Bonus</p>
-                        <p className="font-bold text-lg">{fmt(currentMonthBonus.volumeBonus)}</p>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-primary-foreground/40 mb-2">Performance Volume</p>
+                        <p className="font-black text-2xl tracking-tight">{fmt(currentMonthBonus.volumeBonus)}</p>
                       </div>
                     </div>
                   </div>
@@ -270,28 +330,33 @@ const DashboardPage = () => {
               </CardContent>
             </Card>
 
-            <Card className="border-none shadow-sm rounded-[2.5rem] bg-background overflow-hidden">
-               <div className="p-6 border-b border-border/40 flex items-center justify-between">
-                  <h3 className="font-black text-sm uppercase tracking-widest text-muted-foreground">{t("bonus.history")}</h3>
-                  <Badge variant="outline" className="border-primary/20 text-primary font-bold">{bonusHistory.length} months</Badge>
+            <Card className="border-none shadow-premium rounded-[2.5rem] bg-background overflow-hidden">
+               <div className="p-8 border-b border-border/40 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                     <div className="p-2 rounded-lg bg-primary/10 text-primary"><Calendar className="h-4 w-4" /></div>
+                     <h3 className="font-black text-sm uppercase tracking-widest text-muted-foreground">{t("bonus.history")}</h3>
+                  </div>
+                  <Badge variant="outline" className="border-primary/20 text-primary font-black uppercase tracking-widest text-[9px] px-3 py-1 rounded-full">{bonusHistory.length} Cycles Recorded</Badge>
                </div>
                <CardContent className="p-0">
-                  <div className="overflow-auto max-h-[300px]">
+                  <div className="overflow-auto max-h-[340px] custom-scrollbar">
                     <Table>
                       <TableBody>
                         {bonusHistory.map(row => (
-                          <TableRow key={row.month} className="hover:bg-muted/10 border-border/30">
-                            <TableCell className="font-bold pl-6 text-sm py-4">{formatMonth(row.month, locale)}</TableCell>
-                            <TableCell className="py-4">
+                          <TableRow key={row.month} className="group hover:bg-muted/10 border-border/30 transition-all">
+                            <TableCell className="font-black pl-8 text-sm py-6">{formatMonth(row.month, locale)}</TableCell>
+                            <TableCell className="py-6">
                                <div className="flex flex-col">
-                                 <span className="text-[10px] font-black text-muted-foreground uppercase leading-none mb-1">Total</span>
-                                 <span className={cn("font-black tabular-nums", row.total > 0 ? "text-emerald-500" : "text-muted-foreground")}>
+                                 <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/40 leading-none mb-2">Gross Payout</span>
+                                 <span className={cn("font-black tabular-nums text-base transition-transform group-hover:scale-105 origin-left", row.total > 0 ? "text-emerald-500" : "text-muted-foreground/30")}>
                                      {fmt(row.total)}
                                  </span>
                                </div>
                             </TableCell>
-                            <TableCell className="pr-6 text-right py-4">
-                               <ArrowRight className="h-4 w-4 text-muted-foreground/30 ml-auto" />
+                            <TableCell className="pr-8 text-right py-6">
+                               <div className="h-8 w-8 rounded-full bg-muted/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                               </div>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -304,100 +369,96 @@ const DashboardPage = () => {
         )}
 
         {/* Analytics Section */}
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Main Chart */}
-          <ChartCard title={isAdmin ? t("dashboard.commByCloser") : t("detail.commByProduct")} icon={Activity}>
-             <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={isAdmin ? computed.closerCommData : computed.productData}>
-                  <defs>
-                    <linearGradient id="colorComm" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={CHART_COLORS.primary} stopOpacity={0.2}/>
-                      <stop offset="95%" stopColor={CHART_COLORS.primary} stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.border} vertical={false} />
-                  <XAxis dataKey="name" fontSize={10} font-weight="700" axisLine={false} tickLine={false} dy={10} />
-                  <YAxis fontSize={10} font-weight="700" axisLine={false} tickLine={false} tickFormatter={(v) => `€${v}`} />
-                  <Tooltip 
-                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.15)', fontWeight: 'bold', background: 'hsl(var(--card))', color: 'hsl(var(--card-foreground))' }}
-                    formatter={(v: number) => fmt(v)} 
-                  />
-                  <Area 
-                    type="monotone" 
-                    dataKey="commission" 
-                    stroke={CHART_COLORS.line} 
-                    strokeWidth={3} 
-                    fillOpacity={1} 
-                    fill="url(#colorComm)" 
-                    animationDuration={2000}
-                  />
-                </AreaChart>
-             </ResponsiveContainer>
-          </ChartCard>
+        {loading ? <ChartSkeletons /> : (
+          <div className="grid gap-8 lg:grid-cols-2">
+            {/* Main Chart */}
+            <ChartCard title={isAdmin ? t("dashboard.commByCloser") : t("detail.commByProduct")} icon={Activity} badge={isAdmin ? "By Identity" : "By Product Line"}>
+               <ResponsiveContainer width="100%" height={320}>
+                  <BarChart data={isAdmin ? computed.closerCommData : computed.productData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.border} vertical={false} />
+                    <XAxis dataKey="name" fontSize={10} style={{ fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }} axisLine={false} tickLine={false} dy={10} />
+                    <YAxis fontSize={10} style={{ fontWeight: 800 }} axisLine={false} tickLine={false} tickFormatter={(v) => `€${v}`} />
+                    <Tooltip
+                      contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)', fontWeight: '900', background: 'hsl(var(--card))', color: 'hsl(var(--card-foreground))', padding: '16px' }}
+                      cursor={{ fill: 'rgba(0,0,0,0.03)' }}
+                      formatter={(v: number) => fmt(v)}
+                    />
+                    <Bar dataKey="commission" fill={CHART_COLORS.primary} radius={[8, 8, 0, 0]} barSize={28} />
+                  </BarChart>
+               </ResponsiveContainer>
+            </ChartCard>
 
-          {/* Secondary Chart/Breakdown */}
-          <ChartCard title={t("dashboard.commByMonth")} icon={TrendingUp}>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={computed.monthlyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.border} vertical={false} />
-                  <XAxis dataKey="month" fontSize={10} font-weight="700" axisLine={false} tickLine={false} dy={10} />
-                  <YAxis fontSize={10} font-weight="700" axisLine={false} tickLine={false} tickFormatter={(v) => `€${v}`} />
-                  <Tooltip 
-                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.15)', fontWeight: 'bold', background: 'hsl(var(--card))', color: 'hsl(var(--card-foreground))' }}
-                    formatter={(v: number) => fmt(v)} 
-                  />
-                  <Bar dataKey="commission" fill={CHART_COLORS.primary} radius={[6,6,0,0]} barSize={20} />
-                </BarChart>
-              </ResponsiveContainer>
-          </ChartCard>
-        </div>
+            {/* Secondary Chart/Breakdown */}
+            <ChartCard title={t("dashboard.commByMonth")} icon={TrendingUp} badge="Trend Analysis">
+                <ResponsiveContainer width="100%" height={320}>
+                  <BarChart data={computed.monthlyData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.border} vertical={false} />
+                    <XAxis dataKey="month" fontSize={10} style={{ fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }} axisLine={false} tickLine={false} dy={10} />
+                    <YAxis fontSize={10} style={{ fontWeight: 800 }} axisLine={false} tickLine={false} tickFormatter={(v) => `€${v}`} />
+                    <Tooltip
+                      contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)', fontWeight: '900', background: 'hsl(var(--card))', color: 'hsl(var(--card-foreground))', padding: '16px' }}
+                      cursor={{ fill: 'rgba(0,0,0,0.03)' }}
+                      formatter={(v: number) => fmt(v)}
+                    />
+                    <Bar dataKey="commission" fill={CHART_COLORS.primary} radius={[8, 8, 0, 0]} barSize={28} />
+                  </BarChart>
+                </ResponsiveContainer>
+            </ChartCard>
+          </div>
+        )}
 
         {/* Data Table */}
-        <Card className="border-none shadow-sm rounded-[2.5rem] overflow-hidden">
-          <div className="p-8 flex items-center justify-between border-b border-border/40">
-             <h3 className="font-black text-sm uppercase tracking-widest text-muted-foreground">
-               {isAdmin ? t("dashboard.recentCommissions") : t("detail.salesHistory")}
-             </h3>
-             <Badge variant="outline" className="border-primary/20 text-primary font-bold px-3 py-1">
-               Showing {isAdmin ? adminVisible : memberVisible} records
+        <Card className="border-none shadow-premium rounded-[2.5rem] overflow-hidden bg-background">
+          <div className="p-10 flex flex-col sm:flex-row items-center justify-between border-b border-border/40 gap-6">
+             <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/10 text-primary"><Gift className="h-4 w-4" /></div>
+                <h3 className="font-black text-sm uppercase tracking-widest text-muted-foreground">
+                  {isAdmin ? t("dashboard.recentCommissions") : t("detail.salesHistory")}
+                </h3>
+             </div>
+             <Badge className="bg-primary/5 text-primary border-primary/20 font-black uppercase tracking-widest text-[9px] px-4 py-1.5 rounded-full">
+               System Displaying {isAdmin ? adminVisible : memberVisible} Verified Records
              </Badge>
           </div>
           <CardContent className="p-0">
              {loading ? (
-                <div className="p-8 space-y-4">
-                  {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full rounded-xl" />)}
+                <div className="p-10 space-y-6">
+                  {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-2xl" />)}
                 </div>
               ) : sales.length === 0 ? (
-                <div className="text-center py-20">
-                  <p className="text-muted-foreground font-medium italic">{t("dashboard.noData")}</p>
+                <div className="text-center py-32 grayscale opacity-40">
+                  <div className="h-20 w-20 bg-muted/30 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <ShoppingCart className="h-10 w-10 text-muted-foreground/30" />
+                  </div>
+                  <p className="text-xl font-black tracking-tight text-muted-foreground/60">{t("dashboard.noData")}</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader className="bg-muted/30">
                       <TableRow className="border-none">
-                        <TableHead className="py-4 pl-8 text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t("table.date")}</TableHead>
-                        <TableHead className="py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t("table.client")}</TableHead>
-                        <TableHead className="py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                        <TableHead className="py-6 pl-10 text-[9px] font-black uppercase tracking-widest text-muted-foreground">{t("table.date")}</TableHead>
+                        <TableHead className="py-6 text-[9px] font-black uppercase tracking-widest text-muted-foreground">{t("table.client")}</TableHead>
+                        <TableHead className="py-6 text-[9px] font-black uppercase tracking-widest text-muted-foreground">
                           {isAdmin ? t("table.closer") : (isCloser ? t("table.setter") : t("table.closer"))}
                         </TableHead>
-                        <TableHead className="py-4 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t("table.amount")}</TableHead>
-                        <TableHead className="py-4 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground">Commission</TableHead>
-                        <TableHead className="py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t("table.status")}</TableHead>
-                        <TableHead className="py-4 pr-8 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground">Actions</TableHead>
+                        <TableHead className="py-6 text-right text-[9px] font-black uppercase tracking-widest text-muted-foreground">{t("table.amount")}</TableHead>
+                        <TableHead className="py-6 text-right text-[9px] font-black uppercase tracking-widest text-muted-foreground">Commission</TableHead>
+                        <TableHead className="py-6 text-[9px] font-black uppercase tracking-widest text-muted-foreground">{t("table.status")}</TableHead>
+                        <TableHead className="py-6 pr-10 text-right text-[9px] font-black uppercase tracking-widest text-muted-foreground">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {sales.slice(0, isAdmin ? adminVisible : memberVisible).map(s => (
-                        <TableRow key={s.id} className="group hover:bg-muted/10 transition-colors border-border/30">
-                          <TableCell className="py-5 pl-8 text-xs font-medium text-muted-foreground tabular-nums">{s.date}</TableCell>
-                          <TableCell className="py-5">
+                        <TableRow key={s.id} className="group hover:bg-muted/10 transition-all border-border/30">
+                          <TableCell className="py-7 pl-10 text-xs font-black text-muted-foreground/60 tabular-nums italic">{s.date}</TableCell>
+                          <TableCell className="py-7">
                             <div className="flex flex-col">
-                              <p className="font-bold text-sm tracking-tight">{s.clientName}</p>
-                              {s.clientEmail && <p className="text-[10px] text-muted-foreground line-clamp-1 italic">{s.clientEmail}</p>}
+                              <p className="font-black text-sm tracking-tight leading-none mb-1.5">{s.clientName}</p>
+                              {s.clientEmail && <p className="text-[10px] text-muted-foreground/40 font-bold truncate max-w-[200px]">{s.clientEmail}</p>}
                             </div>
                           </TableCell>
-                          <TableCell className="py-5">
+                          <TableCell className="py-7">
                              {isAdmin ? (
                                <ProfileTag role="closer" personId={s.closerId} personName={s.closer} />
                              ) : (
@@ -406,20 +467,20 @@ const DashboardPage = () => {
                                 : <ProfileTag role="closer" personId={s.closerId} personName={s.closer} />
                              )}
                           </TableCell>
-                          <TableCell className="py-5 text-right font-medium text-sm tabular-nums">{fmt(s.amount)}</TableCell>
-                          <TableCell className="py-5 text-right font-black text-primary tabular-nums">
+                          <TableCell className="py-7 text-right font-black text-sm tabular-nums text-muted-foreground/80">{fmt(s.amount)}</TableCell>
+                          <TableCell className="py-7 text-right font-black text-primary tabular-nums text-base">
                             {fmt(isCloser ? s.closerCommission : (isSetter ? s.setterCommission : s.closerCommission))}
                           </TableCell>
-                          <TableCell className="py-5">
+                          <TableCell className="py-7">
                             <div className="flex items-center gap-2">
                                <SaleStatusBadge refunded={s.refunded} impaye={s.impaye} />
                                {isCloser && s.paymentType === "pif" && (
-                                 <Badge variant="outline" className="text-[9px] font-black text-primary bg-primary/5 border-primary/20 h-5 px-1.5 uppercase">PIF</Badge>
+                                 <Badge className="text-[8px] font-black text-emerald-600 bg-emerald-500/10 border-emerald-500/20 h-5 px-1.5 rounded-sm uppercase tracking-widest">PIF</Badge>
                                )}
                             </div>
                           </TableCell>
-                          <TableCell className="py-5 pr-8 text-right">
-                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-muted opacity-20 group-hover:opacity-100 transition-opacity" onClick={() => setSelectedSale(s)}>
+                          <TableCell className="py-7 pr-10 text-right">
+                            <Button variant="ghost" size="icon" className="h-10 w-10 rounded-2xl hover:bg-primary/10 hover:text-primary transition-all active:scale-90" onClick={() => setSelectedSale(s)}>
                               <Eye className="h-4 w-4" />
                             </Button>
                           </TableCell>
@@ -429,14 +490,14 @@ const DashboardPage = () => {
                   </Table>
                   
                   {(isAdmin ? sales.length > adminVisible : sales.length > memberVisible) && (
-                    <div className="p-8 text-center border-t border-border/40">
+                    <div className="p-10 text-center border-t border-border/40 bg-muted/5">
                       <Button 
-                        variant="ghost" 
+                        variant="outline" 
                         size="sm" 
-                        className="rounded-xl px-10 font-bold text-muted-foreground hover:bg-muted/50 transition-all"
+                        className="rounded-2xl px-12 h-12 font-black uppercase tracking-widest text-[10px] text-muted-foreground border-border/60 hover:bg-background hover:text-primary transition-all active:scale-95 shadow-sm"
                         onClick={() => isAdmin ? setAdminVisible(v => v + PAGE_SIZE) : setMemberVisible(v => v + PAGE_SIZE)}
                       >
-                        Show more ({(isAdmin ? sales.length - adminVisible : sales.length - memberVisible)} remaining)
+                        Load More Records ({(isAdmin ? sales.length - adminVisible : sales.length - memberVisible)} remaining)
                       </Button>
                     </div>
                   )}

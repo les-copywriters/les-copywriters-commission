@@ -22,10 +22,15 @@ const LoginPage = () => {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    const { error } = await login(email, password);
-    setLoading(false);
-    if (error) setError(error);
-    else navigate("/dashboard");
+    try {
+      const { error } = await login(email, password);
+      if (error) setError(error);
+      else navigate("/dashboard");
+    } catch (err) {
+      setError("An unexpected error occurred. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -39,12 +44,12 @@ const LoginPage = () => {
 
         <div className="relative z-10">
           <div className="flex items-center gap-4 animate-in fade-in slide-in-from-top-4 duration-700">
-            <div className="flex h-12 w-12 items-center justify-center rounded-[1rem] bg-primary shadow-2xl shadow-primary/40 ring-4 ring-primary/10">
-              <Sparkles className="h-6 w-6 text-white" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-[1rem] bg-white shadow-2xl shadow-primary/20 overflow-hidden border border-white/10">
+              <img src="/Les Copywriters Logo.jpg" alt="Logo" className="h-full w-full object-cover" />
             </div>
             <div>
-              <p className="font-black text-white text-2xl tracking-tight leading-none">Les Copywriters</p>
-              <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mt-1">Commission Elite</p>
+              <p className="font-black text-white text-2xl tracking-tight leading-none">Les CopyWriters</p>
+              <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mt-1.5 opacity-80">Commission Dashboard</p>
             </div>
           </div>
         </div>
@@ -75,7 +80,7 @@ const LoginPage = () => {
 
         <div className="relative z-10 flex items-center justify-between">
           <p className="text-[10px] font-black uppercase tracking-widest text-white/30">
-            © {new Date().getFullYear()} Elite Network
+            © {new Date().getFullYear()} Les CopyWriters
           </p>
           <div className="flex gap-4">
             <div className="h-1.5 w-8 rounded-full bg-primary" />
@@ -93,10 +98,10 @@ const LoginPage = () => {
 
         {/* Mobile logo */}
         <div className="mb-12 flex items-center gap-4 lg:hidden">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary shadow-xl shadow-primary/20">
-            <Sparkles className="h-6 w-6 text-white" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-xl shadow-primary/20 overflow-hidden border border-border">
+            <img src="/Les Copywriters Logo.jpg" alt="Logo" className="h-full w-full object-cover" />
           </div>
-          <span className="font-black text-2xl tracking-tight">Les Copywriters</span>
+          <span className="font-black text-2xl tracking-tight">Les CopyWriters</span>
         </div>
 
         <div className="w-full max-w-[400px] space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-1000">

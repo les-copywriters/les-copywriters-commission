@@ -85,8 +85,8 @@ Deno.serve(async (req) => {
     const sales = (salesResult.data ?? []) as SaleRow[];
     const profileRows = profilesResult.data ?? [];
 
-    const closerIds = new Set(profileRows.filter((p) => p.role === "closer").map((p) => p.id));
-    const setterIds = new Set(profileRows.filter((p) => p.role === "setter").map((p) => p.id));
+    const closerIds = new Set(profileRows.filter((p) => p.role === "closer" || p.role === "admin").map((p) => p.id));
+    const profileIds = new Set(profileRows.map((p) => p.id));
 
     const discrepancyCounts: Record<string, number> = {
       missing_jotform_submission_id: 0,
@@ -102,7 +102,7 @@ Deno.serve(async (req) => {
       if (!sale.client_email) discrepancyCounts.missing_client_email += 1;
       if (sale.amount <= 0) discrepancyCounts.invalid_amount += 1;
       if (!closerIds.has(sale.closer_id)) discrepancyCounts.closer_profile_mismatch += 1;
-      if (sale.setter_id && !setterIds.has(sale.setter_id)) discrepancyCounts.setter_profile_mismatch += 1;
+      if (sale.setter_id && !profileIds.has(sale.setter_id)) discrepancyCounts.setter_profile_mismatch += 1;
       if (sale.payment_type === "installments" && (!sale.num_installments || !sale.installment_amount)) {
         discrepancyCounts.incomplete_installment_fields += 1;
       }

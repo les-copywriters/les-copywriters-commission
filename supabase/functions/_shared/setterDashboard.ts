@@ -148,7 +148,7 @@ function toUnixSeconds(date: string) {
 function getDateWindow(startDate?: string, endDate?: string) {
   const today = new Date().toISOString().slice(0, 10);
   const end = normalizeDate(endDate) ?? today;
-  const start = normalizeDate(startDate) ?? new Date(Date.now() - 1000 * 60 * 60 * 24 * 365).toISOString().slice(0, 10);
+  const start = normalizeDate(startDate) ?? "2020-01-01";
   return { start, end, fromUnix: toUnixSeconds(start), toUnix: toUnixSeconds(end) + 86399 };
 }
 
@@ -582,14 +582,11 @@ export async function runSetterDashboardSync(options: {
               page++;
             }
 
-            // If calls were fetched but nothing matched, report the actual IDs seen
             if (totalRecordsSeen > 0 && allCallRows.length === 0 && seenUserIds.size > 0) {
               const mappingIds = group.mappings.map(m => m.aircall_user_id ?? "(none)").join(", ");
-              errors.push(
-                `Aircall returned ${totalRecordsSeen} calls but none matched. ` +
-                `User IDs in calls: [${[...seenUserIds].join(", ")}]. ` +
-                `User IDs in mappings: [${mappingIds}]. ` +
-                `Update the Aircall User ID in Settings → Setter Integrations.`
+              console.log(
+                `[aircall] ${totalRecordsSeen} calls fetched but none matched setter IDs. ` +
+                `IDs in calls: [${[...seenUserIds].join(", ")}], IDs in mappings: [${mappingIds}]`
               );
             }
           } catch (err) {

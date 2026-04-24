@@ -39,7 +39,7 @@ describe("useSyncJotform", () => {
 
   it("invalidates sales and profiles after successful sync with updates", async () => {
     mockInvoke.mockResolvedValue({
-      data: { ok: true, total: 4, imported: 1, updated: 2, errors: [] },
+      data: { ok: true, total: 4, imported: 1, updated: 2, skipped: 0, errors: [] },
       error: null,
     });
 

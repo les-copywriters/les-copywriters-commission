@@ -25,7 +25,7 @@ const StatCard = ({ title, value, subtitle, icon, trend, accent = "blue" }: Prop
 
   return (
     <div className={cn(
-      "group relative overflow-hidden rounded-[2rem] bg-background border border-border/50 p-6 shadow-premium transition-all duration-500",
+      "group relative overflow-hidden rounded-3xl bg-background border border-border/50 p-6 shadow-premium transition-all duration-500",
       "hover:-translate-y-2 hover:shadow-[0_22px_44px_-12px_rgba(0,0,0,0.12)]"
     )}>
       {/* Subtle Background Glow */}
@@ -38,26 +38,25 @@ const StatCard = ({ title, value, subtitle, icon, trend, accent = "blue" }: Prop
            </div>
            {trend && (
              <div className={cn(
-               "flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-widest",
+               "flex items-center justify-center h-7 w-7 rounded-full",
                trend === "up" && "bg-emerald-500/10 text-emerald-500",
                trend === "down" && "bg-rose-500/10 text-rose-500",
                trend === "neutral" && "bg-muted/20 text-muted-foreground"
              )}>
-               <TrendIcon className="h-3 w-3" />
-               {trend === "up" ? "Gain" : trend === "down" ? "Loss" : "Flat"}
+               <TrendIcon className="h-3.5 w-3.5" />
              </div>
            )}
          </div>
 
          <div className="space-y-1">
-            <p className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/60 leading-none">
+            <p className="text-xs font-medium text-muted-foreground/70 leading-none">
               {title}
             </p>
             <div className="flex items-baseline gap-2">
-              <p className="text-2xl font-black tracking-tight tabular-nums truncate">{value}</p>
+              <p className="text-2xl font-bold tracking-tight tabular-nums truncate">{value}</p>
             </div>
             {subtitle && (
-              <p className="text-xs font-bold text-muted-foreground/40 tracking-tight truncate">
+              <p className="text-xs text-muted-foreground/50 truncate">
                 {subtitle}
               </p>
             )}

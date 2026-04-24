@@ -59,31 +59,31 @@ const ProfileTag = ({ personId, personName, role }: Props) => {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button className="group flex items-center gap-2 text-xs font-bold transition-all hover:text-primary active:scale-95">
+        <button className="group flex items-center gap-3 text-xs font-black transition-all hover:text-primary active:scale-95 uppercase tracking-tight">
           <div className={cn(
-            "flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[9px] font-black shadow-inner transition-transform group-hover:rotate-6",
+            "flex h-7 w-7 shrink-0 items-center justify-center rounded-xl text-[10px] font-black shadow-inner transition-all duration-500 group-hover:rotate-6 group-hover:scale-110",
             role === "closer" ? "bg-primary/10 text-primary" : "bg-emerald-500/10 text-emerald-600"
           )}>
             {initials}
           </div>
-          <span className="underline-offset-4 group-hover:underline">{personName}</span>
+          <span className="underline-offset-4 group-hover:underline decoration-primary/30">{personName}</span>
         </button>
       </PopoverTrigger>
 
-      <PopoverContent className="w-64 p-0 overflow-hidden shadow-2xl border-none rounded-2xl animate-in fade-in zoom-in-95 duration-200" align="start" side="top" sideOffset={8}>
-        <div className="bg-gradient-to-br from-background via-background to-muted/30 p-4">
-          <div className="flex items-center gap-3 mb-4">
+      <PopoverContent className="w-72 p-0 overflow-hidden shadow-premium border-none rounded-[2rem] animate-in fade-in zoom-in-95 duration-300" align="start" side="top" sideOffset={12}>
+        <div className="bg-gradient-to-br from-background via-background to-muted/20 p-6">
+          <div className="flex items-center gap-4 mb-6">
             <div className={cn(
-              "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xs font-black shadow-inner",
+              "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-xs font-black shadow-xl",
               role === "closer" ? "bg-primary/10 text-primary" : "bg-emerald-500/10 text-emerald-600"
             )}>
               {initials}
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-black leading-none truncate">{personName}</p>
+              <p className="text-base font-black leading-none truncate tracking-tight">{personName}</p>
               <Badge variant="outline" className={cn(
-                "text-[8px] font-black px-1.5 py-0 mt-1 border-none shadow-sm uppercase h-4",
-                role === "closer" ? "bg-primary text-white" : "bg-emerald-500 text-white"
+                "text-[8px] font-black px-2 py-0.5 mt-2 border-none shadow-sm uppercase h-4.5 rounded-full",
+                role === "closer" ? "bg-primary text-white shadow-primary/20" : "bg-emerald-500 text-white shadow-emerald-500/20"
               )}>
                 {t(`role.${role}`)}
               </Badge>
@@ -91,29 +91,29 @@ const ProfileTag = ({ personId, personName, role }: Props) => {
           </div>
 
           {isAdmin && stats ? (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-2">
-                <div className="p-2 rounded-xl bg-muted/50 border border-border/40">
-                  <p className="text-[8px] font-black uppercase text-muted-foreground">{t("detail.totalSales")}</p>
-                  <p className="text-sm font-black tabular-nums">{stats.total}</p>
+            <div className="space-y-5">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-2xl bg-muted/30 border border-border/40">
+                  <p className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/60 mb-1">{t("detail.totalSales")}</p>
+                  <p className="text-base font-black tabular-nums">{stats.total}</p>
                 </div>
-                <div className="p-2 rounded-xl bg-muted/50 border border-border/40">
-                  <p className="text-[8px] font-black uppercase text-muted-foreground">Validated</p>
-                  <p className="text-sm font-black tabular-nums">{stats.validated}</p>
+                <div className="p-3 rounded-2xl bg-muted/30 border border-border/40">
+                  <p className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/60 mb-1">Validated</p>
+                  <p className="text-base font-black tabular-nums text-emerald-500">{stats.validated}</p>
                 </div>
               </div>
 
-              <div>
-                <p className="text-[8px] font-black uppercase text-muted-foreground mb-1">Estimated Commission</p>
-                <p className="text-xl font-black text-primary tabular-nums tracking-tight">
+              <div className="px-1">
+                <p className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/40 mb-1.5">Estimated Performance Revenue</p>
+                <p className="text-2xl font-black text-primary tabular-nums tracking-tighter">
                   {formatCurrency(stats.commission, locale)}
                 </p>
               </div>
 
               {(stats.refunds > 0 || stats.impayes > 0) && (
-                <div className="p-2 rounded-xl bg-destructive/5 border border-destructive/10">
-                   <p className="text-[8px] font-black uppercase text-destructive mb-1">{t("detail.refundsUnpaid")}</p>
-                   <p className="text-xs font-bold text-destructive tabular-nums">
+                <div className="p-3 rounded-2xl bg-rose-500/5 border border-rose-500/10">
+                   <p className="text-[8px] font-black uppercase tracking-widest text-rose-500/60 mb-1.5">{t("detail.refundsUnpaid")}</p>
+                   <p className="text-[10px] font-black text-rose-600 tabular-nums uppercase tracking-widest">
                     {stats.refunds} Refunds / {stats.impayes} Unpaid
                   </p>
                 </div>
@@ -123,16 +123,16 @@ const ProfileTag = ({ personId, personName, role }: Props) => {
 
               <Link
                 to={profilePath}
-                className="flex items-center justify-between text-[10px] text-primary hover:text-primary/80 font-black uppercase tracking-widest transition-colors"
+                className="flex items-center justify-between text-[10px] text-primary hover:text-primary/80 font-black uppercase tracking-[0.2em] transition-all hover:translate-x-1"
               >
                 {t("setter.viewProfile")}
-                <ArrowUpRight className="h-3 w-3" />
+                <ArrowUpRight className="h-4 w-4" />
               </Link>
             </div>
           ) : (
-            <div className="flex items-center gap-2 py-2 text-[10px] text-muted-foreground font-medium italic">
-              <UserIcon className="h-3 w-3" />
-              Viewing limited profile info
+            <div className="flex items-center gap-3 py-3 px-1 text-[10px] text-muted-foreground font-black uppercase tracking-widest opacity-40">
+              <UserIcon className="h-4 w-4" />
+              Identity Encrypted
             </div>
           )}
         </div>
