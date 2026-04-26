@@ -3,7 +3,7 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/i18n";
 import { useProfiles } from "@/hooks/useProfiles";
-import { useSetterCallRecords, useSetterDashboardMetrics, useSetterSyncHealth, useSyncSetterDashboard } from "@/hooks/useSetterDashboard";
+import { useSetterCallRecords, useSetterDashboardMetrics, useSetterIntegrationMappings, useSetterSyncHealth, useSyncSetterDashboard } from "@/hooks/useSetterDashboard";
 import { computeSetterDateRange, formatTalkTime } from "@/lib/setterDashboard";
 import { supabase } from "@/lib/supabase";
 import { useQuery } from "@tanstack/react-query";
@@ -163,22 +163,36 @@ const SetterDashboardPage = () => {
   const [selectedSetterId, setSelectedSetterId] = useState<string>("all");
 
   const { data: syncRuns = [] } = useSetterSyncHealth(isAdmin);
+  const { data: setterMappings = [] } = useSetterIntegrationMappings();
   const [testResults, setTestResults] = useState<{ aircall?: { ok: boolean }; iclosed?: { ok: boolean } } | null>(null);
 
+  // Admins: validate global API credentials against each service.
+  // Setters: derive "live" status from whether their own IDs are configured.
   useQuery({
-    queryKey: ["global_connection_test"],
+    queryKey: ["global_connection_test", isAdmin],
     queryFn: async () => {
-      try {
-        const { data } = await supabase.functions.invoke("sync-setter-dashboard", {
-          body: { validate_only: true }
-        });
-        setTestResults(data.results);
-        return data.results;
-      } catch {
-        return null;
+      if (isAdmin) {
+        try {
+          const { data } = await supabase.functions.invoke("sync-setter-dashboard", {
+            body: { validate_only: true },
+          });
+          setTestResults(data.results);
+          return data.results;
+        } catch {
+          return null;
+        }
+      } else {
+        const myMapping = setterMappings.find((m) => m.profileId === user?.id);
+        const results = {
+          aircall: { ok: !!myMapping?.aircallUserId },
+          iclosed: { ok: !!myMapping?.iclosedUserId },
+        };
+        setTestResults(results);
+        return results;
       }
     },
-    staleTime: 1000 * 60 * 5, // Check every 5 mins
+    enabled: isAdmin ? true : setterMappings.length > 0,
+    staleTime: 1000 * 60 * 5,
   });
   const setters = profiles.filter((profile) => profile.role === "setter");
   const scopedSetterId = isAdmin ? (selectedSetterId === "all" ? undefined : selectedSetterId) : user?.id;

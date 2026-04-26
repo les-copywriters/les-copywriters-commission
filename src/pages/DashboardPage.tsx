@@ -81,11 +81,12 @@ const DashboardPage = () => {
   const [memberVisible, setMemberVisible] = useState(PAGE_SIZE);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
 
-  const dateRange = useMemo(() => computeSetterDateRange("thisMonth"), []);
+  const dateRange = useMemo(() => computeSetterDateRange("thisMonth", "", ""), []);
   const { data: metrics } = useSetterDashboardMetrics({
-    profileId: isAdmin ? undefined : user?.id,
+    profileId: user?.id,
     startDate: dateRange.start,
     endDate: dateRange.end,
+    enabled: isSetter,
   });
 
   // Scope sales/refunds/impayes to the current user if not admin
@@ -222,7 +223,7 @@ const DashboardPage = () => {
               </Button>
             )}
 
-            {!isAdmin && (isCloser || isSetter) && (
+            {isSetter && (
               <Button
                 variant="outline"
                 size="sm"
@@ -239,7 +240,7 @@ const DashboardPage = () => {
                 {funnelSync.isPending ? "Syncing..." : "Sync Performance"}
               </Button>
             )}
-            {!isAdmin && (
+            {isSetter && (
               <Badge className="h-12 px-6 rounded-2xl bg-muted/40 text-muted-foreground border-none font-black uppercase tracking-widest text-[10px] hidden sm:flex">
                 Real-time Intelligence Active
               </Badge>
@@ -264,13 +265,13 @@ const DashboardPage = () => {
               accent="green" 
               icon={isAdmin ? <TrendingUp className="h-5 w-5" /> : <ShoppingCart className="h-5 w-5" />} 
             />
-            <StatCard 
-              title={isAdmin ? t("dashboard.refunds") : t("detail.avgComm")} 
-              value={isAdmin ? fmt(computed.totalRefunds) : fmt(computed.avgComm)} 
-              subtitle={isAdmin ? `${refunds.length} ${t("dashboard.requests")}` : undefined}
-              trend={isAdmin ? "down" : "up"} 
-              accent={isAdmin ? "red" : "blue"} 
-              icon={isAdmin ? <AlertTriangle className="h-5 w-5" /> : <TrendingUp className="h-5 w-5" />} 
+            <StatCard
+              title={isAdmin ? t("dashboard.refunds") : isSetter ? "Show-ups" : t("detail.avgComm")}
+              value={isAdmin ? fmt(computed.totalRefunds) : isSetter ? String(metrics?.summary?.showUps ?? 0) : fmt(computed.avgComm)}
+              subtitle={isAdmin ? `${refunds.length} ${t("dashboard.requests")}` : isSetter ? `${(metrics?.summary?.showRate ?? 0).toFixed(1)}% show rate` : undefined}
+              trend={isAdmin ? "down" : "up"}
+              accent={isAdmin ? "red" : isSetter ? "orange" : "blue"}
+              icon={isAdmin ? <AlertTriangle className="h-5 w-5" /> : isSetter ? <Calendar className="h-5 w-5" /> : <TrendingUp className="h-5 w-5" />}
             />
             <StatCard 
               title={t("detail.refundsUnpaid")} 
@@ -279,14 +280,6 @@ const DashboardPage = () => {
               trend="down" 
               accent="red" 
               icon={<AlertTriangle className="h-5 w-5" />} 
-            />
-            <StatCard 
-              title={isSetter ? "Meetings Set" : "Team Meetings"} 
-              value={String(sales.length)} 
-              subtitle="Imported from JotForm"
-              trend="up" 
-              accent="orange" 
-              icon={<Activity className="h-5 w-5" />} 
             />
           </div>
         )}

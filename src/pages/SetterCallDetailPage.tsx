@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useSetterCallRecords, SetterCallRecord } from "@/hooks/useSetterDashboard";
@@ -18,7 +19,7 @@ import {
   Info,
   MessageSquare,
   Mic,
-  PhoneCall,
+  Pause,
   PhoneMissed,
   Play,
   Sparkles,
@@ -30,6 +31,12 @@ function formatDuration(seconds: number) {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}m ${s}s`;
+}
+
+function formatTime(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
 const SetterCallDetailPage = () => {
@@ -44,6 +51,24 @@ const SetterCallDetailPage = () => {
   const { data: records = [], isLoading } = useSetterCallRecords(profileId);
   const stateCall = location.state?.call as SetterCallRecord | undefined;
   const call = stateCall ?? records.find((r) => String(r.id) === callId);
+
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [audioProgress, setAudioProgress] = useState(0);
+  const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+
+  const togglePlay = () => {
+    if (!audioRef.current) return;
+    if (isPlaying) audioRef.current.pause();
+    else audioRef.current.play();
+  };
+
+  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!audioRef.current || !audioRef.current.duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = (e.clientX - rect.left) / rect.width;
+    audioRef.current.currentTime = ratio * audioRef.current.duration;
+  };
 
   const isAnswered = call?.status === "answered" || call?.status === "done";
   const isMissed = call?.status === "missed" || call?.status === "voicemail";
@@ -216,14 +241,31 @@ const SetterCallDetailPage = () => {
                         <p className="text-xs font-medium text-muted-foreground">Recording</p>
                         {call.recordingUrl ? (
                           <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/30 border border-border/20">
-                            <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full bg-primary text-white hover:bg-primary/90 shrink-0">
-                              <Play className="h-4 w-4 fill-current" />
+                            <audio
+                              ref={audioRef}
+                              src={call.recordingUrl}
+                              preload="metadata"
+                              onPlay={() => setIsPlaying(true)}
+                              onPause={() => setIsPlaying(false)}
+                              onEnded={() => { setIsPlaying(false); setAudioProgress(0); setAudioCurrentTime(0); }}
+                              onTimeUpdate={() => {
+                                const el = audioRef.current;
+                                if (!el || !el.duration) return;
+                                setAudioCurrentTime(el.currentTime);
+                                setAudioProgress((el.currentTime / el.duration) * 100);
+                              }}
+                            />
+                            <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full bg-primary text-white hover:bg-primary/90 shrink-0" onClick={togglePlay}>
+                              {isPlaying ? <Pause className="h-4 w-4 fill-current" /> : <Play className="h-4 w-4 fill-current" />}
                             </Button>
-                            <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden relative">
-                              <div className="absolute inset-y-0 left-0 bg-primary w-1/3" />
+                            <div
+                              className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden relative cursor-pointer"
+                              onClick={handleSeek}
+                            >
+                              <div className="absolute inset-y-0 left-0 bg-primary rounded-full transition-all duration-100" style={{ width: `${audioProgress}%` }} />
                             </div>
                             <p className="text-xs text-muted-foreground tabular-nums shrink-0">
-                              0:00 / {durationMins}:{durationSecs.toString().padStart(2, "0")}
+                              {formatTime(audioCurrentTime)} / {durationMins}:{durationSecs.toString().padStart(2, "0")}
                             </p>
                             <a href={call.recordingUrl} target="_blank" rel="noopener noreferrer" className="p-1.5 hover:bg-muted rounded-lg transition-colors text-muted-foreground shrink-0">
                               <Volume2 className="h-4 w-4" />

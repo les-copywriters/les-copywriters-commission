@@ -158,7 +158,7 @@ export async function getGlobalSettings(supabase: SupabaseClient): Promise<Recor
     aircall_api_id: Deno.env.get("AIRCALL_API_ID") || null,
     aircall_api_token: Deno.env.get("AIRCALL_API_TOKEN") || null,
     iclosed_api_key: Deno.env.get("ICLOSED_API_KEY") || null,
-    iclosed_api_base_url: Deno.env.get("ICLOSED_API_BASE_URL") || "https://api.iclosed.io/v1",
+    iclosed_api_base_url: Deno.env.get("ICLOSED_API_BASE_URL") || "https://public.api.iclosed.io/v1",
   };
   
   if (!error && data) {
@@ -184,6 +184,18 @@ async function fetchJson(url: string, init?: RequestInit) {
     } catch {
       throw new Error(`Invalid JSON returned from ${url}`);
     }
+  } catch (err) {
+    const errStr = String(err);
+    const isDns = errStr.includes("dns error") || errStr.includes("Name or service not known") || errStr.includes("failed to lookup");
+    const isTimeout = errStr.includes("abort") || errStr.includes("timed out");
+    if (isDns) {
+      const host = (() => { try { return new URL(url).hostname; } catch { return url; } })();
+      throw new Error(`Cannot reach "${host}" — domain not found in DNS. Check the iClosed API Base URL in Settings → API Keys → Global Integrations.`);
+    }
+    if (isTimeout) {
+      throw new Error(`Request to ${url} timed out after 20 s.`);
+    }
+    throw err;
   } finally {
     clearTimeout(timeout);
   }
