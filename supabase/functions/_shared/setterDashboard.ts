@@ -132,11 +132,14 @@ export async function resolveCaller(req: Request, supabase: SupabaseClient): Pro
   };
 }
 
-// Ensure the iClosed base URL always includes the /v1 path segment.
-// Handles inputs like "https://public.api.iclosed.io" or "https://public.api.iclosed.io/v1".
+// Ensure the iClosed base URL uses the correct domain and always includes /v1.
+// Fixes stale rows that still have the old wrong domain (api.iclosed.io).
 export function normalizeIClosedBaseUrl(url: string): string {
-  const trimmed = url.replace(/\/$/, "");
-  if (/\/v\d+$/.test(trimmed)) return trimmed; // already ends with /v1, /v2, etc.
+  let trimmed = url.replace(/\/$/, "");
+  // Correct old wrong domain → correct public domain
+  trimmed = trimmed.replace("://api.iclosed.io", "://public.api.iclosed.io");
+  // Ensure /v1 is present
+  if (/\/v\d+$/.test(trimmed)) return trimmed;
   return `${trimmed}/v1`;
 }
 

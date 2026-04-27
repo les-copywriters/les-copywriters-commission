@@ -5,7 +5,7 @@ import { useRefunds } from "@/hooks/useRefunds";
 import { useImpayes } from "@/hooks/useImpayes";
 import { useBonusTiers } from "@/hooks/useBonusTiers";
 import { useSetterDashboardMetrics } from "@/hooks/useSetterDashboard";
-import { computeSetterDateRange } from "@/lib/setterDashboard";
+import { computeSetterDateRange, SetterDatePreset } from "@/lib/setterDashboard";
 import { useLanguage } from "@/i18n";
 import { useAuth } from "@/context/AuthContext";
 import { monthlyBonusBreakdown, formatMonth } from "@/lib/bonusCalculation";
@@ -80,8 +80,9 @@ const DashboardPage = () => {
   const [adminVisible,  setAdminVisible]  = useState(PAGE_SIZE);
   const [memberVisible, setMemberVisible] = useState(PAGE_SIZE);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
+  const [datePreset, setDatePreset] = useState<SetterDatePreset>("thisMonth");
 
-  const dateRange = useMemo(() => computeSetterDateRange("thisMonth", "", ""), []);
+  const dateRange = useMemo(() => computeSetterDateRange(datePreset, "", ""), [datePreset]);
   const { data: metrics } = useSetterDashboardMetrics({
     profileId: user?.id,
     startDate: dateRange.start,
@@ -89,11 +90,13 @@ const DashboardPage = () => {
     enabled: isSetter,
   });
 
-  // Scope sales/refunds/impayes to the current user if not admin
-  const sales = useMemo(() =>
-    isAdmin ? allSales : allSales.filter(s =>
+  // Scope sales/refunds/impayes to the current user if not admin, then apply date filter
+  const sales = useMemo(() => {
+    const scoped = isAdmin ? allSales : allSales.filter(s =>
       isCloser ? s.closerId === user?.id : s.setterId === user?.id
-    ), [allSales, isAdmin, isCloser, user?.id]);
+    );
+    return scoped.filter(s => s.date >= dateRange.start && s.date <= dateRange.end);
+  }, [allSales, isAdmin, isCloser, user?.id, dateRange]);
 
   const visibleIds = useMemo(() => new Set(sales.map(s => s.id)), [sales]);
   const refunds = isAdmin ? allRefunds : allRefunds.filter(r => visibleIds.has(r.saleId));
@@ -158,11 +161,20 @@ const DashboardPage = () => {
   const currentMonthKey  = new Date().toISOString().slice(0, 7);
   const currentMonthBonus = bonusHistory.find(b => b.month === currentMonthKey) ?? bonusHistory[0] ?? null;
 
+  const presetLabels: { key: SetterDatePreset; label: string }[] = [
+    { key: "thisMonth",  label: t("analytics.preset.thisMonth") },
+    { key: "lastMonth",  label: t("analytics.preset.lastMonth") },
+    { key: "last3m",     label: t("analytics.preset.last3m") },
+    { key: "last6m",     label: t("analytics.preset.last6m") },
+    { key: "thisYear",   label: t("analytics.preset.thisYear") },
+    { key: "allTime",    label: t("analytics.preset.allTime") },
+  ];
+
   return (
     <AppLayout>
-      <div className="space-y-12 animate-in fade-in duration-700">
+      <div className="space-y-8 animate-in fade-in duration-700">
         {/* Header */}
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
           <div className="flex items-center gap-5">
              <div className="h-16 w-16 rounded-[1.5rem] bg-primary/10 flex items-center justify-center text-primary shadow-inner">
                 <BarChart3 className="h-8 w-8" />
@@ -246,6 +258,27 @@ const DashboardPage = () => {
               </Badge>
             )}
           </div>
+        </div>
+
+        {/* Date preset filter */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {presetLabels.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => { setDatePreset(key); setAdminVisible(PAGE_SIZE); setMemberVisible(PAGE_SIZE); }}
+              className={cn(
+                "rounded-lg px-3.5 py-1.5 text-xs font-medium transition-all",
+                datePreset === key
+                  ? "bg-primary text-white shadow-sm"
+                  : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+          <span className="ml-auto text-xs text-muted-foreground/50 hidden md:block">
+            {dateRange.start} → {dateRange.end}
+          </span>
         </div>
 
         {/* Stat cards */}

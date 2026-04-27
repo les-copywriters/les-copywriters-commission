@@ -79,7 +79,7 @@ const AnalyticsPage = () => {
   const isSetter = user?.role === "setter";
 
   // ── Filter state ────────────────────────────────────────────────────────────
-  const [datePreset,       setDatePreset]       = useState<DatePreset>("allTime");
+  const [datePreset,       setDatePreset]       = useState<DatePreset>("thisMonth");
   const [customStart,      setCustomStart]      = useState("");
   const [customEnd,        setCustomEnd]        = useState("");
   const [filterProduct,    setFilterProduct]    = useState("all");
