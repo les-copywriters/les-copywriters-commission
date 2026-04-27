@@ -13,6 +13,9 @@ const FIELD_MAP = {
   setter:            "setterLie",
 } as const;
 
+const PRODUCT_FIELD_ALIASES = ["produit", "product", "offer", "offre", "programme", "program", "formation", "service"] as const;
+const PRODUCT_TEXT_ALIASES = ["produit", "product", "offer", "offre", "programme", "formation"] as const;
+
 // ─── COMMISSION RATES ─────────────────────────────────────────────────────────
 const CLOSER_RATE = 0.088;
 const SETTER_RATE = 0.01;
@@ -26,6 +29,29 @@ function norm(s: string): string {
 
 type Profile = { id: string; name: string; role: string };
 
+function parseAliasMap(raw: string | undefined): Record<string, string> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .filter((entry): entry is [string, string] => typeof entry[0] === "string" && typeof entry[1] === "string")
+        .map(([key, value]) => [norm(key), value.trim()]),
+    );
+  } catch (error) {
+    console.warn("[jotform-webhook] invalid alias map JSON:", error);
+    return {};
+  }
+}
+
+const CLOSER_ALIASES = parseAliasMap(Deno.env.get("JOTFORM_CLOSER_ALIASES"));
+const SETTER_ALIASES = parseAliasMap(Deno.env.get("JOTFORM_SETTER_ALIASES"));
+
+function resolveAlias(name: string, aliases: Record<string, string>) {
+  const normalized = norm(name);
+  return aliases[normalized] ?? name.trim();
+}
+
 /**
  * Match a name from JotForm against profiles in the DB.
  * Tries (in order): exact → accent-insensitive → first-name only.
@@ -35,7 +61,15 @@ function findProfile(name: string, role: string, profiles: Profile[]): Profile |
   const exact = profiles.find(p => p.role === role && norm(p.name) === n);
   if (exact) return exact;
   const first = n.split(/\s+/)[0];
-  return profiles.find(p => p.role === role && norm(p.name).split(/\s+/)[0] === first);
+  const firstMatch = profiles.find(p => p.role === role && norm(p.name).split(/\s+/)[0] === first);
+  if (firstMatch) return firstMatch;
+  const compact = n.replace(/[^a-z0-9]/g, "");
+  const partialMatches = profiles.filter((p) => {
+    if (p.role !== role) return false;
+    const candidate = norm(p.name).replace(/[^a-z0-9]/g, "");
+    return candidate.includes(compact) || compact.includes(candidate);
+  });
+  return partialMatches.length === 1 ? partialMatches[0] : undefined;
 }
 
 function findProfileAnyRole(name: string, profiles: Profile[]): Profile | undefined {
@@ -62,6 +96,22 @@ function parseName(form: Record<string, unknown>): string {
     return `${n.first ?? ""} ${n.last ?? ""}`.trim();
   }
   return String(val ?? "").trim();
+}
+
+function getFieldValue(form: Record<string, unknown>, names: readonly string[], texts: readonly string[] = []): string {
+  const normalizedNames = new Set(names.map(norm));
+  const normalizedTexts = new Set(texts.map(norm));
+
+  for (const [key, raw] of Object.entries(form)) {
+    if (!raw || typeof raw !== "object") continue;
+    const entry = raw as Record<string, unknown>;
+    const name = norm(typeof entry.name === "string" ? entry.name : key);
+    const text = typeof entry.text === "string" ? norm(entry.text) : "";
+    if (!normalizedNames.has(name) && !normalizedTexts.has(text)) continue;
+    return getString(form, key);
+  }
+
+  return "";
 }
 
 // ─── HANDLER ──────────────────────────────────────────────────────────────────
@@ -111,7 +161,7 @@ Deno.serve(async (req) => {
 
     const clientName  = parseName(form);
     const clientEmail = get("clientEmail").toLowerCase();
-    const product     = get("product");
+    const product     = get("product") || getFieldValue(form, PRODUCT_FIELD_ALIASES, PRODUCT_TEXT_ALIASES);
 
     if (!product) {
       return new Response("Missing product", { status: 422 });
@@ -144,8 +194,8 @@ Deno.serve(async (req) => {
     const closerCommission = Math.round(amountHT * CLOSER_RATE * 100) / 100;
     const setterCommission = Math.round(amountHT * SETTER_RATE * 100) / 100;
 
-    const closerName = get("closer");
-    const setterName = get("setter");
+    const closerName = resolveAlias(get("closer"), CLOSER_ALIASES);
+    const setterName = resolveAlias(get("setter"), SETTER_ALIASES);
     const noSetter   = !setterName ||
       norm(setterName) === "aucun" ||
       norm(setterName) === "autre" ||

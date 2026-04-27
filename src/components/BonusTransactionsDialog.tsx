@@ -60,15 +60,15 @@ const BonusTransactionsDialog = ({ month, kind, sales, tiers, open, onOpenChange
     const pifSales = validatedSales.filter((sale) => sale.paymentType === "pif");
     const monthlyBonus = calculateMonthBonus(monthSales, tiers);
 
-    const relevantSales = kind === "pifBonus"
-      ? pifSales
-      : validatedSales;
+    const includedIds = new Set(
+      (kind === "pifBonus" ? pifSales : validatedSales).map((sale) => sale.id),
+    );
 
     return {
       monthSales,
       validatedSales,
       pifSales,
-      relevantSales,
+      includedIds,
       monthlyBonus,
     };
   }, [kind, month, sales, tiers]);
@@ -140,22 +140,22 @@ const BonusTransactionsDialog = ({ month, kind, sales, tiers, open, onOpenChange
                 <div className="p-5 border-b border-border/40 flex items-center justify-between gap-4">
                   <div>
                     <p className="text-sm font-black uppercase tracking-widest text-muted-foreground">
-                      Relevant Transactions
+                      Monthly Transactions
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
                       {kind === "pifBonus"
-                        ? "These validated PIF transactions generate the PIF bonus."
-                        : "These validated transactions are the records behind this monthly bonus view."}
+                        ? "This month view marks which transactions are counted for the PIF bonus."
+                        : "This month view marks which transactions are counted for the selected bonus slice."}
                     </p>
                   </div>
                   <Badge variant="outline" className="rounded-full px-3 py-1 font-black text-[10px]">
-                    {detail.relevantSales.length} transaction{detail.relevantSales.length === 1 ? "" : "s"}
+                    {detail.monthSales.length} transaction{detail.monthSales.length === 1 ? "" : "s"}
                   </Badge>
                 </div>
 
-                {detail.relevantSales.length === 0 ? (
+                {detail.monthSales.length === 0 ? (
                   <div className="p-10 text-center text-muted-foreground">
-                    No transactions found for this bonus slice.
+                    No transactions found for this month.
                   </div>
                 ) : (
                   <Table>
@@ -166,12 +166,15 @@ const BonusTransactionsDialog = ({ month, kind, sales, tiers, open, onOpenChange
                         <TableHead className="py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Product</TableHead>
                         <TableHead className="py-4 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground">HT Amount</TableHead>
                         <TableHead className="py-4 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground">Closer Comm</TableHead>
+                        <TableHead className="py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Bonus</TableHead>
                         <TableHead className="py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Status</TableHead>
                         <TableHead className="pr-6 py-4 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground">Action</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {detail.relevantSales.map((sale) => (
+                      {detail.monthSales.map((sale) => {
+                        const included = detail.includedIds.has(sale.id);
+                        return (
                         <TableRow key={sale.id} className="group border-border/30 hover:bg-muted/10 transition-colors">
                           <TableCell className="pl-6 py-5 text-xs font-black text-muted-foreground/60 tabular-nums">{sale.date}</TableCell>
                           <TableCell className="py-5">
@@ -187,6 +190,15 @@ const BonusTransactionsDialog = ({ month, kind, sales, tiers, open, onOpenChange
                           <TableCell className="py-5 text-sm font-bold text-muted-foreground">{sale.product}</TableCell>
                           <TableCell className="py-5 text-right font-black tabular-nums">{fmt(sale.amount)}</TableCell>
                           <TableCell className="py-5 text-right font-black tabular-nums text-primary">{fmt(sale.closerCommission)}</TableCell>
+                          <TableCell className="py-5">
+                            <Badge
+                              className={included
+                                ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-black uppercase tracking-widest text-[8px]"
+                                : "bg-muted text-muted-foreground border-border/60 font-black uppercase tracking-widest text-[8px]"}
+                            >
+                              {included ? "Included" : "Excluded"}
+                            </Badge>
+                          </TableCell>
                           <TableCell className="py-5">
                             <div className="flex items-center gap-2">
                               <SaleStatusBadge refunded={sale.refunded} impaye={sale.impaye} />
@@ -208,7 +220,7 @@ const BonusTransactionsDialog = ({ month, kind, sales, tiers, open, onOpenChange
                             </Button>
                           </TableCell>
                         </TableRow>
-                      ))}
+                      )})}
                     </TableBody>
                   </Table>
                 )}

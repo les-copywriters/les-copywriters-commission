@@ -15,6 +15,9 @@ const FIELD_MAP = {
   setter:          "setterLie",
 } as const;
 
+const PRODUCT_FIELD_ALIASES = ["produit", "product", "offer", "offre", "programme", "program", "formation", "service"] as const;
+const PRODUCT_TEXT_ALIASES = ["produit", "product", "offer", "offre", "programme", "formation"] as const;
+
 const CLOSER_RATE = 0.088;
 const SETTER_RATE = 0.01;
 
@@ -81,6 +84,29 @@ function norm(s: string): string {
 
 type Profile = { id: string; name: string; role: string };
 
+function parseAliasMap(raw: string | undefined): Record<string, string> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .filter((entry): entry is [string, string] => typeof entry[0] === "string" && typeof entry[1] === "string")
+        .map(([key, value]) => [norm(key), value.trim()]),
+    );
+  } catch (error) {
+    console.warn("[sync-jotform] invalid alias map JSON:", error);
+    return {};
+  }
+}
+
+const CLOSER_ALIASES = parseAliasMap(Deno.env.get("JOTFORM_CLOSER_ALIASES"));
+const SETTER_ALIASES = parseAliasMap(Deno.env.get("JOTFORM_SETTER_ALIASES"));
+
+function resolveAlias(name: string, aliases: Record<string, string>) {
+  const normalized = norm(name);
+  return aliases[normalized] ?? name.trim();
+}
+
 /**
  * Match a name from JotForm against profiles in the DB.
  * Tries (in order): exact → accent-insensitive → first-name only.
@@ -92,7 +118,15 @@ function findProfile(name: string, role: string, profiles: Profile[]): Profile |
   if (exact) return exact;
   // 2. First-name only (handles "Céline Dupont" matching profile "Céline")
   const first = n.split(/\s+/)[0];
-  return profiles.find(p => p.role === role && norm(p.name).split(/\s+/)[0] === first);
+  const firstMatch = profiles.find(p => p.role === role && norm(p.name).split(/\s+/)[0] === first);
+  if (firstMatch) return firstMatch;
+  const compact = n.replace(/[^a-z0-9]/g, "");
+  const partialMatches = profiles.filter((p) => {
+    if (p.role !== role) return false;
+    const candidate = norm(p.name).replace(/[^a-z0-9]/g, "");
+    return candidate.includes(compact) || compact.includes(candidate);
+  });
+  return partialMatches.length === 1 ? partialMatches[0] : undefined;
 }
 
 function findProfileAnyRole(name: string, profiles: Profile[]): Profile | undefined {
@@ -122,6 +156,32 @@ function getAnswer(answers: Record<string, unknown>, fieldName: string): string 
       .trim();
   }
   return String(ans).trim();
+}
+
+function getAnswerByAliases(
+  answers: Record<string, unknown>,
+  names: readonly string[],
+  texts: readonly string[] = [],
+): string {
+  const normalizedNames = new Set(names.map(norm));
+  const normalizedTexts = new Set(texts.map(norm));
+
+  for (const raw of Object.values(answers)) {
+    if (raw === null || typeof raw !== "object") continue;
+    const entry = raw as Record<string, unknown>;
+    const name = typeof entry.name === "string" ? norm(entry.name) : "";
+    const text = typeof entry.text === "string" ? norm(entry.text) : "";
+    if (!normalizedNames.has(name) && !normalizedTexts.has(text)) continue;
+
+    const value = getAnswer(answers, String(entry.name ?? ""));
+    if (value) return value;
+  }
+
+  return "";
+}
+
+function getProductValue(answers: Record<string, unknown>) {
+  return getAnswer(answers, FIELD_MAP.product) || getAnswerByAliases(answers, PRODUCT_FIELD_ALIASES, PRODUCT_TEXT_ALIASES);
 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -235,8 +295,9 @@ Deno.serve(async (req) => {
 
       const answers    = (sub.answers ?? {}) as Record<string, unknown>;
       const get        = (f: keyof typeof FIELD_MAP) => getAnswer(answers, FIELD_MAP[f]);
-      const closerName = get("closer");
-      const setterName = get("setter");
+      const closerName = resolveAlias(get("closer"), CLOSER_ALIASES);
+      const setterName = resolveAlias(get("setter"), SETTER_ALIASES);
+      const product    = getProductValue(answers);
 
       console.log(`[sync-jotform] sub ${subId} — closer: "${closerName}" setter: "${setterName}"`);
 
@@ -249,7 +310,6 @@ Deno.serve(async (req) => {
       // Scope: closers only process their own submissions
       if (callerRole === "closer" && norm(closerName) !== norm(callerProfile?.name ?? "")) continue;
 
-      const product = get("product");
       if (!product) {
         skipped++;
         errors.push(`Submission ${subId}: missing product`);

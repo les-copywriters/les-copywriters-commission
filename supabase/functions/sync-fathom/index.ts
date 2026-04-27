@@ -7,6 +7,10 @@ const CORS = {
 };
 
 const BASE = "https://api.fathom.ai/external/v1";
+const FATHOM_MAX_RETRIES = 3;
+const FATHOM_TIMEOUT_MS = 20000;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function respond(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -15,26 +19,71 @@ function respond(body, status = 200) {
   });
 }
 
-async function fathomGet(path, apiKey) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 20000);
-  try {
-    const res = await fetch(`${BASE}${path}`, {
-      headers: { "X-Api-Key": apiKey, Accept: "application/json" },
-      signal: controller.signal,
-    });
-    const text = await res.text();
-    console.log(`[sync-fathom] ${res.status} ${path} — ${text.slice(0, 300)}`);
-    if (!res.ok) throw new Error(`Fathom ${res.status}: ${text.slice(0, 200)}`);
-    return JSON.parse(text);
-  } finally {
-    clearTimeout(timer);
+async function fathomGet(path, apiKey, options = {}) {
+  const { retries = FATHOM_MAX_RETRIES, tolerate429 = false } = options;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FATHOM_TIMEOUT_MS);
+
+    try {
+      const res = await fetch(`${BASE}${path}`, {
+        headers: { "X-Api-Key": apiKey, Accept: "application/json" },
+        signal: controller.signal,
+      });
+      const text = await res.text();
+      console.log(`[sync-fathom] ${res.status} ${path} — ${text.slice(0, 300)}`);
+
+      if (res.status === 429) {
+        if (tolerate429) {
+          throw new Error("FATHOM_RATE_LIMIT_SOFT");
+        }
+
+        const retryAfterHeader = Number(res.headers.get("Retry-After") ?? "0");
+        const waitMs = Math.max(
+          Number.isFinite(retryAfterHeader) && retryAfterHeader > 0 ? retryAfterHeader * 1000 : 0,
+          5000 * (attempt + 1),
+        );
+
+        if (attempt < retries) {
+          console.warn(`[sync-fathom] rate limited on ${path} — waiting ${waitMs}ms before retry ${attempt + 1}/${retries}`);
+          clearTimeout(timer);
+          await sleep(waitMs);
+          continue;
+        }
+
+        throw new Error("Fathom rate limit reached. Please wait a minute and try syncing again.");
+      }
+
+      if (!res.ok) throw new Error(`Fathom ${res.status}: ${text.slice(0, 200)}`);
+      return JSON.parse(text);
+    } catch (err) {
+      if (err?.name === "AbortError") {
+        if (attempt < retries) {
+          const waitMs = 2000 * (attempt + 1);
+          console.warn(`[sync-fathom] timeout on ${path} — waiting ${waitMs}ms before retry ${attempt + 1}/${retries}`);
+          await sleep(waitMs);
+          continue;
+        }
+        throw new Error("Fathom request timed out.");
+      }
+
+      if (String(err?.message ?? err) === "FATHOM_RATE_LIMIT_SOFT") {
+        throw err;
+      }
+
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
   }
+
+  throw new Error("Fathom request failed.");
 }
 
 async function fetchTranscript(recordingId, apiKey) {
   try {
-    const data = await fathomGet(`/recordings/${recordingId}/transcript`, apiKey);
+    const data = await fathomGet(`/recordings/${recordingId}/transcript`, apiKey, { tolerate429: true });
     const segments = Array.isArray(data.transcript) ? data.transcript : [];
     if (!segments.length) return null;
     return segments.map((s) => {
@@ -43,6 +92,10 @@ async function fetchTranscript(recordingId, apiKey) {
       return `${ts}${name}: ${s.text ?? ""}`;
     }).join("\n");
   } catch (err) {
+    if (String(err?.message ?? err) === "FATHOM_RATE_LIMIT_SOFT") {
+      console.warn(`[sync-fathom] transcript rate-limited for ${recordingId}; importing call without transcript for now`);
+      return null;
+    }
     console.warn(`[sync-fathom] transcript failed for ${recordingId}:`, err);
     return null;
   }
@@ -133,6 +186,9 @@ Deno.serve(async (req) => {
         }
 
         const transcript = await fetchTranscript(id, apiKey);
+        if (transcript === null) {
+          await sleep(250);
+        }
 
         const { error: insertErr } = await supabase.from("call_analyses").insert({
           closer_id: closerId,
@@ -163,6 +219,6 @@ Deno.serve(async (req) => {
 
   } catch (err) {
     console.error("[sync-fathom] error:", err);
-    return respond({ ok: false, error: String(err) }, 500);
+    return respond({ ok: false, error: err instanceof Error ? err.message : String(err) }, 500);
   }
 });
