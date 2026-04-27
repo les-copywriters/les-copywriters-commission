@@ -423,14 +423,26 @@ async function recomputeCallMetrics(
 ): Promise<number> {
   if (!profileIds.length || !minDate || !maxDate) return 0;
 
-  const { data: records, error } = await supabase
+  const { data, error } = await supabase.rpc("recompute_setter_call_metrics", {
+    p_profile_ids: profileIds,
+    p_min_date: minDate,
+    p_max_date: maxDate,
+  });
+
+  if (!error && typeof data === "number") {
+    return data;
+  }
+
+  console.warn("[recomputeCallMetrics] RPC unavailable, falling back to in-function aggregation:", error?.message ?? "unknown error");
+
+  const { data: records, error: selectError } = await supabase
     .from("setter_call_records")
     .select("profile_id, started_at, talk_time_seconds, status")
     .in("profile_id", profileIds)
     .gte("started_at", `${minDate}T00:00:00Z`)
     .lte("started_at", `${maxDate}T23:59:59Z`);
 
-  if (error) throw new Error(error.message);
+  if (selectError) throw new Error(selectError.message);
   if (!records?.length) return 0;
 
   const agg = new Map<string, CallAggregate>();
