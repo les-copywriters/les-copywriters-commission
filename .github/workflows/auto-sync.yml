@@ -2,9 +2,8 @@ name: Auto Sync
 
 on:
   schedule:
-    # Runs every 30 minutes (GitHub Actions minimum is 5 minutes)
     - cron: "*/30 * * * *"
-  workflow_dispatch: # Allow manual trigger from GitHub UI
+  workflow_dispatch:
 
 jobs:
   sync:
@@ -13,21 +12,38 @@ jobs:
     timeout-minutes: 10
 
     steps:
+      - name: Validate secrets
+        run: |
+          if [ -z "${{ secrets.SUPABASE_URL }}" ]; then
+            echo "ERROR: SUPABASE_URL secret is not set."
+            echo "Go to repo Settings → Secrets and variables → Actions and add SUPABASE_URL = https://irzeiiamxwccjwbjqnza.supabase.co"
+            exit 1
+          fi
+          if [ -z "${{ secrets.CRON_SECRET }}" ]; then
+            echo "ERROR: CRON_SECRET secret is not set."
+            echo "Go to repo Settings → Secrets and variables → Actions and add CRON_SECRET = <your cron secret>"
+            exit 1
+          fi
+          echo "Secrets validated."
+          echo "Calling: ${{ secrets.SUPABASE_URL }}/functions/v1/auto-sync"
+
       - name: Trigger auto-sync
         run: |
-          response=$(curl -s -o /tmp/sync_response.json -w "%{http_code}" \
+          HTTP_CODE=$(curl -s \
+            -o /tmp/sync_response.json \
+            -w "%{http_code}" \
             -X POST "${{ secrets.SUPABASE_URL }}/functions/v1/auto-sync" \
             -H "Content-Type: application/json" \
             -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
             --max-time 300 \
             -d '{}')
 
-          echo "HTTP status: $response"
+          echo "HTTP status: $HTTP_CODE"
+          echo "Response:"
           cat /tmp/sync_response.json | python3 -m json.tool 2>/dev/null || cat /tmp/sync_response.json
 
-          if [ "$response" != "200" ] && [ "$response" != "207" ]; then
-            echo "Sync failed with HTTP $response"
+          if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "207" ]; then
+            echo "Sync failed with HTTP $HTTP_CODE"
             exit 1
           fi
-
-          echo "Sync completed successfully"
+          echo "Sync completed successfully."
