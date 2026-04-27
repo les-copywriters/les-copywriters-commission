@@ -33,14 +33,19 @@ type StatusFilter  = "all" | "paid" | "refunded" | "unpaid";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function computeDateRange(preset: DatePreset, customStart: string, customEnd: string) {
-  const now   = new Date();
+  const now = new Date();
   const today = now.toISOString().slice(0, 10);
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  const utc = (year: number, month: number, day: number) =>
+    new Date(Date.UTC(year, month, day)).toISOString().slice(0, 10);
+
   switch (preset) {
-    case "thisMonth":  return { start: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10), end: today };
-    case "lastMonth":  return { start: new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10), end: new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10) };
-    case "last3m":     return { start: new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString().slice(0, 10), end: today };
-    case "last6m":     return { start: new Date(now.getFullYear(), now.getMonth() - 5, 1).toISOString().slice(0, 10), end: today };
-    case "thisYear":   return { start: `${now.getFullYear()}-01-01`, end: today };
+    case "thisMonth":  return { start: utc(y, m, 1), end: today };
+    case "lastMonth":  return { start: utc(y, m - 1, 1), end: utc(y, m, 0) };
+    case "last3m":     return { start: utc(y, m - 2, 1), end: today };
+    case "last6m":     return { start: utc(y, m - 5, 1), end: today };
+    case "thisYear":   return { start: `${y}-01-01`, end: today };
     case "allTime":    return { start: "2000-01-01", end: today };
     case "custom":     return { start: customStart || "2000-01-01", end: customEnd || today };
   }

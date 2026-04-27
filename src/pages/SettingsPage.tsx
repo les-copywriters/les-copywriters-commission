@@ -19,6 +19,7 @@ import { useUpdateFathomKey } from "@/hooks/useCallAnalysis";
 import { useSetterIntegrationMappings, useUpsertSetterIntegrationMapping } from "@/hooks/useSetterDashboard";
 import { useGlobalSettings } from "@/hooks/useGlobalSettings";
 import GlobalIntegrationSettings from "@/components/GlobalIntegrationSettings";
+import AutoSyncStatus from "@/components/AutoSyncStatus";
 
 // ── Password strength ─────────────────────────────────────────────────────────
 function getStrength(pw: string): 0 | 1 | 2 | 3 {
@@ -717,6 +718,7 @@ const SettingsPage = () => {
             {user?.role === "admin" && (
               <div className="mt-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-300">
                 <GlobalIntegrationSettings />
+                <AutoSyncStatus />
               </div>
             )}
           </TabsContent>

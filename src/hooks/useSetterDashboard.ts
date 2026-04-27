@@ -331,7 +331,7 @@ export const useSetterCallRecords = (profileId?: string, startDate?: string, end
         .from("setter_call_records")
         .select("id, profile_id, aircall_call_id, direction, status, started_at, ended_at, duration_seconds, talk_time_seconds, contact_name, contact_phone, recording_url, notes, transcription, summary, ai_topics, ai_sentiments, talk_listen_ratio, raw_payload")
         .order("started_at", { ascending: false })
-        .limit(200);
+        .limit(2000);
       if (profileId) query = query.eq("profile_id", profileId);
       if (startDate) query = query.gte("started_at", startDate);
       if (endDate) query = query.lte("started_at", `${endDate}T23:59:59`);

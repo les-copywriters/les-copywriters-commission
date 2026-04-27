@@ -1,4 +1,4 @@
-import { CORS, getAdminClient, getGlobalSettings, json, resolveCaller, runSetterDashboardSync } from "../_shared/setterDashboard.ts";
+import { CORS, getAdminClient, getGlobalSettings, json, normalizeIClosedBaseUrl, resolveCaller, runSetterDashboardSync } from "../_shared/setterDashboard.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
@@ -46,9 +46,10 @@ Deno.serve(async (req) => {
     // Test iClosed
     try {
       const key = global.iclosed_api_key;
-      const base = global.iclosed_api_base_url || "https://api.iclosed.io/v1";
+      const rawBase = global.iclosed_api_base_url || "https://public.api.iclosed.io/v1";
       if (!key) throw new Error("iClosed Global API Key not set in database");
-      const res = await fetch(`${base.replace(/\/$/, "")}/users?limit=1`, {
+      const base = normalizeIClosedBaseUrl(rawBase);
+      const res = await fetch(`${base}/users?limit=1`, {
         headers: { Authorization: `Bearer ${key}` },
       });
       results.iclosed = { ok: res.ok, status: res.status };

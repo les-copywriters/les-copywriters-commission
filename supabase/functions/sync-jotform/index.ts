@@ -136,30 +136,37 @@ Deno.serve(async (req) => {
     return json({ error: "JOTFORM_API_KEY and JOTFORM_FORM_ID secrets are not set" }, 500);
   }
 
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader) return json({ error: "Missing Authorization header" }, 401);
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
 
-  try {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
+  // Allow cron calls via shared secret (no JWT required)
+  const cronSecret = Deno.env.get("SETTER_DASHBOARD_CRON_SECRET");
+  const providedCronSecret = req.headers.get("x-cron-secret");
+  const viaCron = !!(cronSecret && providedCronSecret && providedCronSecret === cronSecret);
 
-    // Verify JWT
+  if (!viaCron) {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) return json({ error: "Missing Authorization header" }, 401);
+
     const { data: { user }, error: authError } = await supabase.auth.getUser(
       authHeader.replace("Bearer ", ""),
     );
     if (authError || !user) return json({ error: "Unauthorized" }, 401);
 
-    // Caller profile
     const { data: callerProfile } = await supabase
       .from("profiles").select("id, name, role").eq("id", user.id).single();
     const callerRole = callerProfile?.role ?? "";
-    console.log("[sync-jotform] caller:", callerProfile?.name, callerRole);
-
     if (callerRole !== "admin" && callerRole !== "closer" && callerRole !== "setter") {
       return json({ ok: false, error: "Only admins, closers and setters can sync" }, 403);
     }
+    console.log("[sync-jotform] caller:", callerProfile?.name, callerRole);
+  } else {
+    console.log("[sync-jotform] cron trigger");
+  }
+
+  try {
 
     // All profiles for fuzzy lookup
     const { data: allProfiles, error: profilesError } = await supabase.from("profiles").select("id, name, role");
@@ -210,6 +217,8 @@ Deno.serve(async (req) => {
 
     let imported = 0, updated = 0, skipped = 0, nonActive = 0;
     const errors: string[] = [];
+    const unmatchedClosers = new Set<string>();
+    const unmatchedSetters = new Set<string>();
 
     for (const sub of allSubs) {
       if (sub.status !== "ACTIVE") { nonActive++; continue; }
@@ -262,7 +271,7 @@ Deno.serve(async (req) => {
       const closerProfile = findProfileAnyRole(closerName, profiles);
       if (!closerProfile) {
         skipped++;
-        errors.push(`Submission ${subId}: closer not found "${closerName}"`);
+        unmatchedClosers.add(closerName);
         continue;
       }
 
@@ -282,7 +291,7 @@ Deno.serve(async (req) => {
 
       if (!noSetter && !setterProfile) {
         console.warn(`[sync-jotform] setter not matched: "${setterName}"`);
-        errors.push(`Setter not matched: "${setterName}"`);
+        unmatchedSetters.add(setterName);
       }
 
       const createdAt  = typeof sub.created_at === "string" ? sub.created_at : "";
@@ -339,6 +348,14 @@ Deno.serve(async (req) => {
         imported++;
         existingIds.add(subId);
       }
+    }
+
+    // Append deduplicated missing-name errors once instead of once per submission
+    for (const name of unmatchedClosers) {
+      errors.push(`Closer "${name}" not found — add them in Admin → Team Manage`);
+    }
+    for (const name of unmatchedSetters) {
+      errors.push(`Setter "${name}" not found — add them in Admin → Team Manage`);
     }
 
     console.log(`[sync-jotform] done — imported: ${imported}, updated: ${updated}, skipped: ${skipped}, nonActive: ${nonActive}, errors: ${errors.length}`);

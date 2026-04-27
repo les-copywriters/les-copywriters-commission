@@ -132,6 +132,14 @@ export async function resolveCaller(req: Request, supabase: SupabaseClient): Pro
   };
 }
 
+// Ensure the iClosed base URL always includes the /v1 path segment.
+// Handles inputs like "https://public.api.iclosed.io" or "https://public.api.iclosed.io/v1".
+export function normalizeIClosedBaseUrl(url: string): string {
+  const trimmed = url.replace(/\/$/, "");
+  if (/\/v\d+$/.test(trimmed)) return trimmed; // already ends with /v1, /v2, etc.
+  return `${trimmed}/v1`;
+}
+
 export function normalizeDate(value: string | null | undefined) {
   if (!value) return null;
   const match = String(value).match(/\d{4}-\d{2}-\d{2}/);
@@ -170,35 +178,53 @@ export async function getGlobalSettings(supabase: SupabaseClient): Promise<Recor
   return settings;
 }
 
-async function fetchJson(url: string, init?: RequestInit) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20000);
-  try {
-    const response = await fetch(url, { ...init, signal: controller.signal });
-    const text = await response.text();
-    if (!response.ok) {
-      throw new Error(`${response.status} ${url}: ${text.slice(0, 200)}`);
-    }
+const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+
+async function fetchJson(url: string, init?: RequestInit, retries = 3): Promise<Record<string, unknown>> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
     try {
-      return JSON.parse(text) as Record<string, unknown>;
-    } catch {
-      throw new Error(`Invalid JSON returned from ${url}`);
+      const response = await fetch(url, { ...init, signal: controller.signal });
+      const text = await response.text();
+
+      // Rate limited — wait then retry
+      if (response.status === 429) {
+        const retryAfterSec = Number(response.headers.get("Retry-After") ?? "30");
+        const waitMs = Math.max(retryAfterSec * 1000, 10_000); // minimum 10 s
+        if (attempt < retries) {
+          console.log(`[fetchJson] 429 rate limit — waiting ${waitMs / 1000}s (attempt ${attempt + 1}/${retries})`);
+          clearTimeout(timeout);
+          await sleep(waitMs);
+          continue;
+        }
+        throw new Error(`429 rate limit exceeded after ${retries} retries: ${url}`);
+      }
+
+      if (!response.ok) {
+        throw new Error(`${response.status} ${url}: ${text.slice(0, 200)}`);
+      }
+      try {
+        return JSON.parse(text) as Record<string, unknown>;
+      } catch {
+        throw new Error(`Invalid JSON returned from ${url}`);
+      }
+    } catch (err) {
+      const errStr = String(err);
+      // Don't retry on DNS/timeout errors — they won't resolve with waiting
+      const isDns = errStr.includes("dns error") || errStr.includes("Name or service not known") || errStr.includes("failed to lookup");
+      const isTimeout = errStr.includes("abort") || errStr.includes("timed out");
+      if (isDns) {
+        const host = (() => { try { return new URL(url).hostname; } catch { return url; } })();
+        throw new Error(`Cannot reach "${host}" — domain not found in DNS. Check the iClosed API Base URL in Settings → API Keys → Global Integrations.`);
+      }
+      if (isTimeout) throw new Error(`Request to ${url} timed out after 20 s.`);
+      throw err;
+    } finally {
+      clearTimeout(timeout);
     }
-  } catch (err) {
-    const errStr = String(err);
-    const isDns = errStr.includes("dns error") || errStr.includes("Name or service not known") || errStr.includes("failed to lookup");
-    const isTimeout = errStr.includes("abort") || errStr.includes("timed out");
-    if (isDns) {
-      const host = (() => { try { return new URL(url).hostname; } catch { return url; } })();
-      throw new Error(`Cannot reach "${host}" — domain not found in DNS. Check the iClosed API Base URL in Settings → API Keys → Global Integrations.`);
-    }
-    if (isTimeout) {
-      throw new Error(`Request to ${url} timed out after 20 s.`);
-    }
-    throw err;
-  } finally {
-    clearTimeout(timeout);
   }
+  throw new Error(`fetchJson failed after ${retries} retries: ${url}`);
 }
 
 function groupCallRows(rows: CallAggregate[]) {
@@ -296,7 +322,7 @@ async function syncIClosedForSetter(
   if (!apiKey || !baseUrl) return { rows: [], recordsSeen: 0 };
 
   const { start, end } = getDateWindow(startDate, endDate);
-  const base = baseUrl.replace(/\/$/, "");
+  const base = normalizeIClosedBaseUrl(baseUrl);
   const rows: FunnelAggregate[] = [];
   let totalSeen = 0;
   let page = 1;
@@ -383,12 +409,53 @@ async function upsertCallRecords(supabase: SupabaseClient, records: CallRecord[]
   return records.length;
 }
 
-async function upsertCallMetrics(supabase: SupabaseClient, rows: CallAggregate[]) {
-  if (!rows.length) return 0;
-  const { error } = await supabase.from("setter_call_metrics_daily").upsert(rows, {
-    onConflict: "profile_id,metric_date,source",
-  });
+// Recompute daily call metrics from the stored call records for every
+// date touched by this sync run. This ensures re-running an incremental
+// sync never overwrites totals — the source of truth is always the records table.
+async function recomputeCallMetrics(
+  supabase: SupabaseClient,
+  profileIds: string[],
+  minDate: string,
+  maxDate: string,
+): Promise<number> {
+  if (!profileIds.length || !minDate || !maxDate) return 0;
+
+  const { data: records, error } = await supabase
+    .from("setter_call_records")
+    .select("profile_id, started_at, talk_time_seconds, status")
+    .in("profile_id", profileIds)
+    .gte("started_at", `${minDate}T00:00:00Z`)
+    .lte("started_at", `${maxDate}T23:59:59Z`);
+
   if (error) throw new Error(error.message);
+  if (!records?.length) return 0;
+
+  const agg = new Map<string, CallAggregate>();
+  for (const r of records as { profile_id: string; started_at: string | null; talk_time_seconds: number; status: string | null }[]) {
+    const date = r.started_at?.slice(0, 10);
+    if (!date) continue;
+    const key = `${r.profile_id}:${date}`;
+    const cur = agg.get(key) ?? {
+      profile_id: r.profile_id,
+      metric_date: date,
+      source: "aircall" as const,
+      calls_made: 0,
+      calls_answered: 0,
+      talk_time_seconds: 0,
+      raw_payload: { count: 0 },
+    };
+    cur.calls_made++;
+    cur.talk_time_seconds += r.talk_time_seconds ?? 0;
+    if (r.status === "answered" || r.status === "done") cur.calls_answered++;
+    (cur.raw_payload as { count: number }).count++;
+    agg.set(key, cur);
+  }
+
+  const rows = [...agg.values()];
+  const { error: upsertErr } = await supabase
+    .from("setter_call_metrics_daily")
+    .upsert(rows, { onConflict: "profile_id,metric_date,source" });
+  if (upsertErr) throw new Error(upsertErr.message);
   return rows.length;
 }
 
@@ -521,16 +588,60 @@ export async function runSetterDashboardSync(options: {
           try {
             const { fromUnix, toUnix } = getDateWindow(startDate, endDate);
             const auth = btoa(`${group.id}:${group.token}`);
-            let page = 1;
+            const MAX_PAGES = 100; // 100 × 50 = 5,000 calls per run
             const seenUserIds = new Set<string>();
 
-            while (page <= 20) {
+            // ── Gap-aware incremental sync ────────────────────────────────────
+            // We start 180 days before the latest stored call (not from the latest
+            // call itself). This automatically fills historical gaps — e.g. months
+            // that were skipped because older syncs used different date windows.
+            // Re-fetching the overlap is safe: upsert is idempotent.
+            const LOOKBACK_SECONDS = 180 * 24 * 3600; // 6 months
+            const groupProfileIds = group.mappings.map(m => m.profile_id);
+            const { data: latestCallRow } = await supabase
+              .from("setter_call_records")
+              .select("started_at")
+              .in("profile_id", groupProfileIds)
+              .not("started_at", "is", null)
+              .order("started_at", { ascending: false })
+              .limit(1)
+              .single();
+
+            const incrementalFrom = latestCallRow?.started_at
+              ? Math.max(
+                  Math.floor(new Date(latestCallRow.started_at as string).getTime() / 1000) - LOOKBACK_SECONDS,
+                  fromUnix,
+                )
+              : fromUnix;
+
+            console.log(`[aircall] syncing from ${new Date(incrementalFrom * 1000).toISOString()} (6-month lookback from latest stored call)`);
+
+            // Time budget: stop before the edge-function timeout (150 s on Pro).
+            // Remaining calls will be picked up on the next sync run.
+            const groupStartMs = Date.now();
+            const TIME_BUDGET_MS = 110_000;
+            let page = 1;
+
+            while (page <= MAX_PAGES) {
+              if (Date.now() - groupStartMs > TIME_BUDGET_MS) {
+                console.log(`[aircall] time budget reached at page ${page} — run sync again to continue`);
+                break;
+              }
+
+              // Aircall rate limit: 60 req/min → 1 s between pages stays safely under
+              if (page > 1) await sleep(1000);
+
               const payload = await fetchJson(
-                `https://api.aircall.io/v1/calls?from=${fromUnix}&to=${toUnix}&page=${page}&per_page=100`,
+                // order=asc: oldest first — ensures each run makes forward progress
+                `https://api.aircall.io/v1/calls?from=${incrementalFrom}&to=${toUnix}&order=asc&page=${page}&per_page=50`,
                 { headers: { Authorization: `Basic ${auth}` } },
               );
               const calls = (Array.isArray(payload.calls) ? payload.calls : Array.isArray(payload.data) ? payload.data : []) as Record<string, unknown>[];
               if (!calls.length) break;
+
+              // Use Aircall's next_page_link to know when pagination ends
+              const meta = payload.meta as Record<string, unknown> | undefined;
+              const hasNextPage = !!meta?.next_page_link;
 
               for (const call of calls) {
                 const callUserId = String(call.user_id ?? (call.user as Record<string, unknown> | undefined)?.id ?? "");
@@ -594,7 +705,7 @@ export async function runSetterDashboardSync(options: {
                 }
                 totalRecordsSeen++;
               }
-              if (calls.length < 100) break;
+              if (!hasNextPage) break;
               page++;
             }
 
@@ -611,7 +722,43 @@ export async function runSetterDashboardSync(options: {
         }
 
         await upsertCallRecords(supabase, allCallRecords);
-        totalRowsWritten = await upsertCallMetrics(supabase, groupCallRows(allCallRows));
+
+        // Recompute daily metrics from ALL stored call records for these profiles
+        // (not just the current batch). This fills any historical gaps caused by
+        // previous sync runs that hit the time budget mid-range or had the old
+        // replace-on-conflict bug.
+        {
+          const affectedProfiles = [...new Set([
+            ...allCallRecords.map(r => r.profile_id),
+            ...rows.map(m => m.profile_id),
+          ])];
+
+          const [{ data: minRow }, { data: maxRow }] = await Promise.all([
+            supabase
+              .from("setter_call_records")
+              .select("started_at")
+              .in("profile_id", affectedProfiles)
+              .not("started_at", "is", null)
+              .order("started_at", { ascending: true })
+              .limit(1)
+              .single(),
+            supabase
+              .from("setter_call_records")
+              .select("started_at")
+              .in("profile_id", affectedProfiles)
+              .not("started_at", "is", null)
+              .order("started_at", { ascending: false })
+              .limit(1)
+              .single(),
+          ]);
+
+          const minDate = (minRow as { started_at: string } | null)?.started_at?.slice(0, 10);
+          const maxDate = (maxRow as { started_at: string } | null)?.started_at?.slice(0, 10);
+
+          if (minDate && maxDate) {
+            totalRowsWritten = await recomputeCallMetrics(supabase, affectedProfiles, minDate, maxDate);
+          }
+        }
 
       } else if (selectedSource === "iclosed") {
         const allFunnelRows: FunnelAggregate[] = [];

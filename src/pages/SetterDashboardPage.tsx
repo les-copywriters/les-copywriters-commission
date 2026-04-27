@@ -214,7 +214,7 @@ const SetterDashboardPage = () => {
     enabled: isAllowed,
   });
 
-  const { data: callRecords = [] } = useSetterCallRecords(scopedSetterId);
+  const { data: callRecords = [] } = useSetterCallRecords(scopedSetterId, start, end);
   const [callSearch, setCallSearch] = useState("");
   const [callLimit, setCallLimit] = useState(25);
   const navigate = useNavigate();
@@ -295,14 +295,14 @@ const SetterDashboardPage = () => {
                 className="h-9 px-3.5 rounded-lg text-sm border-border/60 whitespace-nowrap"
                 onClick={() =>
                   syncAircall.mutate(
-                    { source: "aircall", profileId: scopedSetterId, startDate: start, endDate: end },
+                    { source: "aircall", profileId: scopedSetterId },
                     {
                       onSuccess: (data) => {
                         const r = (data as any)?.results?.[0];
                         if (r?.errors?.length) toast.error(`Aircall: ${r.errors[0]}`);
                         else if (r?.rows_written > 0) toast.success(`Aircall synced — ${r.rows_written} rows written`);
-                        else if (r?.records_seen > 0) toast.success(`Aircall sync complete — no calls found in the selected period.`);
-                        else toast.warning("Aircall sync found 0 calls for this date range.");
+                        else if (r?.records_seen > 0) toast.success("Aircall sync complete — all calls are up to date.");
+                        else toast.warning("Aircall sync found 0 calls.");
                       },
                       onError: (syncError) => toast.error(syncError.message),
                     },
@@ -320,13 +320,13 @@ const SetterDashboardPage = () => {
                 className="h-9 px-3.5 rounded-lg text-sm border-border/60 whitespace-nowrap"
                 onClick={() =>
                   syncIclosed.mutate(
-                    { source: "iclosed", profileId: scopedSetterId, startDate: start, endDate: end },
+                    { source: "iclosed", profileId: scopedSetterId },
                     {
                       onSuccess: (data) => {
                         const r = (data as any)?.results?.[0];
                         if (r?.errors?.length) toast.error(`iClosed: ${r.errors[0]}`);
                         else if (r?.rows_written > 0) toast.success(`iClosed synced — ${r.rows_written} rows written`);
-                        else toast.success(`iClosed sync complete — no events found in the selected period.`);
+                        else toast.success("iClosed sync complete — all events are up to date.");
                       },
                       onError: (syncError) => toast.error(syncError.message),
                     },

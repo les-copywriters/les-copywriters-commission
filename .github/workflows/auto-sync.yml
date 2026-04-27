@@ -1,0 +1,33 @@
+name: Auto Sync
+
+on:
+  schedule:
+    # Runs every 30 minutes (GitHub Actions minimum is 5 minutes)
+    - cron: "*/30 * * * *"
+  workflow_dispatch: # Allow manual trigger from GitHub UI
+
+jobs:
+  sync:
+    name: Sync all data sources
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Trigger auto-sync
+        run: |
+          response=$(curl -s -o /tmp/sync_response.json -w "%{http_code}" \
+            -X POST "${{ secrets.SUPABASE_URL }}/functions/v1/auto-sync" \
+            -H "Content-Type: application/json" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            --max-time 300 \
+            -d '{}')
+
+          echo "HTTP status: $response"
+          cat /tmp/sync_response.json | python3 -m json.tool 2>/dev/null || cat /tmp/sync_response.json
+
+          if [ "$response" != "200" ] && [ "$response" != "207" ]; then
+            echo "Sync failed with HTTP $response"
+            exit 1
+          fi
+
+          echo "Sync completed successfully"

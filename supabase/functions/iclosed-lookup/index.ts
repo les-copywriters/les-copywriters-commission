@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { normalizeIClosedBaseUrl } from "../_shared/setterDashboard.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -111,7 +112,7 @@ Deno.serve(async (req) => {
     return json({ error: "iClosed API Base URL is not configured. The correct default is https://public.api.iclosed.io/v1" }, 400);
   }
 
-  const base = baseUrl.replace(/\/$/, "");
+  const base = normalizeIClosedBaseUrl(baseUrl);
   const headers = { Authorization: `Bearer ${apiKey}` };
 
   // ── Step 1: try /v1/users ────────────────────────────────────────────────────
