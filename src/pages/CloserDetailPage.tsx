@@ -20,6 +20,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { cn } from "@/lib/utils";
 import SaleDetailsDialog from "@/components/SaleDetailsDialog";
 import { Sale } from "@/types";
+import BonusTransactionsDialog, { BonusDrilldownKind } from "@/components/BonusTransactionsDialog";
 
 const CHART_COLORS = {
   primary: "hsl(var(--primary))",
@@ -60,6 +61,7 @@ const CloserDetailPage = () => {
 
   const decodedName = decodeURIComponent(name || "");
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
+  const [bonusDialog, setBonusDialog] = useState<{ month: string; kind: BonusDrilldownKind } | null>(null);
 
   const { sales, totalComm, totalSales, refundedSales, unpaidSales, avgCommission, productData, monthlyTrend } = useMemo(() => {
     const sales = allSales.filter(s => s.closer === decodedName);
@@ -109,6 +111,7 @@ const CloserDetailPage = () => {
   const loadErrorMessage = salesLoadFailed
     ? salesError instanceof Error ? salesError.message : "Failed to load closer details."
     : tiersError instanceof Error ? tiersError.message : "Failed to load bonus tiers.";
+  const openBonusDialog = (month: string, kind: BonusDrilldownKind) => setBonusDialog({ month, kind });
 
   return (
     <AppLayout>
@@ -204,16 +207,26 @@ const CloserDetailPage = () => {
                   <div className="space-y-6">
                     <div className="flex justify-between items-center group">
                       <span className="text-xs font-black uppercase tracking-widest text-muted-foreground/60">{t("bonus.validatedCount")}</span>
-                      <span className="font-black text-lg text-foreground tabular-nums">{currentMonthBonus.validatedCount}</span>
+                      <Button
+                        variant="ghost"
+                        className="h-auto p-0 font-black text-lg text-foreground tabular-nums hover:bg-transparent hover:text-primary"
+                        onClick={() => openBonusDialog(currentMonthBonus.month, "validatedCount")}
+                      >
+                        {currentMonthBonus.validatedCount}
+                      </Button>
                     </div>
                     <div className="flex justify-between items-center group">
                       <span className="text-xs font-black uppercase tracking-widest text-muted-foreground/60">
                          {t("bonus.pifBonus")} 
                          <span className="text-[9px] font-bold text-primary/40 ml-2">({currentMonthBonus.pifCount} × €50)</span>
                       </span>
-                      <span className={cn("font-black text-lg tabular-nums", currentMonthBonus.pifBonus > 0 ? "text-emerald-500" : "text-muted-foreground/30")}>
+                      <Button
+                        variant="ghost"
+                        className={cn("h-auto p-0 font-black text-lg tabular-nums hover:bg-transparent hover:text-primary", currentMonthBonus.pifBonus > 0 ? "text-emerald-500" : "text-muted-foreground/30")}
+                        onClick={() => openBonusDialog(currentMonthBonus.month, "pifBonus")}
+                      >
                         {fmt(currentMonthBonus.pifBonus)}
-                      </span>
+                      </Button>
                     </div>
                     <div className="flex justify-between items-center group">
                       <span className="text-xs font-black uppercase tracking-widest text-muted-foreground/60">
@@ -224,13 +237,23 @@ const CloserDetailPage = () => {
                           </Badge>
                         )}
                       </span>
-                      <span className={cn("font-black text-lg tabular-nums", currentMonthBonus.volumeBonus > 0 ? "text-emerald-500" : "text-muted-foreground/30")}>
+                      <Button
+                        variant="ghost"
+                        className={cn("h-auto p-0 font-black text-lg tabular-nums hover:bg-transparent hover:text-primary", currentMonthBonus.volumeBonus > 0 ? "text-emerald-500" : "text-muted-foreground/30")}
+                        onClick={() => openBonusDialog(currentMonthBonus.month, "volumeBonus")}
+                      >
                         {fmt(currentMonthBonus.volumeBonus)}
-                      </span>
+                      </Button>
                     </div>
                     <div className="pt-8 border-t border-border/40 flex flex-col items-center gap-2 text-center">
                       <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40">{t("bonus.total")} Estimated Reward</span>
-                      <span className="text-5xl font-black text-emerald-500 tabular-nums tracking-tighter drop-shadow-sm">{fmt(currentMonthBonus.total)}</span>
+                      <Button
+                        variant="ghost"
+                        className="h-auto p-0 text-5xl font-black text-emerald-500 tabular-nums tracking-tighter drop-shadow-sm hover:bg-transparent hover:text-primary"
+                        onClick={() => openBonusDialog(currentMonthBonus.month, "total")}
+                      >
+                        {fmt(currentMonthBonus.total)}
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -261,10 +284,32 @@ const CloserDetailPage = () => {
                       {bonusHistory.map(row => (
                         <TableRow key={row.month} className="hover:bg-muted/10 transition-all group border-border/30">
                           <TableCell className="py-6 pl-8 font-black text-sm tracking-tight">{formatMonth(row.month, locale)}</TableCell>
-                          <TableCell className="py-6 text-right text-muted-foreground font-bold tabular-nums text-xs">{fmt(row.pifBonus)}</TableCell>
-                          <TableCell className="py-6 text-right text-muted-foreground font-bold tabular-nums text-xs">{fmt(row.volumeBonus)}</TableCell>
-                          <TableCell className={cn("py-6 pr-8 text-right font-black tabular-nums text-sm transition-transform group-hover:scale-110", row.total > 0 ? "text-emerald-500" : "text-muted-foreground/30")}>
-                            {fmt(row.total)}
+                          <TableCell className="py-6 text-right">
+                            <Button
+                              variant="ghost"
+                              className="h-auto p-0 text-muted-foreground font-bold tabular-nums text-xs hover:bg-transparent hover:text-primary"
+                              onClick={() => openBonusDialog(row.month, "pifBonus")}
+                            >
+                              {fmt(row.pifBonus)}
+                            </Button>
+                          </TableCell>
+                          <TableCell className="py-6 text-right">
+                            <Button
+                              variant="ghost"
+                              className="h-auto p-0 text-muted-foreground font-bold tabular-nums text-xs hover:bg-transparent hover:text-primary"
+                              onClick={() => openBonusDialog(row.month, "volumeBonus")}
+                            >
+                              {fmt(row.volumeBonus)}
+                            </Button>
+                          </TableCell>
+                          <TableCell className="py-6 pr-8 text-right">
+                            <Button
+                              variant="ghost"
+                              className={cn("h-auto p-0 font-black tabular-nums text-sm transition-transform group-hover:scale-110 hover:bg-transparent hover:text-primary", row.total > 0 ? "text-emerald-500" : "text-muted-foreground/30")}
+                              onClick={() => openBonusDialog(row.month, "total")}
+                            >
+                              {fmt(row.total)}
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -373,6 +418,14 @@ const CloserDetailPage = () => {
            </ContentCard>
         </div>
       </div>
+      <BonusTransactionsDialog
+        month={bonusDialog?.month ?? null}
+        kind={bonusDialog?.kind ?? null}
+        sales={sales}
+        tiers={tiers}
+        open={!!bonusDialog}
+        onOpenChange={(open) => !open && setBonusDialog(null)}
+      />
       <SaleDetailsDialog sale={selectedSale} open={!!selectedSale} onOpenChange={(open) => !open && setSelectedSale(null)} />
     </AppLayout>
   );

@@ -28,6 +28,7 @@ import { useSyncJotform } from "@/hooks/useSyncJotform";
 import { toast } from "sonner";
 import SaleDetailsDialog from "@/components/SaleDetailsDialog";
 import { Sale } from "@/types";
+import BonusTransactionsDialog, { BonusDrilldownKind } from "@/components/BonusTransactionsDialog";
 
 // ─── Shared skeleton loader ───────────────────────────────────────────────────
 const CardSkeletons = ({ n = 4 }: { n?: number }) => (
@@ -80,6 +81,7 @@ const DashboardPage = () => {
   const [adminVisible,  setAdminVisible]  = useState(PAGE_SIZE);
   const [memberVisible, setMemberVisible] = useState(PAGE_SIZE);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
+  const [bonusDialog, setBonusDialog] = useState<{ month: string; kind: BonusDrilldownKind } | null>(null);
   const [datePreset, setDatePreset] = useState<SetterDatePreset>("thisMonth");
 
   const dateRange = useMemo(() => computeSetterDateRange(datePreset, "", ""), [datePreset]);
@@ -160,6 +162,7 @@ const DashboardPage = () => {
   const bonusHistory     = useMemo(() => isCloser ? monthlyBonusBreakdown(sales, tiers) : [], [sales, tiers, isCloser]);
   const currentMonthKey  = new Date().toISOString().slice(0, 7);
   const currentMonthBonus = bonusHistory.find(b => b.month === currentMonthKey) ?? bonusHistory[0] ?? null;
+  const openBonusDialog = (month: string, kind: BonusDrilldownKind) => setBonusDialog({ month, kind });
 
   const presetLabels: { key: SetterDatePreset; label: string }[] = [
     { key: "thisMonth",  label: t("analytics.preset.thisMonth") },
@@ -340,17 +343,35 @@ const DashboardPage = () => {
                 ) : (
                   <div className="space-y-10">
                     <div>
-                      <p className="text-6xl font-black tabular-nums tracking-tighter mb-2 drop-shadow-lg">{fmt(currentMonthBonus.total)}</p>
+                      <Button
+                        variant="ghost"
+                        className="h-auto p-0 text-6xl font-black tabular-nums tracking-tighter mb-2 drop-shadow-lg hover:bg-transparent hover:text-white/80"
+                        onClick={() => openBonusDialog(currentMonthBonus.month, "total")}
+                      >
+                        {fmt(currentMonthBonus.total)}
+                      </Button>
                       <p className="text-[10px] font-black uppercase tracking-widest text-primary-foreground/50">Current Monthly Estimated Reward</p>
                     </div>
                     <div className="grid grid-cols-2 gap-8 border-t border-white/10 pt-8">
                       <div>
                         <p className="text-[9px] font-black uppercase tracking-widest text-primary-foreground/40 mb-2">Validated PIF Bonus</p>
-                        <p className="font-black text-2xl tracking-tight">{fmt(currentMonthBonus.pifBonus)}</p>
+                        <Button
+                          variant="ghost"
+                          className="h-auto p-0 font-black text-2xl tracking-tight hover:bg-transparent hover:text-white/80"
+                          onClick={() => openBonusDialog(currentMonthBonus.month, "pifBonus")}
+                        >
+                          {fmt(currentMonthBonus.pifBonus)}
+                        </Button>
                       </div>
                       <div>
                         <p className="text-[9px] font-black uppercase tracking-widest text-primary-foreground/40 mb-2">Performance Volume</p>
-                        <p className="font-black text-2xl tracking-tight">{fmt(currentMonthBonus.volumeBonus)}</p>
+                        <Button
+                          variant="ghost"
+                          className="h-auto p-0 font-black text-2xl tracking-tight hover:bg-transparent hover:text-white/80"
+                          onClick={() => openBonusDialog(currentMonthBonus.month, "volumeBonus")}
+                        >
+                          {fmt(currentMonthBonus.volumeBonus)}
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -371,7 +392,11 @@ const DashboardPage = () => {
                     <Table>
                       <TableBody>
                         {bonusHistory.map(row => (
-                          <TableRow key={row.month} className="group hover:bg-muted/10 border-border/30 transition-all">
+                          <TableRow
+                            key={row.month}
+                            className="group hover:bg-muted/10 border-border/30 transition-all cursor-pointer"
+                            onClick={() => openBonusDialog(row.month, "total")}
+                          >
                             <TableCell className="font-black pl-8 text-sm py-6">{formatMonth(row.month, locale)}</TableCell>
                             <TableCell className="py-6">
                                <div className="flex flex-col">
@@ -534,6 +559,14 @@ const DashboardPage = () => {
           </CardContent>
         </Card>
       </div>
+      <BonusTransactionsDialog
+        month={bonusDialog?.month ?? null}
+        kind={bonusDialog?.kind ?? null}
+        sales={sales}
+        tiers={tiers}
+        open={!!bonusDialog}
+        onOpenChange={(open) => !open && setBonusDialog(null)}
+      />
       <SaleDetailsDialog sale={selectedSale} open={!!selectedSale} onOpenChange={(open) => !open && setSelectedSale(null)} />
     </AppLayout>
   );
