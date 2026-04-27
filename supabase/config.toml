@@ -1,0 +1,10 @@
+project_id = "les-copywriters-commission"
+
+[functions.sync-jotform]
+verify_jwt = false
+
+[functions.schedule-setter-dashboard-sync]
+verify_jwt = false
+
+[functions.auto-sync]
+verify_jwt = false
