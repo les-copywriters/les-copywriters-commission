@@ -16,6 +16,98 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Users, ArrowRight, AlertCircle } from "lucide-react";
 
+const initials = (name: string) => name.split(" ").map((n) => n[0]).join("").slice(0, 2);
+
+const MemberCard = ({
+  user,
+  href,
+  accent,
+  salesLabel,
+  commissionLabel,
+  fmt,
+}: {
+  user: { id: string; name: string; count: number; commission: number; volume: number };
+  href: string;
+  accent: "blue" | "green";
+  salesLabel: string;
+  commissionLabel: string;
+  fmt: (n: number) => string;
+}) => {
+  const theme = accent === "blue"
+    ? {
+        frame: "from-primary/12 via-primary/5 to-transparent",
+        avatar: "bg-primary/12 text-primary ring-primary/20",
+        pill: "bg-primary/10 text-primary border-primary/20",
+        arrow: "text-primary",
+        statGlow: "shadow-primary/10",
+        volume: "bg-primary/10 text-primary",
+      }
+    : {
+        frame: "from-emerald-500/12 via-emerald-500/5 to-transparent",
+        avatar: "bg-emerald-500/12 text-emerald-500 ring-emerald-500/20",
+        pill: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
+        arrow: "text-emerald-500",
+        statGlow: "shadow-emerald-500/10",
+        volume: "bg-emerald-500/10 text-emerald-500",
+      };
+
+  return (
+    <Link to={href} className="group block">
+      <Card className="relative overflow-hidden rounded-[1.45rem] border border-border/35 bg-card/95 shadow-[0_10px_26px_rgba(0,0,0,0.14)] transition-all duration-300 hover:-translate-y-1 hover:border-border/60 hover:shadow-[0_16px_34px_rgba(0,0,0,0.18)]">
+        <div className={cn("pointer-events-none absolute inset-x-0 top-0 h-14 bg-gradient-to-b opacity-75", theme.frame)} />
+        <CardContent className="relative p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.95rem] font-black text-sm ring-1 transition-all duration-300", theme.avatar)}>
+                {initials(user.name)}
+              </div>
+              <div className="min-w-0 space-y-1">
+                <p className="truncate text-[1rem] leading-none font-black tracking-tight text-foreground">
+                  {user.name}
+                </p>
+                <Badge variant="outline" className={cn("rounded-full border px-2.5 py-0.5 text-[9px] font-black uppercase tracking-[0.16em]", theme.pill)}>
+                  {accent === "blue" ? "Closer" : "Setter"}
+                </Badge>
+              </div>
+            </div>
+
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/45 bg-background/60 text-muted-foreground transition-all duration-300 group-hover:border-transparent group-hover:bg-background group-hover:shadow-md">
+              <ArrowRight className={cn("h-3.5 w-3.5 transition-all duration-300 group-hover:translate-x-0.5", theme.arrow)} />
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-2.5">
+            <div className="rounded-[1.15rem] border border-border/35 bg-background/45 px-3.5 py-3">
+              <div className="flex items-end justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[8px] font-black uppercase tracking-[0.16em] text-muted-foreground/65">{commissionLabel}</p>
+                  <p className="mt-1.5 truncate text-[1.05rem] leading-none font-black tracking-tight text-foreground">{fmt(user.commission)}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-[8px] font-black uppercase tracking-[0.16em] text-muted-foreground/55">Volume</p>
+                  <p className={cn("mt-1 text-[11px] font-black tabular-nums", accent === "blue" ? "text-primary" : "text-emerald-500")}>{fmt(user.volume)}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="rounded-[0.95rem] border border-border/30 bg-muted/15 px-3 py-2.5">
+                <p className="text-[8px] font-black uppercase tracking-[0.14em] text-muted-foreground/65">{salesLabel}</p>
+                <p className="mt-1 text-lg font-black tabular-nums text-foreground">{user.count}</p>
+              </div>
+              <div className="rounded-[0.95rem] border border-border/30 bg-muted/15 px-3 py-2.5">
+                <p className="text-[8px] font-black uppercase tracking-[0.14em] text-muted-foreground/65">Avg. Comm.</p>
+                <p className="mt-1 text-lg font-black tabular-nums text-foreground">
+                  {fmt(user.count > 0 ? user.commission / user.count : 0)}
+                </p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
+  );
+};
 
 const TeamPage = () => {
   const { t, locale } = useLanguage();
@@ -210,7 +302,7 @@ const TeamPage = () => {
             </div>
             
             {loading ? (
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                 {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-40 rounded-3xl" />)}
               </div>
             ) : loadError ? (
@@ -227,33 +319,17 @@ const TeamPage = () => {
                 <p className="text-muted-foreground italic font-medium">{t("team.noClosers")}</p>
               </div>
             ) : (
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                 {closerMembers.map(user => (
-                  <Link key={user.id} to={`/team/closer/${encodeURIComponent(user.name)}`} className="group">
-                    <Card className="border-none shadow-sm hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden group-hover:-translate-y-1">
-                      <CardContent className="p-6">
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary font-black group-hover:bg-primary group-hover:text-white transition-colors duration-300">
-                            {user.name.split(" ").map(n => n[0]).join("")}
-                          </div>
-                          <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 group-hover:text-primary transition-all duration-300" />
-                        </div>
-                        <div>
-                          <p className="font-bold text-lg mb-4">{user.name}</p>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="p-3 bg-muted/30 rounded-2xl group-hover:bg-background transition-colors duration-300">
-                              <p className="text-xs font-medium text-muted-foreground">{t("team.sales")}</p>
-                              <p className="text-lg font-bold mt-1 tabular-nums">{user.count}</p>
-                            </div>
-                            <div className="p-3 bg-primary/5 rounded-2xl group-hover:bg-primary group-hover:shadow-lg group-hover:shadow-primary/20 transition-all duration-300">
-                              <p className={cn("text-[10px] font-bold uppercase transition-colors duration-300", "text-primary group-hover:text-white/80")}>{t("team.commission")}</p>
-                              <p className={cn("text-lg font-bold mt-1 tabular-nums transition-colors duration-300", "text-primary group-hover:text-white")}>{fmt(user.commission)}</p>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
+                  <MemberCard
+                    key={user.id}
+                    user={user}
+                    href={`/team/closer/${encodeURIComponent(user.name)}`}
+                    accent="blue"
+                    salesLabel={t("team.sales")}
+                    commissionLabel={t("team.commission")}
+                    fmt={fmt}
+                  />
                 ))}
               </div>
             )}
@@ -272,7 +348,7 @@ const TeamPage = () => {
             </div>
             
             {loading ? (
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                 {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-40 rounded-3xl" />)}
               </div>
             ) : setterMembers.length === 0 ? (
@@ -280,33 +356,17 @@ const TeamPage = () => {
                 <p className="text-muted-foreground italic font-medium">{t("team.noSetters")}</p>
               </div>
             ) : (
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                 {setterMembers.map(user => (
-                  <Link key={user.id} to={`/team/setter/${encodeURIComponent(user.name)}`} className="group">
-                    <Card className="border-none shadow-sm hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden group-hover:-translate-y-1">
-                      <CardContent className="p-6">
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 font-black group-hover:bg-emerald-500 group-hover:text-white transition-colors duration-300">
-                            {user.name.split(" ").map(n => n[0]).join("")}
-                          </div>
-                          <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 group-hover:text-emerald-500 transition-all duration-300" />
-                        </div>
-                        <div>
-                          <p className="font-bold text-lg mb-4">{user.name}</p>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="p-3 bg-muted/30 rounded-2xl group-hover:bg-background transition-colors duration-300">
-                              <p className="text-xs font-medium text-muted-foreground">{t("team.sales")}</p>
-                              <p className="text-lg font-bold mt-1 tabular-nums">{user.count}</p>
-                            </div>
-                            <div className="p-3 bg-emerald-500/5 rounded-2xl group-hover:bg-emerald-500 group-hover:shadow-lg group-hover:shadow-emerald-500/20 transition-all duration-300">
-                              <p className={cn("text-[10px] font-bold uppercase transition-colors duration-300", "text-emerald-600 group-hover:text-white/80")}>{t("team.commission")}</p>
-                              <p className={cn("text-lg font-bold mt-1 tabular-nums transition-colors duration-300", "text-emerald-600 group-hover:text-white")}>{fmt(user.commission)}</p>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
+                  <MemberCard
+                    key={user.id}
+                    user={user}
+                    href={`/team/setter/${encodeURIComponent(user.name)}`}
+                    accent="green"
+                    salesLabel={t("team.sales")}
+                    commissionLabel={t("team.commission")}
+                    fmt={fmt}
+                  />
                 ))}
               </div>
             )}

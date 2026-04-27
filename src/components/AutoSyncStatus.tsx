@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Activity, CheckCircle2, Clock, Github, XCircle, Zap } from "lucide-react";
+import { Activity, CheckCircle2, XCircle, Zap } from "lucide-react";
 
 type SyncRun = {
   id: string;
@@ -122,41 +122,6 @@ export default function AutoSyncStatus() {
               </div>
             );
           })}
-        </div>
-
-        {/* Setup instructions */}
-        <div className="rounded-2xl border border-border/40 bg-muted/5 p-6 space-y-4">
-          <div className="flex items-center gap-2">
-            <Github className="h-4 w-4 text-muted-foreground" />
-            <p className="text-sm font-black uppercase tracking-widest text-muted-foreground">Setup — GitHub Actions (one time)</p>
-          </div>
-          <ol className="space-y-2 text-sm text-muted-foreground list-decimal list-inside">
-            <li>Push this repository to GitHub if you haven't already.</li>
-            <li>
-              Go to <span className="font-mono bg-muted/30 px-1 rounded text-xs">Settings → Secrets and variables → Actions</span> and add:
-              <ul className="ml-6 mt-1 space-y-1 list-disc">
-                <li><span className="font-mono text-xs bg-muted/30 px-1 rounded">SUPABASE_URL</span> — your Supabase project URL</li>
-                <li>
-                  <span className="font-mono text-xs bg-muted/30 px-1 rounded">CRON_SECRET</span>
-                  {" "}— any random string; set the same value as the
-                  {" "}<span className="font-mono text-xs bg-muted/30 px-1 rounded">SETTER_DASHBOARD_CRON_SECRET</span> Supabase secret
-                </li>
-              </ul>
-            </li>
-            <li>
-              Set the Supabase secret via CLI:
-              <pre className="mt-1 ml-4 text-[11px] bg-muted/20 rounded-lg px-3 py-2 font-mono overflow-x-auto">
-                {`supabase secrets set SETTER_DASHBOARD_CRON_SECRET=your-random-secret`}
-              </pre>
-            </li>
-            <li>The workflow in <span className="font-mono text-xs bg-muted/30 px-1 rounded">.github/workflows/auto-sync.yml</span> runs every 30 minutes automatically.</li>
-          </ol>
-          <div className="flex items-center gap-2 pt-2 border-t border-border/30">
-            <Clock className="h-3.5 w-3.5 text-muted-foreground/50" />
-            <p className="text-[10px] text-muted-foreground/60 font-medium">
-              Schedule: JotForm + Aircall + iClosed synced every 30 minutes automatically
-            </p>
-          </div>
         </div>
 
         {/* Recent runs table */}

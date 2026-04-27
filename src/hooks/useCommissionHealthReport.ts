@@ -8,6 +8,44 @@ export type CommissionHealthReport = {
   weeklyImpayes: number;
   discrepancyCounts: Record<string, number>;
   totalDiscrepancies: number;
+  syncHealth: Record<string, {
+    status: string;
+    freshness: "fresh" | "aging" | "stale" | "missing";
+    startedAt: string | null;
+    finishedAt: string | null;
+    rowsWritten: number;
+    recordsSeen: number;
+    ageMinutes: number | null;
+    errorCount: number;
+    lastError: string | null;
+  }>;
+  reconciliation: {
+    jotform: {
+      importedSales: number;
+      uniqueSubmissionIds: number;
+      duplicateSubmissionCount: number;
+      missingSubmissionIdCount: number;
+      latestImportedSaleDate: string | null;
+    };
+    aircall: {
+      storedCallRecords: number;
+      latestRunRecordsSeen: number;
+      latestRunRowsWritten: number;
+      latestRunStatus: string;
+    };
+    iclosed: {
+      storedFunnelMetricRows: number;
+      latestRunRecordsSeen: number;
+      latestRunRowsWritten: number;
+      latestRunStatus: string;
+    };
+    fathom: {
+      importedMeetings: number;
+      meetingsWithTranscript: number;
+      pendingTranscriptCount: number;
+      latestImportedAt: string | null;
+    };
+  };
   slackNotified: boolean;
 };
 

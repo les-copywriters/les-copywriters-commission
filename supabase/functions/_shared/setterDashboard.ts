@@ -5,7 +5,7 @@ export const CORS = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
 };
 
-export type SyncSource = "aircall" | "pipedrive" | "iclosed";
+export type SyncSource = "aircall" | "pipedrive" | "iclosed" | "jotform";
 export type SyncMode = "manual" | "scheduled";
 
 type Caller = {
@@ -483,7 +483,7 @@ async function upsertFunnelMetrics(supabase: SupabaseClient, rows: FunnelAggrega
   return rows.length;
 }
 
-async function createRun(
+export async function createRun(
   supabase: SupabaseClient,
   source: SyncSource,
   mode: SyncMode,
@@ -507,7 +507,7 @@ async function createRun(
   return String(data.id);
 }
 
-async function finishRun(
+export async function finishRun(
   supabase: SupabaseClient,
   runId: string,
   status: "success" | "partial" | "error",

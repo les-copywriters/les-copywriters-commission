@@ -24,6 +24,17 @@ import { useCommissionHealthReport } from "@/hooks/useCommissionHealthReport";
 import { cn } from "@/lib/utils";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
+const timeAgo = (iso: string | null) => {
+  if (!iso) return "Never";
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.max(0, Math.floor(diff / 60000));
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+};
+
 const AdminPage = () => {
   const { t, locale } = useLanguage();
   const {
@@ -153,6 +164,9 @@ const AdminPage = () => {
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  const syncHealth = healthReport.data?.syncHealth ?? {};
+  const reconciliation = healthReport.data?.reconciliation;
 
   return (
     <AppLayout>
@@ -314,6 +328,126 @@ const AdminPage = () => {
                 </Button>
               </CardHeader>
               <CardContent className="p-8 space-y-6">
+                {Object.keys(syncHealth).length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Platform Sync Health</p>
+                      <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest">
+                        {healthReport.data?.generatedAt ? `Updated ${timeAgo(healthReport.data.generatedAt)}` : "Health report"}
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3">
+                      {["jotform", "aircall", "iclosed"].map((source) => {
+                        const item = syncHealth[source];
+                        if (!item) return null;
+                        const tone =
+                          item.freshness === "fresh" && item.status === "success" ? "emerald" :
+                          item.status === "partial" || item.freshness === "aging" ? "amber" :
+                          item.status === "error" || item.freshness === "stale" || item.freshness === "missing" ? "rose" :
+                          "blue";
+
+                        return (
+                          <div
+                            key={source}
+                            className={cn(
+                              "rounded-[1.35rem] border px-4 py-3",
+                              tone === "emerald" && "border-emerald-500/20 bg-emerald-500/5",
+                              tone === "amber" && "border-amber-500/20 bg-amber-500/5",
+                              tone === "rose" && "border-rose-500/20 bg-rose-500/5",
+                              tone === "blue" && "border-blue-500/20 bg-blue-500/5",
+                            )}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-black uppercase tracking-widest">{source}</p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {item.startedAt ? `Last run ${timeAgo(item.startedAt)}` : "No sync run recorded"}
+                                </p>
+                              </div>
+                              <div className="flex flex-col items-end gap-1">
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    "text-[8px] font-black uppercase tracking-widest",
+                                    tone === "emerald" && "border-emerald-500/20 text-emerald-600",
+                                    tone === "amber" && "border-amber-500/20 text-amber-600",
+                                    tone === "rose" && "border-rose-500/20 text-rose-600",
+                                    tone === "blue" && "border-blue-500/20 text-blue-600",
+                                  )}
+                                >
+                                  {item.status} · {item.freshness}
+                                </Badge>
+                                <span className="text-[10px] text-muted-foreground">
+                                  {item.rowsWritten} written / {item.recordsSeen} seen
+                                </span>
+                              </div>
+                            </div>
+                            {item.lastError && (
+                              <p className="mt-3 text-[11px] text-rose-500 font-medium line-clamp-2">{item.lastError}</p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {reconciliation && (
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Reconciliation Snapshot</p>
+                    <div className="grid grid-cols-1 gap-3">
+                      <div className="rounded-[1.35rem] border border-border/40 bg-muted/20 px-4 py-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-black uppercase tracking-widest">JotForm</p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {reconciliation.jotform.importedSales} imported sales · {reconciliation.jotform.uniqueSubmissionIds} unique submission IDs
+                            </p>
+                          </div>
+                          <Badge variant="outline" className="text-[8px] font-black uppercase tracking-widest">
+                            {reconciliation.jotform.duplicateSubmissionCount} duplicates
+                          </Badge>
+                        </div>
+                        <p className="mt-2 text-[11px] text-muted-foreground">
+                          Missing submission IDs: {reconciliation.jotform.missingSubmissionIdCount}
+                          {reconciliation.jotform.latestImportedSaleDate ? ` · latest sale ${reconciliation.jotform.latestImportedSaleDate}` : ""}
+                        </p>
+                      </div>
+
+                      <div className="rounded-[1.35rem] border border-border/40 bg-muted/20 px-4 py-3">
+                        <p className="text-sm font-black uppercase tracking-widest">Aircall</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {reconciliation.aircall.storedCallRecords} call records stored in database
+                        </p>
+                        <p className="mt-2 text-[11px] text-muted-foreground">
+                          Latest run: {reconciliation.aircall.latestRunRecordsSeen} seen · {reconciliation.aircall.latestRunRowsWritten} rows written · {reconciliation.aircall.latestRunStatus}
+                        </p>
+                      </div>
+
+                      <div className="rounded-[1.35rem] border border-border/40 bg-muted/20 px-4 py-3">
+                        <p className="text-sm font-black uppercase tracking-widest">iClosed</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {reconciliation.iclosed.storedFunnelMetricRows} funnel metric rows stored in database
+                        </p>
+                        <p className="mt-2 text-[11px] text-muted-foreground">
+                          Latest run: {reconciliation.iclosed.latestRunRecordsSeen} seen · {reconciliation.iclosed.latestRunRowsWritten} rows written · {reconciliation.iclosed.latestRunStatus}
+                        </p>
+                      </div>
+
+                      <div className="rounded-[1.35rem] border border-border/40 bg-muted/20 px-4 py-3">
+                        <p className="text-sm font-black uppercase tracking-widest">Fathom</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {reconciliation.fathom.importedMeetings} meetings imported · {reconciliation.fathom.meetingsWithTranscript} with transcript
+                        </p>
+                        <p className="mt-2 text-[11px] text-muted-foreground">
+                          Pending transcripts: {reconciliation.fathom.pendingTranscriptCount}
+                          {reconciliation.fathom.latestImportedAt ? ` · latest import ${timeAgo(reconciliation.fathom.latestImportedAt)}` : ""}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {discrepancies.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 grayscale opacity-40 text-center">
                     <div className="h-16 w-16 bg-emerald-500/10 rounded-full flex items-center justify-center mb-4">

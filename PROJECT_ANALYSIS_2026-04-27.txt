@@ -1,0 +1,634 @@
+LES COPYWRITERS COMMISSION
+Project Analysis
+Date: 2026-04-27
+
+==================================================
+1. PROJECT OVERVIEW
+==================================================
+
+This project is a React + TypeScript + Vite web application backed by Supabase.
+It is a commission operations dashboard for a sales organization.
+
+The application combines:
+- commission tracking
+- refunds / unpaid monitoring
+- team management
+- sales analytics
+- closer coaching / call analysis
+- setter operations metrics
+- AI-assisted sales coaching
+- automated multi-platform sync workflows
+
+Main external platforms integrated in the codebase:
+- JotForm
+- Aircall
+- iClosed
+- Fathom
+- Google Gemini (for AI analysis / framework generation / assistant behavior)
+- GitHub Actions (for scheduled sync orchestration)
+
+
+==================================================
+2. FRONTEND STACK
+==================================================
+
+Core stack:
+- React 18
+- TypeScript
+- Vite
+- React Router
+- TanStack Query
+- Supabase JS client
+- Tailwind CSS
+- Radix UI primitives
+- Recharts for charts
+- Sonner / toaster notifications
+
+Development tooling:
+- ESLint
+- Vitest
+- Testing Library
+- Playwright listed in dependencies/dev dependencies
+
+
+==================================================
+3. APP STRUCTURE
+==================================================
+
+Main frontend folders:
+- src/pages
+- src/components
+- src/hooks
+- src/lib
+- src/context
+- src/i18n
+- src/types
+
+Backend folders:
+- supabase/functions
+- supabase/migrations
+
+
+==================================================
+4. ROUTING AND ACCESS MODEL
+==================================================
+
+Main route file:
+- src/App.tsx
+
+The app uses:
+- AuthProvider for session + profile loading
+- ProtectedRoute for authenticated users
+- AdminRoute for admin-only pages
+- CloserOrAdminRoute for call-analysis/coaching-style pages
+
+Main routes found:
+- /                → Login
+- /dashboard       → Main dashboard
+- /refunds         → Admin refunds page
+- /admin           → Admin operations page
+- /team            → Team directory
+- /team/manage     → Team management
+- /team/closer/:name
+- /team/setter/:name
+- /analytics       → Analytics page
+- /setter-dashboard
+- /setter-dashboard/calls/:callId
+- /calls           → Call analysis page
+- /assistant       → Sales assistant page
+- /coaching        → Admin coaching page
+- /settings        → Settings and integrations
+
+
+==================================================
+5. AUTHENTICATION AND USER MODEL
+==================================================
+
+Main auth layer:
+- src/context/AuthContext.tsx
+
+Current user model:
+- id
+- name
+- role
+
+Supported roles:
+- admin
+- closer
+- setter
+
+Auth flow:
+- Supabase Auth session is loaded
+- matching profile row is fetched from public.profiles
+- role-based navigation and route protection are applied in the frontend
+
+
+==================================================
+6. MAIN PRODUCT AREAS
+==================================================
+
+A. Commission Dashboard
+- central dashboard page for users
+- shows sales, commissions, bonus information, tables, charts
+- closer and setter views are role-aware
+
+Relevant files:
+- src/pages/DashboardPage.tsx
+- src/hooks/useSales.ts
+- src/hooks/useSyncJotform.ts
+- src/lib/bonusCalculation.ts
+- src/lib/commissionRates.ts
+
+
+B. Refunds / Unpaid Tracking
+- admin-facing area for refunds and unpaid items
+- tracks refund / impayé volume and status
+
+Relevant files:
+- src/pages/RefundsPage.tsx
+- src/hooks/useRefunds.ts
+- src/hooks/useImpayes.ts
+
+
+C. Admin Operations
+- full sales table
+- CSV export
+- commission override
+- delete sale
+- data quality inspection
+- health report
+- manual JotForm sync trigger
+
+Relevant files:
+- src/pages/AdminPage.tsx
+- src/components/admin/SalesTable.tsx
+- src/components/admin/BonusTiersCard.tsx
+- src/components/admin/AddSaleDialog.tsx
+- src/hooks/useCommissionHealthReport.ts
+
+
+D. Team Directory and Team Management
+- admin team listing
+- closer / setter detail pages
+- editable profiles
+- invite flow
+- performance breakdown per member
+
+Relevant files:
+- src/pages/TeamPage.tsx
+- src/pages/CloserDetailPage.tsx
+- src/pages/SetterDetailPage.tsx
+- src/pages/TeamManagePage.tsx
+- src/hooks/useProfiles.ts
+
+
+E. Analytics
+- filtering by date, payment type, sales status
+- charts and summary KPIs
+- role-aware analytics behavior
+
+Relevant files:
+- src/pages/AnalyticsPage.tsx
+
+
+F. Setter Ops / Setter Dashboard
+- operational metrics for setters
+- Aircall + iClosed-based performance signals
+- call detail drill-down
+
+Relevant files:
+- src/pages/SetterDashboardPage.tsx
+- src/pages/SetterCallDetailPage.tsx
+- src/hooks/useSetterDashboard.ts
+- src/lib/setterDashboard.ts
+
+
+G. Call Analysis / Coaching
+- sync Fathom calls
+- analyze transcripts with AI
+- show call details and feedback
+- build closer coaching artifacts
+
+Relevant files:
+- src/pages/CallsPage.tsx
+- src/pages/CoachingPage.tsx
+- src/components/CallDetailsDialog.tsx
+- src/hooks/useCallAnalysis.ts
+
+
+H. Sales Assistant
+- AI assistant for closers using call context, frameworks, and memory snapshots
+
+Relevant files:
+- src/pages/SalesAssistantPage.tsx
+- src/components/SalesAssistantPanel.tsx
+- src/hooks/useSalesAssistant.ts
+
+
+I. Settings / Integrations
+- profile settings
+- theme / account settings
+- Fathom key management
+- setter integration mappings
+- global integration settings
+- auto-sync status
+
+Relevant files:
+- src/pages/SettingsPage.tsx
+- src/components/GlobalIntegrationSettings.tsx
+- src/components/AutoSyncStatus.tsx
+- src/hooks/useGlobalSettings.ts
+
+
+==================================================
+7. DATA MODEL SUMMARY
+==================================================
+
+Main business tables visible from the codebase:
+- profiles
+- sales
+- refunds
+- impayes
+- bonus_tiers
+- call_analyses
+- closer_frameworks
+- closer_profiles
+- assistant_threads
+- assistant_messages
+- assistant_memory_snapshots
+- setter_integration_mappings
+- setter_call_metrics_daily
+- setter_funnel_metrics_daily
+- setter_call_records
+- integration_sync_runs
+- global_settings
+
+What they represent:
+
+profiles
+- application users and role assignment
+
+sales
+- central commission transaction table
+- contains client, product, closer/setter IDs, HT/TTC amount fields, payment type, commissions, refund/unpaid flags, JotForm submission ID
+
+refunds / impayes
+- issue tracking against sales
+
+bonus_tiers
+- monthly volume-based bonus thresholds
+
+call_analyses
+- imported Fathom meetings + transcripts + AI analysis results
+
+closer_frameworks
+- AI-generated markdown frameworks for a closer
+
+closer_profiles
+- aggregated coaching profile / strengths / risks / score summaries
+
+setter_integration_mappings
+- links setters to Aircall / iClosed identities and credentials
+
+setter_call_records
+- detailed imported Aircall calls
+
+setter_call_metrics_daily
+- daily rollups from call records
+
+setter_funnel_metrics_daily
+- daily rollups from iClosed / funnel activity
+
+integration_sync_runs
+- stores operational sync runs for Aircall / iClosed scheduled/manual syncs
+
+assistant_threads / assistant_messages / assistant_memory_snapshots
+- sales assistant conversation layer and AI memory
+
+
+==================================================
+8. INTEGRATIONS
+==================================================
+
+A. JotForm
+Purpose:
+- ingest sales submissions into the sales table
+
+Functions:
+- supabase/functions/sync-jotform/index.ts
+- supabase/functions/jotform-webhook/index.ts
+
+Capabilities:
+- scheduled/manual sync through API pagination
+- webhook ingest path
+- fuzzy name matching for closer/setter
+- alias support for closer/setter names
+- product fallback parsing
+
+
+B. Aircall
+Purpose:
+- setter call activity and call record ingestion
+
+Functions:
+- supabase/functions/aircall-lookup/index.ts
+- supabase/functions/sync-setter-dashboard/index.ts
+- shared logic in supabase/functions/_shared/setterDashboard.ts
+
+Capabilities:
+- validate credentials
+- fetch users
+- store per-call records
+- build daily metrics
+
+
+C. iClosed
+Purpose:
+- setter funnel and event-call data
+
+Functions:
+- supabase/functions/iclosed-lookup/index.ts
+- supabase/functions/sync-setter-dashboard/index.ts
+- shared logic in supabase/functions/_shared/setterDashboard.ts
+
+Capabilities:
+- API validation
+- event-call ingestion
+- funnel rollups
+
+
+D. Fathom
+Purpose:
+- import closer meetings and transcripts for coaching
+
+Functions:
+- supabase/functions/sync-fathom/index.ts
+
+Capabilities:
+- fetch meetings
+- fetch transcripts
+- import into call_analyses
+- retry / backoff for 429 rate limits
+
+
+E. Gemini
+Purpose:
+- analyze calls
+- generate sales frameworks
+- power sales assistant responses
+- refresh closer profiles
+
+Functions:
+- analyze-call
+- generate-framework
+- sales-assistant
+- refresh-closer-profile
+- shared closer profile logic
+
+
+F. GitHub Actions
+Purpose:
+- scheduled automation for sync
+
+Observed from codebase context:
+- auto-sync orchestration is triggered through a cron-style workflow and delegates into separate functions
+
+
+==================================================
+9. SUPABASE EDGE FUNCTIONS
+==================================================
+
+Shared modules:
+- _shared/setterDashboard.ts
+- _shared/closerProfile.ts
+
+Function summary:
+
+aircall-lookup
+- fetches Aircall users for mapping/setup
+
+analyze-call
+- uses Gemini to score and analyze a call transcript
+
+auto-sync
+- lightweight orchestrator for cron sync flow
+
+commission-health-report
+- admin-only operational health report for data quality, sync freshness, and reconciliation snapshot
+
+generate-framework
+- creates a markdown sales framework from transcripts
+
+iclosed-lookup
+- validates iClosed and fetches user data for mapping/setup
+
+invite-user
+- creates/invites a user into the system
+
+jotform-webhook
+- webhook ingestion path for JotForm submissions
+
+refresh-closer-profile
+- rebuilds AI closer profile from call-analysis data
+
+sales-assistant
+- AI assistant using stored sales/call/coaching context
+
+schedule-setter-dashboard-sync
+- scheduled Aircall + iClosed sync entry point
+
+sync-fathom
+- imports Fathom meetings/transcripts into call_analyses
+
+sync-jotform
+- paginated JotForm sync into sales
+
+sync-setter-dashboard
+- manual or admin-triggered setter dashboard sync / validation
+
+
+==================================================
+10. MIGRATIONS HISTORY (HIGH LEVEL)
+==================================================
+
+Visible migrations show the project evolved in phases:
+
+1. Refund status work
+- 20260410_set_refund_status.sql
+
+2. Call analysis / coaching system
+- 20260415_add_call_analysis.sql
+- 20260417120000_add_closer_profiles_and_analysis_details.sql
+- 20260417121000_backfill_call_analysis_columns.sql
+
+3. Sales assistant conversation system
+- 20260417153936_add_sales_assistant.sql
+- 20260417155808_allow_multiple_assistant_threads.sql
+- 20260417161747_add_pin_and_archive_to_assistant_threads.sql
+
+4. Setter dashboard / integrations
+- 20260420110000_add_setter_dashboard.sql
+- 20260421103000_allow_setters_to_manage_own_integration_mapping.sql
+- 20260422000000_add_setter_api_credentials.sql
+- 20260422120000_add_setter_call_records.sql
+- 20260423120000_add_global_settings.sql
+- 20260423192000_add_ai_call_details.sql
+- 20260427133000_optimize_sync_aggregation.sql
+
+
+==================================================
+11. HOOKS AND FRONTEND DATA ACCESS
+==================================================
+
+Main hooks:
+- useSales
+- useRefunds
+- useImpayes
+- useProfiles
+- useBonusTiers
+- useSyncJotform
+- useSetterDashboard
+- useCallAnalysis
+- useSalesAssistant
+- useGlobalSettings
+- useCommissionHealthReport
+
+Pattern used:
+- most data access is centralized in custom hooks
+- hooks call Supabase tables or Edge Functions
+- React Query handles caching, invalidation, and loading states
+
+
+==================================================
+12. UI COMPONENT SYSTEM
+==================================================
+
+The app uses:
+- reusable layout shell
+- sidebar navigation
+- stat cards
+- dialogs for sales/call details
+- multiple custom cards for admin, team, and dashboard sections
+- Radix-based UI components in src/components/ui
+
+Notable custom components:
+- AppLayout
+- AppSidebar
+- StatCard
+- SaleDetailsDialog
+- CallDetailsDialog
+- ProfileTag
+- SetterTag
+- SalesAssistantPanel
+- GlobalIntegrationSettings
+- AutoSyncStatus
+- BonusTransactionsDialog
+
+
+==================================================
+13. INTERNATIONALIZATION
+==================================================
+
+The app includes an i18n layer:
+- src/i18n/LanguageContext.tsx
+- src/i18n/index.ts
+- locale files under src/i18n/locales
+
+Observed supported languages:
+- English
+- French
+
+
+==================================================
+14. TESTING
+==================================================
+
+Visible tests:
+- src/hooks/useRefunds.test.tsx
+- src/hooks/useSetterDashboard.test.tsx
+- src/hooks/useSyncJotform.test.tsx
+- src/lib/setterDashboard.test.ts
+- src/test/example.test.ts
+
+This suggests:
+- some key business hooks and setter dashboard logic have automated test coverage
+- coverage is present, but likely partial rather than full-system
+
+
+==================================================
+15. CURRENT OPERATIONAL CAPABILITIES
+==================================================
+
+From the current codebase, the project can:
+- authenticate users with role-based access
+- store and manage sales commissions
+- ingest sales from JotForm
+- track refunds and unpaid records
+- manage team profiles and roles
+- calculate bonuses
+- provide analytics dashboards
+- sync setter performance data from Aircall and iClosed
+- import Fathom calls
+- analyze calls with AI
+- generate closer frameworks and profiles
+- provide a closer-oriented AI sales assistant
+- run scheduled sync automations
+- run admin data health checks
+- show platform sync health and reconciliation summaries
+
+
+==================================================
+16. CURRENT LIMITATIONS / RISKS
+==================================================
+
+Based on the code review, important limitations include:
+
+1. The system is integration-heavy
+- reliability depends on external APIs and credentials staying healthy
+
+2. Health checks are improving but not yet full live reconciliations
+- the current admin health report summarizes internal system state and sync freshness
+- it does not fully live-compare every source API on each run
+
+3. A lot of business logic lives in Edge Functions
+- operational debugging often depends on Supabase logs and external API behavior
+
+4. The frontend is feature-rich and broad
+- continued work will benefit from keeping logic modular and tested
+
+
+==================================================
+17. CURRENT MODIFIED FILES IN WORKTREE
+==================================================
+
+At the moment of this analysis, these files are locally modified:
+- src/components/AutoSyncStatus.tsx
+- src/hooks/useCommissionHealthReport.ts
+- src/pages/AdminPage.tsx
+- src/pages/TeamPage.tsx
+- supabase/functions/commission-health-report/index.ts
+
+These reflect the recent work around:
+- auto sync UI cleanup
+- admin health / reconciliation reporting
+- team card design adjustments
+
+
+==================================================
+18. BOTTOM-LINE SUMMARY
+==================================================
+
+This project is a sales operations and coaching platform centered on commissions.
+
+It is not just a commission tracker.
+It currently contains:
+- commission accounting
+- team operations
+- setter performance monitoring
+- closer call intelligence
+- AI-generated coaching and assistant features
+- multi-platform ingestion pipelines
+- admin diagnostics and sync monitoring
+
+Architecturally, it is a single frontend app with a fairly rich Supabase backend layer and a large amount of business logic in Edge Functions.
+

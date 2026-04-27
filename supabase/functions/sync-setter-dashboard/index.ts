@@ -57,6 +57,17 @@ Deno.serve(async (req) => {
       results.iclosed = { ok: false, error: e.message };
     }
 
+    // Test Jotform
+    try {
+      const key = global.jotform_api_key;
+      const formId = global.jotform_form_id;
+      if (!key || !formId) throw new Error("Missing Jotform credentials in database");
+      const res = await fetch(`https://api.jotform.com/form/${formId}?apiKey=${key}`);
+      results.jotform = { ok: res.ok, status: res.status };
+    } catch (e) {
+      results.jotform = { ok: false, error: e.message };
+    }
+
     return json({ ok: true, results });
   }
 

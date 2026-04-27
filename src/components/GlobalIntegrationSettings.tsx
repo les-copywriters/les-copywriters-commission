@@ -10,12 +10,16 @@ import { Eye, EyeOff, Save, GlobeLock, CheckCircle2, XCircle, RefreshCw, Activit
 import { cn } from "@/lib/utils";
 import { supabase as supabaseClient } from "@/lib/supabase";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useSyncJotform } from "@/hooks/useSyncJotform";
+import { useCommissionHealthReport } from "@/hooks/useCommissionHealthReport";
 
 const EXPECTED_KEYS = [
   { key: 'aircall_api_id', label: 'Global Aircall API ID', secret: false },
   { key: 'aircall_api_token', label: 'Global Aircall API Token', secret: true },
   { key: 'iclosed_api_key', label: 'Global iClosed API Key', secret: true },
   { key: 'iclosed_api_base_url', label: 'Global iClosed API Base URL', secret: false },
+  { key: 'jotform_api_key', label: 'Global Jotform API Key', secret: true },
+  { key: 'jotform_form_id', label: 'Global Jotform Form ID', secret: false },
 ];
 
 const GlobalIntegrationSettings = () => {
@@ -23,6 +27,7 @@ const GlobalIntegrationSettings = () => {
   const { t } = useLanguage();
   const { data: settings = [], isLoading } = useGlobalSettings();
   const updateSetting = useUpdateGlobalSetting();
+  const syncJotform = useSyncJotform();
   
   const syncDashboard = useMutation({
     mutationFn: async (payload: { source: string }) => {
@@ -157,12 +162,27 @@ const GlobalIntegrationSettings = () => {
           </Button>
           <Button 
             size="sm" 
+            variant="secondary"
+            className="h-10 rounded-xl font-black gap-2 shadow-lg shadow-secondary/20 transition-all hover:scale-[1.02] active:scale-95 text-xs uppercase tracking-widest"
+            disabled={syncJotform.isPending}
+            onClick={() => syncJotform.mutate(undefined, {
+              onSuccess: (res) => {
+                toast.success(`Jotform Sync Success`, { description: `Imported ${res.imported} sales, updated ${res.updated}.` });
+              },
+              onError: (err) => toast.error(`Jotform Sync Error: ${err.message}`)
+            })}
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", syncJotform.isPending && "animate-spin")} />
+            {syncJotform.isPending ? "Syncing..." : "Sync Jotform"}
+          </Button>
+          <Button 
+            size="sm" 
             className="h-10 rounded-xl font-black gap-2 shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] active:scale-95 text-xs uppercase tracking-widest"
             disabled={syncDashboard.isPending}
             onClick={() => syncDashboard.mutate({ source: "all" })}
           >
             <CloudCog className={cn("h-3.5 w-3.5", syncDashboard.isPending && "animate-spin")} />
-            {syncDashboard.isPending ? "Syncing..." : "Run Full Sync"}
+            {syncDashboard.isPending ? "Syncing..." : "Sync Aircall + iClosed"}
           </Button>
         </div>
       </div>

@@ -1,4 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createRun, finishRun, normalizeDate, getGlobalSettings } from "../_shared/setterDashboard.ts";
+
 
 const JOTFORM_API_KEY = Deno.env.get("JOTFORM_API_KEY") ?? "";
 const JOTFORM_FORM_ID = Deno.env.get("JOTFORM_FORM_ID") ?? "";
@@ -37,14 +39,14 @@ function json(body: unknown, status = 200) {
   });
 }
 
-async function fetchJotformPage(offset: number): Promise<Record<string, unknown>[]> {
+async function fetchJotformPage(offset: number, apiKey: string, formId: string): Promise<Record<string, unknown>[]> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), JOTFORM_FETCH_TIMEOUT_MS);
 
   try {
     const url =
-      `https://api.jotform.com/form/${JOTFORM_FORM_ID}/submissions` +
-      `?apiKey=${JOTFORM_API_KEY}&limit=${JOTFORM_PAGE_SIZE}&offset=${offset}&orderby=created_at,DESC`;
+      `https://api.jotform.com/form/${formId}/submissions` +
+      `?apiKey=${apiKey}&limit=${JOTFORM_PAGE_SIZE}&offset=${offset}&orderby=created_at,DESC`;
 
     const res = await fetch(url, { signal: controller.signal });
     const text = await res.text();
@@ -229,7 +231,37 @@ Deno.serve(async (req) => {
     console.log("[sync-jotform] cron trigger");
   }
 
+  const mode = viaCron ? "scheduled" : "manual";
+  let runId: string | null = null;
+  
+  let imported = 0, updated = 0, skipped = 0, nonActive = 0;
+  let totalSeen = 0;
+  const errors: string[] = [];
+
   try {
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!serviceKey) {
+      throw new Error("SUPABASE_SERVICE_ROLE_KEY is missing from environment");
+    }
+
+    // Initialize run record
+    try {
+      runId = await createRun(supabase, "jotform", mode, viaCron ? null : (callerProfile?.id ?? null));
+    } catch (e) {
+      console.warn("[sync-jotform] failed to create run record:", e.message);
+      // We continue even if tracking fails, but we won't be able to finish the run.
+    }
+
+    // Load global settings to get the latest Jotform API key/form ID
+    const global = await getGlobalSettings(supabase);
+    const finalApiKey = global.jotform_api_key || JOTFORM_API_KEY;
+    const finalFormId = global.jotform_form_id || JOTFORM_FORM_ID;
+
+    if (!finalApiKey || !finalFormId) {
+      console.error("[sync-jotform] missing credentials (check Global Settings)");
+      await finishRun(supabase, runId, "error", 0, 0, ["JOTFORM_API_KEY and JOTFORM_FORM_ID are not set in database or environment"]);
+      return json({ error: "Jotform credentials are not set" }, 500);
+    }
 
     // All profiles for fuzzy lookup
     const { data: allProfiles, error: profilesError } = await supabase.from("profiles").select("id, name, role");
@@ -267,7 +299,7 @@ Deno.serve(async (req) => {
     let offset = 0;
     let pageCount = 0;
     while (true) {
-      const page = await fetchJotformPage(offset);
+      const page = await fetchJotformPage(offset, finalApiKey, finalFormId);
       allSubs.push(...page);
       if (page.length < JOTFORM_PAGE_SIZE) break;
       offset += JOTFORM_PAGE_SIZE;
@@ -277,9 +309,8 @@ Deno.serve(async (req) => {
       }
     }
     console.log("[sync-jotform] fetched from JotForm:", allSubs.length);
+    totalSeen = allSubs.length;
 
-    let imported = 0, updated = 0, skipped = 0, nonActive = 0;
-    const errors: string[] = [];
     const unmatchedClosers = new Set<string>();
     const unmatchedSetters = new Set<string>();
 
@@ -422,10 +453,25 @@ Deno.serve(async (req) => {
     }
 
     console.log(`[sync-jotform] done — imported: ${imported}, updated: ${updated}, skipped: ${skipped}, nonActive: ${nonActive}, errors: ${errors.length}`);
+    
+    if (runId) {
+      const finalStatus = errors.length > 0 ? "partial" : "success";
+      await finishRun(supabase, runId, finalStatus, totalSeen, imported + updated, errors, {
+        skipped,
+        nonActive,
+        updated_count: updated,
+        imported_count: imported
+      });
+    }
+
     return json({ ok: true, total: allSubs.length, imported, updated, skipped, nonActive, errors });
 
   } catch (err) {
     console.error("[sync-jotform] uncaught:", err);
-    return json({ ok: false, error: String(err) }, 500);
+    const message = String(err);
+    if (runId) {
+      await finishRun(supabase, runId, "error", totalSeen, imported + updated, [message]);
+    }
+    return json({ ok: false, error: message }, 500);
   }
 });

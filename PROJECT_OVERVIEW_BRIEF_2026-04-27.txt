@@ -1,0 +1,48 @@
+LES COPYWRITERS COMMISSION
+Brief Project Overview
+Date: 2026-04-27
+
+This project is a business dashboard used to manage sales commissions, team performance, and sales operations in one place.
+
+At its core, it helps the company:
+- track sales and commissions
+- monitor refunds and unpaid deals
+- manage closers and setters
+- view performance analytics
+- sync data automatically from external platforms
+- review call performance and coaching data
+- use AI tools to support sales coaching and analysis
+
+The main parts of the project are:
+
+1. Commission management
+- stores sales
+- calculates closer and setter commissions
+- tracks payment type and transaction details
+
+2. Team management
+- shows performance for closers and setters
+- allows admins to manage team members and roles
+- gives detail pages for each person
+
+3. Analytics and dashboards
+- gives visibility into sales, commissions, trends, and team results
+- includes dedicated views for both closers and setters
+
+4. Platform sync
+- pulls information from tools like JotForm, Aircall, iClosed, and Fathom
+- supports automatic scheduled syncing
+- includes health checks to monitor whether the data is coming in correctly
+
+5. Coaching and call analysis
+- imports sales calls
+- analyzes them with AI
+- helps generate coaching insights, frameworks, and closer profiles
+
+6. Admin monitoring
+- lets admins check data quality
+- highlights discrepancies and sync issues
+- provides operational visibility into how healthy the system is
+
+In simple terms, this project is not just a commission tracker.
+It is a sales operations and performance platform that combines finance tracking, team management, analytics, call coaching, and automated data syncing into one system.
