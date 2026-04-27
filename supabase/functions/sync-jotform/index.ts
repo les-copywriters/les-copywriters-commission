@@ -145,6 +145,8 @@ Deno.serve(async (req) => {
   const cronSecret = Deno.env.get("SETTER_DASHBOARD_CRON_SECRET");
   const providedCronSecret = req.headers.get("x-cron-secret");
   const viaCron = !!(cronSecret && providedCronSecret && providedCronSecret === cronSecret);
+  let callerProfile: Profile | null = null;
+  let callerRole = "";
 
   if (!viaCron) {
     const authHeader = req.headers.get("Authorization");
@@ -155,9 +157,10 @@ Deno.serve(async (req) => {
     );
     if (authError || !user) return json({ error: "Unauthorized" }, 401);
 
-    const { data: callerProfile } = await supabase
+    const { data: profile } = await supabase
       .from("profiles").select("id, name, role").eq("id", user.id).single();
-    const callerRole = callerProfile?.role ?? "";
+    callerProfile = profile ?? null;
+    callerRole = callerProfile?.role ?? "";
     if (callerRole !== "admin" && callerRole !== "closer" && callerRole !== "setter") {
       return json({ ok: false, error: "Only admins, closers and setters can sync" }, 403);
     }
