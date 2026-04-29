@@ -301,6 +301,7 @@ const fr: Record<string, string> = {
   "analytics.preset.last3m": "3 derniers mois",
   "analytics.preset.last6m": "6 derniers mois",
   "analytics.preset.thisYear": "Cette année",
+  "analytics.preset.lastYear": "L'année dernière",
   "analytics.preset.allTime": "Tout",
   "analytics.preset.custom": "Personnalisé",
   "analytics.filter.from": "Du",

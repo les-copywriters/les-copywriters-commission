@@ -160,8 +160,8 @@ const DashboardPage = () => {
 
   // Closer: monthly bonus history
   const bonusHistory     = useMemo(() => isCloser ? monthlyBonusBreakdown(sales, tiers) : [], [sales, tiers, isCloser]);
-  const currentMonthKey  = new Date().toISOString().slice(0, 7);
-  const currentMonthBonus = bonusHistory.find(b => b.month === currentMonthKey) ?? bonusHistory[0] ?? null;
+  const currentMonthKey   = new Date().toISOString().slice(0, 7);
+  const currentMonthBonus = bonusHistory.find(b => b.month === currentMonthKey) ?? null;
   const openBonusDialog = (month: string, kind: BonusDrilldownKind) => setBonusDialog({ month, kind });
 
   const presetLabels: { key: SetterDatePreset; label: string }[] = [
@@ -170,6 +170,7 @@ const DashboardPage = () => {
     { key: "last3m",     label: t("analytics.preset.last3m") },
     { key: "last6m",     label: t("analytics.preset.last6m") },
     { key: "thisYear",   label: t("analytics.preset.thisYear") },
+    { key: "lastYear",   label: t("analytics.preset.lastYear") },
     { key: "allTime",    label: t("analytics.preset.allTime") },
   ];
 
@@ -330,7 +331,7 @@ const DashboardPage = () => {
               <CardContent className="p-10 relative">
                 <div className="flex items-center gap-3 mb-10">
                   <Badge className="bg-white/20 hover:bg-white/30 text-white border-none font-black uppercase tracking-widest text-[9px] px-4 py-1.5 rounded-full backdrop-blur-md">
-                    {formatMonth(currentMonthBonus?.month || currentMonthKey, locale)}
+                    {formatMonth(currentMonthKey, locale)}
                   </Badge>
                   <p className="text-[10px] font-black uppercase tracking-widest text-primary-foreground/60">{t("bonus.currentMonth")}</p>
                 </div>

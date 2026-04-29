@@ -102,9 +102,9 @@ const CloserDetailPage = () => {
     [sales, tiers]
   );
 
-  const currentMonthBonus = bonusHistory[0] ?? null;
-  const currentMonthKey = new Date().toISOString().slice(0, 7);
-  const isCurrentMonth  = currentMonthBonus?.month === currentMonthKey;
+  const currentMonthKey   = new Date().toISOString().slice(0, 7);
+  const currentMonthBonus = bonusHistory.find(b => b.month === currentMonthKey) ?? null;
+  const isCurrentMonth    = currentMonthBonus?.month === currentMonthKey;
 
   const fmt = (n: number) => formatCurrency(n, locale);
   const loadError = salesLoadFailed || tiersLoadFailed;

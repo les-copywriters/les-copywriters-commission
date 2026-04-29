@@ -22,6 +22,7 @@ const PRODUCT_TEXT_ALIASES = ["produit", "product", "offer", "offre", "programme
 
 const CLOSER_RATE = 0.088;
 const SETTER_RATE = 0.01;
+const LEGACY_NAMES = new Set(["johanna", "pablo", "axel", "tommy", "pierre", "allessya", "leslie"].map(n => n.toLowerCase()));
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -171,9 +172,15 @@ function getAnswerByAliases(
   for (const raw of Object.values(answers)) {
     if (raw === null || typeof raw !== "object") continue;
     const entry = raw as Record<string, unknown>;
+    
     const name = typeof entry.name === "string" ? norm(entry.name) : "";
     const text = typeof entry.text === "string" ? norm(entry.text) : "";
-    if (!normalizedNames.has(name) && !normalizedTexts.has(text)) continue;
+    
+    // Check if the internal name OR the display text matches our aliases
+    const isMatch = (name && normalizedNames.has(name)) || 
+                    (text && Array.from(normalizedTexts).some(t => text.includes(t)));
+    
+    if (!isMatch) continue;
 
     const value = getAnswer(answers, String(entry.name ?? ""));
     if (value) return value;
@@ -320,30 +327,35 @@ Deno.serve(async (req) => {
       const subId   = String(sub.id ?? "");
       if (!subId) continue;
 
-      const isNew         = !existingIds.has(subId) && !nullSetterIds.has(subId);
-      const needsUpdate   = nullSetterIds.has(subId);
-      if (!isNew && !needsUpdate) continue; // already complete
+      // FORCE REFRESH: We process everything to ensure names/products are updated
 
       const answers    = (sub.answers ?? {}) as Record<string, unknown>;
       const get        = (f: keyof typeof FIELD_MAP) => getAnswer(answers, FIELD_MAP[f]);
-      const closerName = resolveAlias(get("closer"), CLOSER_ALIASES);
-      const setterName = resolveAlias(get("setter"), SETTER_ALIASES);
+      const closerName = resolveAlias(get("closer") || getAnswerByAliases(answers, ["closer", "vendeur"], ["closer", "vendeur", "vendu par"]), CLOSER_ALIASES);
+      const setterName = resolveAlias(get("setter") || getAnswerByAliases(answers, ["setter", "pris par"], ["setter", "pris par", "rendez-vous"]), SETTER_ALIASES);
       const product    = getProductValue(answers);
 
-      console.log(`[sync-jotform] sub ${subId} — closer: "${closerName}" setter: "${setterName}"`);
-
-      if (!closerName || norm(closerName) === "autre") {
-        skipped++;
-        errors.push(`Submission ${subId}: missing or unsupported closer`);
+      // SILENT SKIP: If everything is missing, it's likely a test or abandoned submission
+      if (!closerName && !setterName && !product) {
+        nonActive++;
         continue;
       }
 
-      // Scope: closers only process their own submissions
+      console.log(`[sync-jotform] sub ${subId} — closer: "${closerName}" setter: "${setterName}" product: "${product}"`);
+
+      if (!closerName || norm(closerName) === "autre") {
+        skipped++;
+        const foundLabels = Object.values(answers).map((a: any) => `${a?.name}: "${a?.text}"`).filter(Boolean).join(" | ");
+        errors.push(`Submission ${subId}: missing closer. Labels: [${foundLabels}]`);
+        continue;
+      }
+
       if (callerRole === "closer" && norm(closerName) !== norm(callerProfile?.name ?? "")) continue;
 
       if (!product) {
         skipped++;
-        errors.push(`Submission ${subId}: missing product`);
+        const foundLabels = Object.values(answers).map((a: any) => `${a?.name}: "${a?.text}"`).filter(Boolean).join(" | ");
+        errors.push(`Submission ${subId}: missing product. Labels: [${foundLabels}]`);
         continue;
       }
 
@@ -364,7 +376,12 @@ Deno.serve(async (req) => {
       // 1. Resolve Closer
       const closerProfile = findProfileAnyRole(closerName, profiles);
       if (!closerProfile) {
+        if (LEGACY_NAMES.has(norm(closerName))) {
+          nonActive++; // Treat as non-active/skipped quietly
+          continue;
+        }
         skipped++;
+        errors.push(`Submission ${subId}: Closer "${closerName}" not found in team or legacy list`);
         unmatchedClosers.add(closerName);
         continue;
       }
@@ -384,40 +401,20 @@ Deno.serve(async (req) => {
       }
 
       if (!noSetter && !setterProfile) {
-        console.warn(`[sync-jotform] setter not matched: "${setterName}"`);
-        unmatchedSetters.add(setterName);
+        if (LEGACY_NAMES.has(norm(setterName))) {
+          // Ignore quietly
+        } else {
+          console.warn(`[sync-jotform] setter not matched: "${setterName}"`);
+          unmatchedSetters.add(setterName);
+        }
       }
 
       const createdAt  = typeof sub.created_at === "string" ? sub.created_at : "";
       const dateOfSale = createdAt ? createdAt.split(" ")[0] : new Date().toISOString().split("T")[0];
 
-      if (needsUpdate && setterProfile) {
-        // Fill in the missing setter on an existing record
-        const saleRowId = nullSetterIds.get(subId)!;
-        const { error: updErr } = await supabase
-          .from("sales")
-          .update({
-            setter_id:          setterProfile.id,
-            setter_commission:  Math.round(amountHT * SETTER_RATE * 100) / 100,
-          })
-          .eq("id", saleRowId);
-        if (updErr) {
-          errors.push(`Update ${subId}: ${updErr.message}`);
-        } else {
-          updated++;
-          existingIds.add(subId);
-        }
-        continue;
-      }
+      // Process and upsert every valid submission
 
-      if (needsUpdate && !noSetter && !setterProfile) {
-        skipped++;
-        continue;
-      }
-
-      if (!isNew) continue;
-
-      const { error: insertError } = await supabase.from("sales").insert({
+      const { error: insertError } = await supabase.from("sales").upsert({
         jotform_submission_id: subId,
         date:               dateOfSale,
         client_name:        get("fullName"),
@@ -434,7 +431,7 @@ Deno.serve(async (req) => {
         impaye:             false,
         payment_platform:   get("paymentPlatform") || null,
         payment_type:       paymentType,
-      });
+      }, { onConflict: "jotform_submission_id" });
 
       if (insertError) {
         errors.push(`Insert ${subId}: ${insertError.message}`);

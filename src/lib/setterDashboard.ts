@@ -1,6 +1,6 @@
 import { SetterCallMetricDaily, SetterDashboardMetrics, SetterDashboardPoint, SetterDashboardSummary, SetterFunnelMetricDaily } from "@/types";
 
-export type SetterDatePreset = "thisMonth" | "lastMonth" | "last3m" | "last6m" | "thisYear" | "allTime" | "custom";
+export type SetterDatePreset = "thisMonth" | "lastMonth" | "last3m" | "last6m" | "thisYear" | "lastYear" | "allTime" | "custom";
 
 export function computeSetterDateRange(preset: SetterDatePreset, customStart: string, customEnd: string) {
   const now = new Date();
@@ -23,6 +23,8 @@ export function computeSetterDateRange(preset: SetterDatePreset, customStart: st
       return { start: utc(y, m - 5, 1), end: today };
     case "thisYear":
       return { start: `${y}-01-01`, end: today };
+    case "lastYear":
+      return { start: `${y - 1}-01-01`, end: `${y - 1}-12-31` };
     case "allTime":
       return { start: "2000-01-01", end: today };
     case "custom":

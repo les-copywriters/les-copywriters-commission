@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useSales } from "@/hooks/useSales";
 import { useBonusTiers } from "@/hooks/useBonusTiers";
 import { useProfiles } from "@/hooks/useProfiles";
@@ -22,12 +22,12 @@ import { Label } from "@/components/ui/label";
 import { DollarSign, ShoppingCart, TrendingUp, AlertTriangle, Target, Percent, Gift, X, Layers, Calendar, Check, Search } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, AreaChart, Area
+  ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, Legend
 } from "recharts";
 import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type DatePreset = "thisMonth" | "lastMonth" | "last3m" | "last6m" | "thisYear" | "allTime" | "custom";
+type DatePreset = "thisMonth" | "lastMonth" | "last3m" | "last6m" | "thisYear" | "lastYear" | "allTime" | "custom";
 type PaymentFilter = "all" | "pif" | "installments";
 type StatusFilter  = "all" | "paid" | "refunded" | "unpaid";
 
@@ -46,6 +46,7 @@ function computeDateRange(preset: DatePreset, customStart: string, customEnd: st
     case "last3m":     return { start: utc(y, m - 2, 1), end: today };
     case "last6m":     return { start: utc(y, m - 5, 1), end: today };
     case "thisYear":   return { start: `${y}-01-01`, end: today };
+    case "lastYear":   return { start: `${y - 1}-01-01`, end: `${y - 1}-12-31` };
     case "allTime":    return { start: "2000-01-01", end: today };
     case "custom":     return { start: customStart || "2000-01-01", end: customEnd || today };
   }
@@ -79,9 +80,19 @@ const AnalyticsPage = () => {
   const isSetter = user?.role === "setter";
 
   // ── Filter state ────────────────────────────────────────────────────────────
-  const [datePreset,       setDatePreset]       = useState<DatePreset>("thisMonth");
-  const [customStart,      setCustomStart]      = useState("");
-  const [customEnd,        setCustomEnd]        = useState("");
+  const [datePreset, setDatePreset] = useState<DatePreset>(
+    () => (localStorage.getItem("analytics.datePreset") as DatePreset | null) ?? "thisMonth"
+  );
+  const [customStart, setCustomStart] = useState(
+    () => localStorage.getItem("analytics.customStart") ?? ""
+  );
+  const [customEnd, setCustomEnd] = useState(
+    () => localStorage.getItem("analytics.customEnd") ?? ""
+  );
+
+  useEffect(() => { localStorage.setItem("analytics.datePreset", datePreset); }, [datePreset]);
+  useEffect(() => { localStorage.setItem("analytics.customStart", customStart); }, [customStart]);
+  useEffect(() => { localStorage.setItem("analytics.customEnd", customEnd); }, [customEnd]);
   const [filterProduct,    setFilterProduct]    = useState("all");
   const [filterType,       setFilterType]       = useState<PaymentFilter>("all");
   const [filterStatus,     setFilterStatus]     = useState<StatusFilter>("all");
@@ -174,16 +185,39 @@ const AnalyticsPage = () => {
       return { month: formatMonth(key, locale), commission: monthMap.get(key) ?? 0 };
     });
 
+    // Full monthly data for the selected range
+    const allMonths: string[] = [];
+    const rangeStart = new Date(startDate);
+    const rangeEnd   = new Date(endDate);
+    for (const d = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
+         d <= rangeEnd;
+         d.setMonth(d.getMonth() + 1)) {
+      allMonths.push(d.toISOString().slice(0, 7));
+    }
+    const monthlyFull = allMonths.map(key => ({
+      month: formatMonth(key, locale),
+      commission: monthMap.get(key) ?? 0,
+      revenue: Array.from(filteredSales)
+        .filter(s => s.date.startsWith(key))
+        .reduce((sum, s) => sum + s.amount, 0),
+    }));
+
+    // Payment mix
+    const installCount = filteredSales.filter(s => s.paymentType !== "pif" && !s.refunded && !s.impaye).length;
+    const paidCount    = filteredSales.filter(s => !s.refunded && !s.impaye).length;
+
     return {
       totalComm, totalVolume, avgComm, validatedCount,
       refundCount, unpaidCount, refundRate, pifRate,
+      pifCount, installCount, paidCount,
       productData: Array.from(productMap, ([name, commission]) => ({ name, commission }))
                        .sort((a, b) => b.commission - a.commission),
       closerData:  Array.from(closerMap,  ([name, commission]) => ({ name, commission }))
                        .sort((a, b) => b.commission - a.commission),
       monthlyData,
+      monthlyFull,
     };
-  }, [filteredSales, isCloser, isSetter, locale]);
+  }, [filteredSales, isCloser, isSetter, locale, startDate, endDate]);
 
   // ── Closer bonus progress (always current month, unaffected by date filter) ─
   const currentMonthKey = new Date().toISOString().slice(0, 7);
@@ -200,6 +234,13 @@ const AnalyticsPage = () => {
   const progressTarget = nextTier?.minSales ?? currentTier?.minSales ?? 13;
   const progressPct    = Math.min((currentMonthValidated / progressTarget) * 100, 100);
 
+  const [animatedProgress, setAnimatedProgress] = useState(0);
+  useEffect(() => {
+    if (!isCloser) return;
+    const t = setTimeout(() => setAnimatedProgress(progressPct), 400);
+    return () => clearTimeout(t);
+  }, [progressPct, isCloser]);
+
   // ── Date preset pills ───────────────────────────────────────────────────────
   const presets: { key: DatePreset; label: string }[] = [
     { key: "thisMonth",  label: t("analytics.preset.thisMonth")  },
@@ -207,6 +248,7 @@ const AnalyticsPage = () => {
     { key: "last3m",     label: t("analytics.preset.last3m")     },
     { key: "last6m",     label: t("analytics.preset.last6m")     },
     { key: "thisYear",   label: t("analytics.preset.thisYear")   },
+    { key: "lastYear",   label: t("analytics.preset.lastYear")   },
     { key: "allTime",    label: t("analytics.preset.allTime")    },
     { key: "custom",     label: t("analytics.preset.custom")     },
   ];
@@ -347,55 +389,24 @@ const AnalyticsPage = () => {
           </div>
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            <StatCard
-              title={t("analytics.kpi.totalComm")}
-              value={fmt(metrics.totalComm)}
-              subtitle={`${metrics.validatedCount} ${t("analytics.kpi.validated")}`}
-              accent="blue"
-              icon={<DollarSign className="h-5 w-5" />}
-            />
-            <StatCard
-              title={t("analytics.kpi.avgComm")}
-              value={fmt(metrics.avgComm)}
-              subtitle={t("analytics.kpi.perValidatedSale")}
-              accent="blue"
-              icon={<TrendingUp className="h-5 w-5" />}
-            />
-            <StatCard
-              title={t("analytics.kpi.volume")}
-              value={fmt(metrics.totalVolume)}
-              subtitle={`${filteredSales.length} ${t("analytics.kpi.transactions")}`}
-              accent="green"
-              icon={<Target className="h-5 w-5" />}
-            />
-            <StatCard
-              title={t("analytics.kpi.salesCount")}
-              value={String(metrics.validatedCount)}
-              subtitle={`${metrics.refundCount + metrics.unpaidCount} ${t("analytics.kpi.exceptions")}`}
-              accent="green"
-              icon={<ShoppingCart className="h-5 w-5" />}
-            />
-            <StatCard
-              title={t("analytics.kpi.refundRate")}
-              value={`${metrics.refundRate.toFixed(1)}%`}
-              subtitle={`${metrics.refundCount} ${t("status.refunded").toLowerCase()} · ${metrics.unpaidCount} ${t("status.unpaid").toLowerCase()}`}
-              trend={metrics.refundRate > 10 ? "down" : "neutral"}
-              accent="red"
-              icon={<AlertTriangle className="h-5 w-5" />}
-            />
-            <StatCard
-              title={t("analytics.kpi.pifRate")}
-              value={`${metrics.pifRate.toFixed(1)}%`}
-              subtitle={`${filteredSales.filter(s => s.paymentType === "pif" && !s.refunded && !s.impaye).length} PIF Sales`}
-              accent="orange"
-              icon={<Percent className="h-5 w-5" />}
-            />
+            {[
+              <StatCard title={t("analytics.kpi.totalComm")} value={fmt(metrics.totalComm)} subtitle={`${metrics.validatedCount} ${t("analytics.kpi.validated")}`} accent="blue" icon={<DollarSign className="h-5 w-5" />} />,
+              <StatCard title={t("analytics.kpi.avgComm")} value={fmt(metrics.avgComm)} subtitle={t("analytics.kpi.perValidatedSale")} accent="blue" icon={<TrendingUp className="h-5 w-5" />} />,
+              <StatCard title={t("analytics.kpi.volume")} value={fmt(metrics.totalVolume)} subtitle={`${filteredSales.length} ${t("analytics.kpi.transactions")}`} accent="green" icon={<Target className="h-5 w-5" />} />,
+              <StatCard title={t("analytics.kpi.salesCount")} value={String(metrics.validatedCount)} subtitle={`${metrics.refundCount + metrics.unpaidCount} ${t("analytics.kpi.exceptions")}`} accent="green" icon={<ShoppingCart className="h-5 w-5" />} />,
+              <StatCard title={t("analytics.kpi.refundRate")} value={`${metrics.refundRate.toFixed(1)}%`} subtitle={`${metrics.refundCount} ${t("status.refunded").toLowerCase()} · ${metrics.unpaidCount} ${t("status.unpaid").toLowerCase()}`} trend={metrics.refundRate > 10 ? "down" : "neutral"} accent="red" icon={<AlertTriangle className="h-5 w-5" />} />,
+              <StatCard title={t("analytics.kpi.pifRate")} value={`${metrics.pifRate.toFixed(1)}%`} subtitle={`${filteredSales.filter(s => s.paymentType === "pif" && !s.refunded && !s.impaye).length} PIF Sales`} accent="orange" icon={<Percent className="h-5 w-5" />} />,
+            ].map((card, i) => (
+              <div key={i} className="animate-in fade-in slide-in-from-bottom-4 fill-mode-both" style={{ animationDuration: "500ms", animationDelay: `${i * 75}ms` }}>
+                {card}
+              </div>
+            ))}
           </div>
         )}
 
         {/* ── Closer: bonus progress ─────────────────────────────────────────── */}
         {isCloser && (
-          <Card className="border-none shadow-sm bg-gradient-to-br from-background via-background to-primary/5 p-8 rounded-[2.5rem] relative overflow-hidden group">
+          <Card className="border-none shadow-sm bg-gradient-to-br from-background via-background to-primary/5 p-8 rounded-[2.5rem] relative overflow-hidden group animate-in fade-in slide-in-from-bottom-6 fill-mode-both" style={{ animationDuration: "600ms", animationDelay: "500ms" }}>
              <div className="absolute top-0 right-0 p-10 opacity-5 transform group-hover:scale-110 transition-transform">
                 <Gift className="h-32 w-32 text-primary" />
              </div>
@@ -424,19 +435,20 @@ const AnalyticsPage = () => {
                           <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Progress to target</p>
                           <p className="text-sm font-black text-primary tabular-nums">{progressPct.toFixed(0)}% Complete</p>
                        </div>
-                       <Progress value={progressPct} className="h-3 rounded-full bg-muted/40" />
+                       <Progress value={animatedProgress} className="h-3 rounded-full bg-muted/40 [&>div]:transition-all [&>div]:duration-1000 [&>div]:ease-out" />
                     </div>
 
                     <div className="flex flex-wrap gap-3">
-                      {sortedTiers.map(tier => (
+                      {sortedTiers.map((tier, i) => (
                         <div
                           key={tier.id}
                           className={cn(
-                            "flex flex-col items-center gap-1 flex-1 min-w-[120px] p-4 rounded-2xl border transition-all duration-300",
+                            "flex flex-col items-center gap-1 flex-1 min-w-[120px] p-4 rounded-2xl border transition-all duration-300 animate-in fade-in zoom-in-95 fill-mode-both",
                             currentMonthValidated >= tier.minSales
                               ? "bg-emerald-500 border-emerald-500/20 text-white shadow-lg shadow-emerald-500/10"
                               : "bg-muted/10 border-border/40 text-muted-foreground grayscale opacity-60"
                           )}
+                          style={{ animationDuration: "400ms", animationDelay: `${700 + i * 80}ms` }}
                         >
                           <p className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">Tier</p>
                           <p className="text-lg font-black leading-none">{tier.minSales}</p>
@@ -462,8 +474,8 @@ const AnalyticsPage = () => {
           </Card>
         )}
 
-        {/* ── Charts ─────────────────────────────────────────────────────────── */}
-        <div className="grid gap-6 lg:grid-cols-2">
+        {/* ── Charts Row 1 ───────────────────────────────────────────────────── */}
+        <div className="grid gap-6 lg:grid-cols-2 animate-in fade-in slide-in-from-bottom-4 fill-mode-both" style={{ animationDuration: "600ms", animationDelay: "200ms" }}>
           <ChartCard title="Performance Trend" icon={TrendingUp}>
             {metrics.monthlyData.every(d => d.commission === 0) ? (
               <p className="text-center py-20 text-sm text-muted-foreground italic">No historical data available</p>
@@ -509,8 +521,97 @@ const AnalyticsPage = () => {
           </ChartCard>
         </div>
 
+        {/* ── Charts Row 2 ───────────────────────────────────────────────────── */}
+        <div className="grid gap-6 lg:grid-cols-3 animate-in fade-in slide-in-from-bottom-4 fill-mode-both" style={{ animationDuration: "600ms", animationDelay: "350ms" }}>
+          {/* Revenue vs Commission dual bar */}
+          <ChartCard title="Revenue vs Commission" icon={TrendingUp}>
+            {metrics.monthlyFull.every(d => d.revenue === 0) ? (
+              <p className="text-center py-20 text-sm text-muted-foreground italic">No data for selected period</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={metrics.monthlyFull} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.border} vertical={false} />
+                  <XAxis dataKey="month" fontSize={9} axisLine={false} tickLine={false} dy={8} />
+                  <YAxis fontSize={9} axisLine={false} tickLine={false} tickFormatter={(v) => `€${(v/1000).toFixed(0)}k`} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.15)', fontWeight: 'bold', background: 'hsl(var(--card))', color: 'hsl(var(--card-foreground))' }}
+                    formatter={(v: number, name: string) => [fmt(v), name === "revenue" ? "Revenue" : "Commission"]}
+                  />
+                  <Legend formatter={(v) => v === "revenue" ? "Revenue" : "Commission"} wrapperStyle={{ fontSize: '10px', fontWeight: 700, paddingTop: '12px' }} />
+                  <Bar dataKey="revenue"    fill="hsl(var(--primary) / 0.25)" radius={[4,4,0,0]} barSize={14} />
+                  <Bar dataKey="commission" fill={CHART_COLORS.primary}       radius={[4,4,0,0]} barSize={14} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </ChartCard>
+
+          {/* Payment Mix donut */}
+          <ChartCard title="Payment Mix" icon={Percent}>
+            {metrics.pifCount === 0 && metrics.installCount === 0 ? (
+              <p className="text-center py-20 text-sm text-muted-foreground italic">No data</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Pie
+                    data={[
+                      { name: "PIF",          value: metrics.pifCount },
+                      { name: "Installments", value: metrics.installCount },
+                    ]}
+                    cx="50%" cy="45%"
+                    innerRadius={65} outerRadius={95}
+                    paddingAngle={4}
+                    dataKey="value"
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    labelLine={false}
+                  >
+                    <Cell fill={CHART_COLORS.primary} />
+                    <Cell fill="hsl(var(--primary) / 0.3)" />
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.15)', fontWeight: 'bold', background: 'hsl(var(--card))', color: 'hsl(var(--card-foreground))' }}
+                    formatter={(v: number) => [`${v} sales`]}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </ChartCard>
+
+          {/* Sales Status donut */}
+          <ChartCard title="Sales Status" icon={ShoppingCart}>
+            {filteredSales.length === 0 ? (
+              <p className="text-center py-20 text-sm text-muted-foreground italic">No data</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Pie
+                    data={[
+                      { name: "Paid",     value: metrics.paidCount - metrics.pifCount - metrics.installCount < 0 ? metrics.paidCount : metrics.paidCount },
+                      { name: "Refunded", value: metrics.refundCount },
+                      { name: "Unpaid",   value: metrics.unpaidCount },
+                    ].filter(d => d.value > 0)}
+                    cx="50%" cy="45%"
+                    innerRadius={65} outerRadius={95}
+                    paddingAngle={4}
+                    dataKey="value"
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    labelLine={false}
+                  >
+                    <Cell fill="#10b981" />
+                    <Cell fill="#f59e0b" />
+                    <Cell fill="#ef4444" />
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.15)', fontWeight: 'bold', background: 'hsl(var(--card))', color: 'hsl(var(--card-foreground))' }}
+                    formatter={(v: number) => [`${v} sales`]}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </ChartCard>
+        </div>
+
         {/* ── Transactions table ─────────────────────────────────────────────── */}
-        <Card className="border-none shadow-sm rounded-[2.5rem] overflow-hidden">
+        <Card className="border-none shadow-sm rounded-[2.5rem] overflow-hidden animate-in fade-in slide-in-from-bottom-4 fill-mode-both" style={{ animationDuration: "600ms", animationDelay: "500ms" }}>
           <div className="p-8 border-b border-border/40 flex items-center justify-between">
             <h3 className="font-black text-sm uppercase tracking-widest text-muted-foreground">{t("analytics.sales.title")}</h3>
             <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 font-bold h-8 px-4">
