@@ -79,6 +79,7 @@ export type CallAnalysis = {
   fathomMeetingId: string | null;
   callTitle: string | null;
   callDate: string | null;
+  callStartedAt: string | null;
   durationSeconds: number | null;
   transcript: string | null;
   score: number | null;

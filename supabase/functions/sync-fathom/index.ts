@@ -150,15 +150,38 @@ Deno.serve(async (req) => {
       .not("fathom_meeting_id", "is", null);
 
     const seen = new Set((existing ?? []).map((r) => String(r.fathom_meeting_id)));
-    console.log(`[sync-fathom] ${seen.size} already in DB`);
+
+    // Load existing session start times for deduplication.
+    // Wrapped in try/catch in case the call_started_at column hasn't been
+    // added via migration yet — sync still works, just without time-based dedup.
+    let seenStartTimes = new Set<string>();
+    try {
+      const { data: existingTimes } = await supabase
+        .from("call_analyses")
+        .select("call_started_at")
+        .eq("closer_id", closerId)
+        .not("call_started_at", "is", null);
+      seenStartTimes = new Set(
+        (existingTimes ?? []).map((r) => String(r.call_started_at))
+      );
+    } catch {
+      console.warn("[sync-fathom] call_started_at column not yet available — skipping time-based deduplication");
+    }
+
+    console.log(`[sync-fathom] ${seen.size} already in DB, ${seenStartTimes.size} unique sessions`);
 
     let imported = 0;
+    let transcriptsFetched = 0;
     const errors = [];
     let cursor = null;
     let page = 0;
     let totalSeen = 0;
 
-    outer: do {
+    // ── Phase 1: Import all meeting metadata (fast — no transcript calls) ───
+    // This completes in seconds regardless of how many meetings exist.
+    const newlyImported: Array<{ dbId?: string; fathomId: string }> = [];
+
+    do {
       const path = cursor ? `/meetings?limit=50&cursor=${encodeURIComponent(cursor)}` : "/meetings?limit=50";
       const res = await fathomGet(path, apiKey);
       const meetings = Array.isArray(res.items) ? res.items : [];
@@ -168,53 +191,113 @@ Deno.serve(async (req) => {
         const id = String(m.recording_id ?? m.id ?? "");
         if (!id) continue;
 
-        // Fathom returns newest-first: first known ID → everything after is already imported
-        if (seen.has(id)) {
-          console.log(`[sync-fathom] reached known meeting ${id} — stopping`);
-          break outer;
-        }
+        if (seen.has(id)) continue; // already in DB by fathom_meeting_id, skip
 
-        const title = (m.meeting_title || m.title || null);
-        const dateRaw = m.created_at || m.scheduled_start_time || null;
-        const callDate = dateRaw ? String(dateRaw).split("T")[0] : null;
+        const title     = (m.meeting_title || m.title || null);
+        const dateRaw   = m.created_at || m.scheduled_start_time || null;
+        const callDate  = dateRaw ? String(dateRaw).split("T")[0] : null;
+
+        // Parse the full start datetime for deduplication and display
+        const startedAt = m.scheduled_start_time
+          ? new Date(String(m.scheduled_start_time)).toISOString()
+          : null;
+
+        // If another recording for this closer at exactly the same start time
+        // already exists, this is a duplicate session (notetaker + host, or
+        // two participants both running Fathom). Skip silently.
+        if (startedAt && seenStartTimes.has(startedAt)) {
+          console.log(`[sync-fathom] skipping duplicate session at ${startedAt} (${id})`);
+          continue;
+        }
 
         let duration = null;
         if (m.scheduled_start_time && m.scheduled_end_time) {
-          const diff = new Date(m.scheduled_end_time) - new Date(m.scheduled_start_time);
+          const diff = new Date(m.scheduled_end_time).getTime() - new Date(m.scheduled_start_time).getTime();
           if (diff > 0) duration = Math.round(diff / 1000);
         }
 
-        const transcript = await fetchTranscript(id, apiKey);
-        if (transcript === null) {
-          await sleep(250);
-        }
-
-        const { error: insertErr } = await supabase.from("call_analyses").insert({
+        // Insert metadata only — transcript fetched in Phase 2.
+        // call_started_at is stored separately so a missing column never
+        // blocks the sync (the column may not exist until the migration runs).
+        const basePayload = {
           closer_id: closerId,
           fathom_meeting_id: id,
           call_title: title,
           call_date: callDate,
           duration_seconds: duration,
-          transcript,
-          status: transcript ? "synced" : "pending",
+          transcript: null,
+          status: "pending",
           updated_at: new Date().toISOString(),
-        });
+        };
+
+        let { error: insertErr } = await supabase.from("call_analyses").upsert(
+          { ...basePayload, call_started_at: startedAt },
+          { onConflict: "fathom_meeting_id", ignoreDuplicates: true }
+        );
+
+        // If the column doesn't exist yet, retry without it
+        if (insertErr?.message?.includes("call_started_at")) {
+          console.warn("[sync-fathom] call_started_at column missing — retrying without it");
+          ({ error: insertErr } = await supabase.from("call_analyses").upsert(
+            basePayload,
+            { onConflict: "fathom_meeting_id", ignoreDuplicates: true }
+          ));
+        }
 
         if (insertErr) {
           errors.push(`${id}: ${insertErr.message}`);
         } else {
           imported++;
           seen.add(id);
+          if (startedAt) seenStartTimes.add(startedAt);
+          newlyImported.push({ fathomId: id });
         }
       }
 
       cursor = res.next_cursor || null;
       page++;
-      if (page >= 20) break;
+      if (page >= 100) break;
     } while (cursor);
 
-    console.log(`[sync-fathom] done — seen=${totalSeen} imported=${imported}`);
-    return respond({ ok: true, imported, total_seen: totalSeen, errors });
+    console.log(`[sync-fathom] phase 1 done — metadata imported: ${imported}, total seen: ${totalSeen}`);
+
+    // ── Phase 2: Fetch transcripts within a strict time budget ──────────────
+    // Fetches transcripts for all pending calls for this closer (newest first).
+    // Stops when the time budget is exhausted so the function never times out.
+    // Each subsequent sync picks up where the last left off.
+    const TIME_BUDGET_MS = 90_000; // 90 s — well within Supabase's 150 s limit
+    const phaseStart = Date.now();
+
+    const { data: pendingCalls } = await supabase
+      .from("call_analyses")
+      .select("id, fathom_meeting_id")
+      .eq("closer_id", closerId)
+      .eq("status", "pending")
+      .not("fathom_meeting_id", "is", null)
+      .order("call_date", { ascending: false })
+      .limit(200);
+
+    for (const call of pendingCalls ?? []) {
+      if (Date.now() - phaseStart > TIME_BUDGET_MS) {
+        console.log("[sync-fathom] time budget reached — remaining transcripts will be fetched on next sync");
+        break;
+      }
+
+      const transcript = await fetchTranscript(String(call.fathom_meeting_id), apiKey);
+      if (transcript) {
+        await supabase.from("call_analyses").update({
+          transcript,
+          status: "synced",
+          updated_at: new Date().toISOString(),
+        }).eq("id", call.id);
+        transcriptsFetched++;
+      }
+
+      await sleep(300); // stay under Fathom rate limits
+    }
+
+    console.log(`[sync-fathom] phase 2 done — transcripts fetched: ${transcriptsFetched}`);
+    return respond({ ok: true, imported, transcripts_fetched: transcriptsFetched, total_seen: totalSeen, errors });
 
   } catch (err) {
     console.error("[sync-fathom] error:", err);

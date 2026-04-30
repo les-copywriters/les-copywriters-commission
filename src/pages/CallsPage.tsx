@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAnalyzeCall, useCallAnalyses, useSyncFathom } from "@/hooks/useCallAnalysis";
+import { useAnalyzeCall, useBulkAnalyze, useCallAnalyses, useSyncFathom } from "@/hooks/useCallAnalysis";
 import { useProfiles } from "@/hooks/useProfiles";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/i18n";
@@ -106,8 +106,9 @@ const CallsPage = () => {
   const { data: calls = [], isLoading } = useCallAnalyses(
     isAdmin ? (closerFilter !== "all" ? closerFilter : undefined) : user?.id
   );
-  const syncFathom = useSyncFathom();
+  const syncFathom  = useSyncFathom();
   const analyzeCall = useAnalyzeCall();
+  const bulkAnalyze = useBulkAnalyze();
 
   const [selectedCall, setSelectedCall] = useState<CallAnalysis | null>(null);
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
@@ -269,6 +270,46 @@ const CallsPage = () => {
               >
                 <RefreshCw className={cn("h-4 w-4 mr-2", syncFathom.isPending && "animate-spin")} />
                 {syncFathom.isPending ? t("calls.syncing") : t("calls.syncButton")}
+              </Button>
+            )}
+            {(isCloser || isAdmin) && stats.ready > 0 && (
+              <Button
+                size="sm"
+                disabled={bulkAnalyze.isPending}
+                className="rounded-xl h-10 px-4 font-bold gap-2 shadow-lg shadow-primary/20 transition-all active:scale-95"
+                onClick={() =>
+                  bulkAnalyze.mutate(
+                    isAdmin && closerFilter !== "all" ? closerFilter : undefined,
+                    {
+                      onSuccess: (res) => {
+                        if (res.remaining > 0) {
+                          toast.success(
+                            `${res.analyzed} call${res.analyzed === 1 ? "" : "s"} analyzed`,
+                            { description: `${res.remaining} remaining — click again to continue.` },
+                          );
+                        } else {
+                          toast.success(
+                            `All ${res.analyzed} call${res.analyzed === 1 ? "" : "s"} analyzed!`,
+                            { description: "AI review complete for all ready calls." },
+                          );
+                        }
+                      },
+                      onError: (e) => toast.error(`Bulk analysis failed: ${e.message}`),
+                    },
+                  )
+                }
+              >
+                {bulkAnalyze.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    Analyze All ({stats.ready})
+                  </>
+                )}
               </Button>
             )}
           </div>

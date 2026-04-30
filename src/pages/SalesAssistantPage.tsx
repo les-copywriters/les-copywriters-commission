@@ -3,18 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Navigate, useSearchParams } from "react-router-dom";
 import AppLayout from "@/components/AppLayout";
 import SalesAssistantPanel from "@/components/SalesAssistantPanel";
-import { Card, CardContent } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/context/AuthContext";
 import { useCallAnalyses } from "@/hooks/useCallAnalysis";
 import { supabase } from "@/lib/supabase";
-import { cn } from "@/lib/utils";
 import { CallAnalysis } from "@/types";
-import { Calendar, Clock3, Pin, UserRoundSearch } from "lucide-react";
 
 const SalesAssistantPage = () => {
   const { user } = useAuth();
@@ -84,53 +76,25 @@ const SalesAssistantPage = () => {
   }
 
   return (
-    <AppLayout>
-      <div className="space-y-4 animate-in fade-in duration-500">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <h1 className="text-2xl font-black tracking-tight">Sales Assistant</h1>
-            <p className="text-sm text-muted-foreground">
-              Chat-first coaching for calls, objections, and sales patterns.
-            </p>
-          </div>
-
-          {isAdmin && (
-            <Select
-              value={selectedCloserId || "none"}
-              onValueChange={(value) => {
-                setSelectedCloserId(value === "none" ? "" : value);
-                setSelectedCallId(null);
-              }}
-            >
-              <SelectTrigger className="h-11 min-w-[260px] rounded-2xl border-border/60 bg-background font-bold">
-                <SelectValue placeholder="Choose closer" />
-              </SelectTrigger>
-              <SelectContent className="rounded-2xl">
-                <SelectItem value="none">Choose closer</SelectItem>
-                {closers.map((closer) => (
-                  <SelectItem key={closer.id} value={closer.id}>
-                    {closer.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-
-        <div className="flex-1">
-          <SalesAssistantPanel
-            closerId={assistantCloserId || null}
-            closerName={closerName}
-            selectedCall={selectedCall}
-            calls={focusableCalls}
-            disabledReason={!assistantCloserId ? "Choose a closer to open the standalone assistant." : null}
-            onOpenCall={(call: CallAnalysis) => setSelectedCallId(call.id)}
-            onClearSelectedCall={() => setSelectedCallId(null)}
-            selectedThreadId={selectedThreadId}
-            onSelectThread={(id) => setSelectedThreadId(id)}
-          />
-        </div>
-      </div>
+    <AppLayout fullscreen>
+      <SalesAssistantPanel
+          closerId={assistantCloserId || null}
+          closerName={closerName}
+          isAdmin={isAdmin}
+          closers={closers}
+          selectedCloserId={selectedCloserId}
+          onSelectCloser={(id) => {
+            setSelectedCloserId(id);
+            setSelectedCallId(null);
+          }}
+          selectedCall={selectedCall}
+          calls={focusableCalls}
+          disabledReason={!assistantCloserId ? "Choose a closer to open the assistant." : null}
+          onOpenCall={(call: CallAnalysis) => setSelectedCallId(call.id)}
+          onClearSelectedCall={() => setSelectedCallId(null)}
+          selectedThreadId={selectedThreadId}
+          onSelectThread={(id) => setSelectedThreadId(id)}
+        />
     </AppLayout>
   );
 };

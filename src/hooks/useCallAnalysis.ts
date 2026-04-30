@@ -10,6 +10,7 @@ type CallRow = {
   fathom_meeting_id: string | null;
   call_title: string | null;
   call_date: string | null;
+  call_started_at: string | null;
   duration_seconds: number | null;
   transcript: string | null;
   score: number | null;
@@ -27,6 +28,7 @@ const mapCall = (row: CallRow): CallAnalysis => ({
   fathomMeetingId: row.fathom_meeting_id,
   callTitle: row.call_title,
   callDate: row.call_date,
+  callStartedAt: row.call_started_at,
   durationSeconds: row.duration_seconds,
   transcript: row.transcript,
   score: row.score,
@@ -238,6 +240,36 @@ export const useRefreshCloserProfile = () => {
     onSuccess: (_data, closerId) => {
       qc.invalidateQueries({ queryKey: ["closer_profile", closerId] });
       qc.invalidateQueries({ queryKey: ["call_analyses", closerId] });
+    },
+  });
+};
+
+export const useBulkAnalyze = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (closerId?: string): Promise<{ analyzed: number; remaining: number; errors: string[] }> => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) throw new Error("Session expired. Please sign in again.");
+
+      const { data, error } = await supabase.functions.invoke("bulk-analyze", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: closerId ? { closer_id: closerId } : {},
+      });
+
+      if (error) {
+        const ctx = error as { context?: { json?: () => Promise<{ error?: string }> } };
+        const body = await ctx.context?.json?.().catch(() => null);
+        throw new Error((body as { error?: string })?.error ?? error.message);
+      }
+
+      const result = data as { ok: boolean; analyzed: number; remaining: number; errors: string[]; error?: string };
+      if (!result.ok) throw new Error(result.error ?? "Bulk analysis failed");
+      return result;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["call_analyses"] });
+      qc.invalidateQueries({ queryKey: ["closer_profile"] });
     },
   });
 };
