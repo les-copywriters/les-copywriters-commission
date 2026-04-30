@@ -39,6 +39,18 @@ import {
   Trash2,
   User2,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 type Props = {
   closerId: string | null;
@@ -176,6 +188,9 @@ const SalesAssistantPanel = ({
   const [draft, setDraft] = useState("");
   const [optimisticPrompt, setOptimisticPrompt] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [renameTarget, setRenameTarget] = useState<{ id: string; current: string | null } | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const callsById = useMemo(() => new Map(calls.map((call) => [call.id, call])), [calls]);
@@ -300,25 +315,33 @@ const SalesAssistantPanel = ({
 
   const handleDeleteThread = (threadId: string, event: React.MouseEvent) => {
     event.stopPropagation();
-    if (!confirm("Are you sure you want to delete this conversation?")) return;
-    
-    deleteThread.mutate(threadId, {
+    setDeleteTarget(threadId);
+  };
+
+  const confirmDelete = () => {
+    if (!deleteTarget) return;
+    deleteThread.mutate(deleteTarget, {
       onSuccess: () => {
-        if (selectedThreadId === threadId) {
-          onSelectThread(null);
-        }
+        if (selectedThreadId === deleteTarget) onSelectThread(null);
         toast.success("Conversation deleted");
+        setDeleteTarget(null);
       },
     });
   };
 
   const handleRenameThread = (threadId: string, currentTitle: string | null, event: React.MouseEvent) => {
     event.stopPropagation();
-    const newTitle = prompt("Enter a new title for this conversation:", currentTitle || "");
-    if (!newTitle || newTitle === currentTitle) return;
+    setRenameTarget({ id: threadId, current: currentTitle });
+    setRenameValue(currentTitle ?? "");
+  };
 
-    updateThread.mutate({ threadId, title: newTitle }, {
-      onSuccess: () => toast.success("Conversation renamed"),
+  const confirmRename = () => {
+    if (!renameTarget || !renameValue.trim() || renameValue.trim() === renameTarget.current) {
+      setRenameTarget(null);
+      return;
+    }
+    updateThread.mutate({ threadId: renameTarget.id, title: renameValue.trim() }, {
+      onSuccess: () => { toast.success("Conversation renamed"); setRenameTarget(null); },
     });
   };
 
@@ -606,6 +629,62 @@ const SalesAssistantPanel = ({
           </div>
         )}
       </CardContent>
+      {/* Delete conversation confirmation */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent className="rounded-[2rem] border-none shadow-2xl p-8">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-black">Delete conversation?</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              This permanently removes the conversation and all its messages. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-3 mt-6">
+            <AlertDialogCancel className="rounded-xl h-11 font-bold">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={deleteThread.isPending}
+              className="rounded-xl h-11 bg-rose-500 hover:bg-rose-600 font-bold shadow-lg shadow-rose-500/20"
+            >
+              {deleteThread.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Rename conversation dialog */}
+      <Dialog open={!!renameTarget} onOpenChange={(open) => !open && setRenameTarget(null)}>
+        <DialogContent className="rounded-[2rem] border-none shadow-2xl max-w-sm p-8">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black">Rename conversation</DialogTitle>
+          </DialogHeader>
+          <Input
+            value={renameValue}
+            onChange={e => setRenameValue(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") confirmRename(); }}
+            className="h-12 rounded-xl border-2 bg-muted/20 mt-4 font-medium"
+            placeholder="Conversation title..."
+            autoFocus
+          />
+          <DialogFooter className="mt-4 gap-3">
+            <button
+              type="button"
+              onClick={() => setRenameTarget(null)}
+              className="h-11 px-5 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmRename}
+              disabled={updateThread.isPending}
+              className="h-11 px-5 rounded-xl bg-primary text-white font-bold text-sm shadow-lg shadow-primary/20 hover:bg-primary/90 transition-colors disabled:opacity-50"
+            >
+              {updateThread.isPending ? "Saving..." : "Save"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 };

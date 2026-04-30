@@ -13,6 +13,7 @@ const json = (body: unknown, status = 200) =>
 
 type SaleRow = {
   id: string;
+  date: string;
   client_name: string;
   client_email: string | null;
   amount: number;
@@ -93,7 +94,7 @@ Deno.serve(async (req) => {
       adminClient.from("impayes").select("id, date"),
       adminClient
         .from("sales")
-        .select("id, client_name, client_email, amount, closer_id, setter_id, payment_type, num_installments, installment_amount, jotform_submission_id"),
+        .select("id, date, client_name, client_email, amount, closer_id, setter_id, payment_type, num_installments, installment_amount, jotform_submission_id"),
       adminClient.from("profiles").select("id, role"),
       adminClient
         .from("integration_sync_runs")

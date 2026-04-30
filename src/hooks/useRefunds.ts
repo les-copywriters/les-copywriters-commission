@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { formatCurrency } from "@/lib/formatCurrency";
 import { Refund } from "@/types";
 
 type RefundRow = {
@@ -90,9 +91,27 @@ export const useUpdateRefundStatus = () => {
         throw new Error(saleError.message);
       }
     },
-    onSuccess: () => {
+    onSuccess: (_, { saleId, status }) => {
       qc.invalidateQueries({ queryKey: ["refunds"] });
       qc.invalidateQueries({ queryKey: ["sales"] });
+
+      // Email the closer when their refund is approved so they know the
+      // commission is being clawed back. Best-effort — never blocks the UI.
+      if (status !== "approved") return;
+      const sale = qc
+        .getQueryData<{ id: string; clientName: string; closerId: string; closerCommission: number }[]>(["sales"])
+        ?.find(s => s.id === saleId);
+      if (!sale) return;
+      supabase.functions.invoke("notify", {
+        body: {
+          event: "refund_approved",
+          payload: {
+            closerId: sale.closerId,
+            clientName: sale.clientName,
+            commissionAmount: formatCurrency(sale.closerCommission, "fr"),
+          },
+        },
+      }).catch(e => console.warn("[useUpdateRefundStatus] notify failed:", e));
     },
   });
 };

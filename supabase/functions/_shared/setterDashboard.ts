@@ -53,8 +53,8 @@ type CallRecord = {
   notes: string | null;
   transcription?: string | null;
   summary?: string | null;
-  ai_topics?: any;
-  ai_sentiments?: any;
+  ai_topics?: unknown;
+  ai_sentiments?: unknown;
   talk_listen_ratio?: { agent: number; customer: number } | null;
   raw_payload: Record<string, unknown>;
 };

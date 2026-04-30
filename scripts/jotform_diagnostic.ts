@@ -34,7 +34,7 @@ async function runDiagnostic() {
   const profileNames = new Set(profiles?.map(p => p.name.toLowerCase()) || []);
 
   let offset = 0;
-  let allSubmissions: any[] = [];
+  const allSubmissions: Record<string, unknown>[] = [];
 
   try {
     while (true) {
@@ -65,8 +65,8 @@ async function runDiagnostic() {
     }
 
     const answers = sub.answers || {};
-    const closerAnswer = Object.values(answers).find((a: any) => a.name === FIELD_MAP.closer) as any;
-    const setterAnswer = Object.values(answers).find((a: any) => a.name === FIELD_MAP.setter) as any;
+    const closerAnswer = Object.values(answers).find((a) => (a as Record<string, unknown>).name === FIELD_MAP.closer) as Record<string, unknown> | undefined;
+    const setterAnswer = Object.values(answers).find((a) => (a as Record<string, unknown>).name === FIELD_MAP.setter) as Record<string, unknown> | undefined;
 
     const closerName = closerAnswer?.answer || "Unknown";
     const setterName = setterAnswer?.answer || "None";

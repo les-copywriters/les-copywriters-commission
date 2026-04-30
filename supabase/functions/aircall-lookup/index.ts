@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -12,7 +12,7 @@ function json(body: unknown, status = 200) {
   });
 }
 
-async function getGlobalSettings(supabase: any): Promise<Record<string, string | null>> {
+async function getGlobalSettings(supabase: SupabaseClient): Promise<Record<string, string | null>> {
   const { data, error } = await supabase.from("global_settings").select("key, value");
   const settings: Record<string, string | null> = {
     aircall_api_id: Deno.env.get("AIRCALL_API_ID") || null,
@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
     const users = Array.isArray(parsed.users) ? parsed.users : [];
 
     return json({
-      users: users.map((u: any) => ({
+      users: (users as Record<string, unknown>[]).map((u) => ({
         id: u.id,
         name: `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() || u.name || `User ${u.id}`,
         email: u.email ?? null,

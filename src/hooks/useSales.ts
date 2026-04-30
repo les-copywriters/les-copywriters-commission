@@ -123,12 +123,31 @@ export const useAddSale = () => {
 export const useUpdateCommission = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, closerCommission }: { id: string; closerCommission: number }) => {
-      const { error } = await supabase
+    mutationFn: async ({ id, closerCommission, oldCommission }: { id: string; closerCommission: number; oldCommission: number }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Authenticated user required for commission override");
+
+      // Update the sale record
+      const { error: updateError } = await supabase
         .from("sales")
         .update({ closer_commission: closerCommission })
         .eq("id", id);
-      if (error) throw new Error(error.message);
+      if (updateError) throw new Error(updateError.message);
+
+      // Create an audit log entry
+      const { error: logError } = await supabase
+        .from("commission_audit_log")
+        .insert({
+          sale_id: id,
+          changed_by: user.id,
+          old_amount: oldCommission,
+          new_amount: closerCommission,
+        });
+      
+      // We don't throw if the log fails, but we warn in console
+      if (logError) {
+        console.warn("Failed to create commission audit log:", logError.message);
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sales"] }),
   });

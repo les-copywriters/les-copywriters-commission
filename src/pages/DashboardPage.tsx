@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { formatCurrency } from "@/lib/formatCurrency";
 import { useSales } from "@/hooks/useSales";
 import { useRefunds } from "@/hooks/useRefunds";
@@ -8,7 +8,7 @@ import { useSetterDashboardMetrics } from "@/hooks/useSetterDashboard";
 import { computeSetterDateRange, SetterDatePreset } from "@/lib/setterDashboard";
 import { useLanguage } from "@/i18n";
 import { useAuth } from "@/context/AuthContext";
-import { monthlyBonusBreakdown, formatMonth } from "@/lib/bonusCalculation";
+import { monthlyBonusBreakdown, calculateMonthBonus, formatMonth } from "@/lib/bonusCalculation";
 import AppLayout from "@/components/AppLayout";
 import StatCard from "@/components/StatCard";
 import ProfileTag from "@/components/ProfileTag";
@@ -44,7 +44,7 @@ const ChartSkeletons = () => (
 );
 
 // ─── Chart card wrapper ───────────────────────────────────────────────────────
-const ChartCard = ({ title, icon: Icon, children, badge }: { title: string; icon?: any; children: React.ReactNode; badge?: string }) => (
+const ChartCard = ({ title, icon: Icon, children, badge }: { title: string; icon?: React.ElementType; children: React.ReactNode; badge?: string }) => (
   <Card className="border-none shadow-premium bg-background overflow-hidden rounded-[2.5rem]">
     <CardHeader className="p-8 border-b border-border/40 flex flex-row items-center justify-between">
       <div className="flex items-center gap-3">
@@ -82,7 +82,10 @@ const DashboardPage = () => {
   const [memberVisible, setMemberVisible] = useState(PAGE_SIZE);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [bonusDialog, setBonusDialog] = useState<{ month: string; kind: BonusDrilldownKind } | null>(null);
-  const [datePreset, setDatePreset] = useState<SetterDatePreset>("thisMonth");
+  const [datePreset, setDatePreset] = useState<SetterDatePreset>(
+    () => (localStorage.getItem("dashboard.datePreset") as SetterDatePreset | null) ?? "thisMonth"
+  );
+  useEffect(() => { localStorage.setItem("dashboard.datePreset", datePreset); }, [datePreset]);
 
   const dateRange = useMemo(() => computeSetterDateRange(datePreset, "", ""), [datePreset]);
   const { data: metrics } = useSetterDashboardMetrics({
@@ -158,10 +161,19 @@ const DashboardPage = () => {
     };
   }, [sales, refunds, impayes, isCloser, isSetter, locale]);
 
-  // Closer: monthly bonus history
-  const bonusHistory     = useMemo(() => isCloser ? monthlyBonusBreakdown(sales, tiers) : [], [sales, tiers, isCloser]);
-  const currentMonthKey   = new Date().toISOString().slice(0, 7);
-  const currentMonthBonus = bonusHistory.find(b => b.month === currentMonthKey) ?? null;
+  // Closer: monthly bonus history (follows the date filter for the history table)
+  const bonusHistory   = useMemo(() => isCloser ? monthlyBonusBreakdown(sales, tiers) : [], [sales, tiers, isCloser]);
+  const currentMonthKey = new Date().toISOString().slice(0, 7);
+
+  // Current-month bonus is ALWAYS pinned to today regardless of the date filter,
+  // so selecting "Last Year" doesn't blank out the live reward card.
+  const currentMonthBonus = useMemo(() => {
+    if (!isCloser) return null;
+    const scopedToUser = allSales.filter(s => s.closerId === user?.id);
+    const thisMonth    = scopedToUser.filter(s => s.date.startsWith(currentMonthKey));
+    if (thisMonth.length === 0) return null;
+    return { month: currentMonthKey, ...calculateMonthBonus(thisMonth, tiers) };
+  }, [allSales, isCloser, user?.id, currentMonthKey, tiers]);
   const openBonusDialog = (month: string, kind: BonusDrilldownKind) => setBonusDialog({ month, kind });
 
   const presetLabels: { key: SetterDatePreset; label: string }[] = [

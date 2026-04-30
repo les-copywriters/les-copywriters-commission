@@ -17,6 +17,7 @@ import { Download, Shield, FileSpreadsheet, RefreshCw, Trash2, AlertTriangle, Be
 
 import { toast } from "sonner";
 import { useSales, useUpdateCommission, useDeleteSale } from "@/hooks/useSales";
+import { useCommissionAuditLog } from "@/hooks/useCommissionAuditLog";
 import { useProfiles } from "@/hooks/useProfiles";
 import { Badge } from "@/components/ui/badge";
 import { useSyncJotform } from "@/hooks/useSyncJotform";
@@ -54,6 +55,7 @@ const AdminPage = () => {
   const deleteSale = useDeleteSale();
   const sync = useSyncJotform();
   const healthReport = useCommissionHealthReport();
+  const { data: auditLog = [] } = useCommissionAuditLog();
 
   const closerIds = useMemo(
     () => new Set(profiles.filter((p) => p.role === "closer").map((p) => p.id)),
@@ -82,7 +84,11 @@ const AdminPage = () => {
     if (!editing) return;
     const override = parseFloat(commOverride);
     if (isNaN(override)) return;
-    updateCommission.mutate({ id: editing.id, closerCommission: override }, {
+    updateCommission.mutate({ 
+      id: editing.id, 
+      closerCommission: override,
+      oldCommission: editing.closerCommission 
+    }, {
       onSuccess: () => {
         toast.success(t("admin.commUpdated"), { description: `Closer commission → ${fmt(override)}` });
         setEditing(null);
@@ -501,6 +507,38 @@ const AdminPage = () => {
             </Card>
 
             <BonusTiersCard />
+
+            {auditLog.length > 0 && (
+              <Card className="border-none shadow-premium rounded-[2.5rem] bg-background overflow-hidden">
+                <CardHeader className="flex flex-row items-center justify-between p-8 border-b border-border/40">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500"><TrendingDown className="h-4 w-4" /></div>
+                    <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground">Commission Overrides</CardTitle>
+                  </div>
+                  <Badge variant="outline" className="bg-amber-500/5 text-amber-600 border-amber-500/20 font-bold h-7 px-3 text-[10px]">
+                    {auditLog.length} logged
+                  </Badge>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="divide-y divide-border/30 max-h-[340px] overflow-y-auto custom-scrollbar">
+                    {auditLog.map(entry => (
+                      <div key={entry.id} className="px-8 py-4 flex items-start justify-between gap-4 hover:bg-muted/10 transition-colors">
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold truncate">{entry.clientName}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            by {entry.changedByName} · {new Date(entry.changedAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-xs text-muted-foreground line-through">{fmt(entry.oldAmount)}</p>
+                          <p className="text-sm font-black text-primary">{fmt(entry.newAmount)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       </div>

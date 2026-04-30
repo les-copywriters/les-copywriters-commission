@@ -29,7 +29,7 @@ const CHART_COLORS = {
   border: "rgba(128,128,128,0.12)",
 };
 
-const ContentCard = ({ title, icon: Icon, children, className, headerAction }: { title: string; icon?: any; children: React.ReactNode; className?: string; headerAction?: React.ReactNode }) => (
+const ContentCard = ({ title, icon: Icon, children, className, headerAction }: { title: string; icon?: React.ElementType; children: React.ReactNode; className?: string; headerAction?: React.ReactNode }) => (
   <Card className={cn("border-none shadow-premium rounded-[2.5rem] bg-background overflow-hidden", className)}>
     <CardHeader className="p-8 border-b border-border/40 flex flex-row items-center justify-between">
       <div className="flex items-center gap-3">

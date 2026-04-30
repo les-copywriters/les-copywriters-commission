@@ -144,7 +144,7 @@ function findProfileAnyRole(name: string, profiles: Profile[]): Profile | undefi
 function getAnswer(answers: Record<string, unknown>, fieldName: string): string {
   const entry = Object.values(answers).find(
     (a) => a !== null && typeof a === "object" && (a as Record<string, unknown>).name === fieldName,
-  ) as Record<string, any> | undefined;
+  ) as Record<string, unknown> | undefined;
 
   if (!entry?.answer) return "";
   const ans = entry.answer;
@@ -264,6 +264,11 @@ Deno.serve(async (req) => {
     const finalApiKey = global.jotform_api_key || JOTFORM_API_KEY;
     const finalFormId = global.jotform_form_id || JOTFORM_FORM_ID;
 
+    // Commission rates: DB value overrides the hardcoded constant so admin can
+    // adjust rates without a code deployment (Settings → API Keys → Global Integrations).
+    const closerRate = parseFloat(global.closer_commission_rate ?? "") || CLOSER_RATE;
+    const setterRate = parseFloat(global.setter_commission_rate ?? "") || SETTER_RATE;
+
     if (!finalApiKey || !finalFormId) {
       console.error("[sync-jotform] missing credentials (check Global Settings)");
       await finishRun(supabase, runId, "error", 0, 0, ["JOTFORM_API_KEY and JOTFORM_FORM_ID are not set in database or environment"]);
@@ -345,7 +350,7 @@ Deno.serve(async (req) => {
 
       if (!closerName || norm(closerName) === "autre") {
         skipped++;
-        const foundLabels = Object.values(answers).map((a: any) => `${a?.name}: "${a?.text}"`).filter(Boolean).join(" | ");
+        const foundLabels = Object.values(answers).map((a) => { const e = a as Record<string, unknown>; return `${e?.name}: "${e?.text}"`; }).filter(Boolean).join(" | ");
         errors.push(`Submission ${subId}: missing closer. Labels: [${foundLabels}]`);
         continue;
       }
@@ -354,7 +359,7 @@ Deno.serve(async (req) => {
 
       if (!product) {
         skipped++;
-        const foundLabels = Object.values(answers).map((a: any) => `${a?.name}: "${a?.text}"`).filter(Boolean).join(" | ");
+        const foundLabels = Object.values(answers).map((a) => { const e = a as Record<string, unknown>; return `${e?.name}: "${e?.text}"`; }).filter(Boolean).join(" | ");
         errors.push(`Submission ${subId}: missing product. Labels: [${foundLabels}]`);
         continue;
       }
@@ -412,9 +417,9 @@ Deno.serve(async (req) => {
       const createdAt  = typeof sub.created_at === "string" ? sub.created_at : "";
       const dateOfSale = createdAt ? createdAt.split(" ")[0] : new Date().toISOString().split("T")[0];
 
-      // Process and upsert every valid submission
-
-      const { error: insertError } = await supabase.from("sales").upsert({
+      // Safe fields that can be refreshed on every sync (never touch refunded/impaye
+      // on existing rows — those are set manually and must survive re-syncs).
+      const safePayload = {
         jotform_submission_id: subId,
         date:               dateOfSale,
         client_name:        get("fullName"),
@@ -425,18 +430,34 @@ Deno.serve(async (req) => {
         amount:             amountHT,
         amount_ttc:         amountHT,
         tax_amount:         0,
-        closer_commission:  Math.round(amountHT * CLOSER_RATE * 100) / 100,
-        setter_commission:  setterProfile ? Math.round(amountHT * SETTER_RATE * 100) / 100 : 0,
-        refunded:           false,
-        impaye:             false,
+        closer_commission:  Math.round(amountHT * closerRate * 100) / 100,
+        setter_commission:  setterProfile ? Math.round(amountHT * setterRate * 100) / 100 : 0,
         payment_platform:   get("paymentPlatform") || null,
         payment_type:       paymentType,
-      }, { onConflict: "jotform_submission_id" });
+      };
+
+      const isExisting = existingIds.has(subId) || nullSetterIds.has(subId);
+      let insertError: { message: string } | null = null;
+
+      if (isExisting) {
+        // Update only safe metadata — never reset refunded/impaye on existing rows.
+        const { error } = await supabase.from("sales").update(safePayload)
+          .eq("jotform_submission_id", subId);
+        insertError = error;
+      } else {
+        // Brand-new submission: insert with initial refunded/impaye defaults.
+        const { error } = await supabase.from("sales").insert({
+          ...safePayload,
+          refunded: false,
+          impaye:   false,
+        });
+        insertError = error;
+      }
 
       if (insertError) {
         errors.push(`Insert ${subId}: ${insertError.message}`);
       } else {
-        imported++;
+        if (isExisting) { updated++; } else { imported++; }
         existingIds.add(subId);
       }
     }
@@ -459,6 +480,67 @@ Deno.serve(async (req) => {
         updated_count: updated,
         imported_count: imported
       });
+    }
+
+    // ── Bonus milestone notifications ───────────────────────────────────────
+    // Only run when new sales were imported this cycle — no point checking
+    // if nothing changed.
+    if (imported > 0) {
+      try {
+        const currentMonthStart = new Date().toISOString().slice(0, 7) + "-01";
+        const currentMonthEnd   = new Date().toISOString().slice(0, 10);
+
+        // Fetch bonus tiers sorted ascending
+        const { data: tiers } = await supabase
+          .from("bonus_tiers")
+          .select("min_sales, bonus_amount")
+          .order("min_sales", { ascending: true });
+        if (tiers && tiers.length > 0) {
+          // Count validated sales per closer for the current month
+          const { data: monthlySales } = await supabase
+            .from("sales")
+            .select("closer_id")
+            .gte("date", currentMonthStart)
+            .lte("date", currentMonthEnd)
+            .eq("refunded", false)
+            .eq("impaye", false);
+
+          if (monthlySales) {
+            const countByCloser = new Map<string, number>();
+            for (const row of monthlySales) {
+              countByCloser.set(row.closer_id, (countByCloser.get(row.closer_id) ?? 0) + 1);
+            }
+
+            const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+            for (const [closerId, count] of countByCloser) {
+              // Find the highest tier this closer has exactly reached this run.
+              // "Exactly reached" = their count equals a tier's min_sales value,
+              // meaning they just crossed it (not already past it from before).
+              const hitTier = tiers.find(t => t.min_sales === count);
+              if (!hitTier) continue;
+
+              // Fire and forget — a failed notification never fails the sync.
+              fetch(`${supabaseUrl}/functions/v1/notify`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-cron-secret": Deno.env.get("SETTER_DASHBOARD_CRON_SECRET") ?? "",
+                },
+                body: JSON.stringify({
+                  event: "bonus_milestone",
+                  payload: {
+                    closerId,
+                    tierSales: hitTier.min_sales,
+                    bonusAmount: `€${hitTier.bonus_amount}`,
+                  },
+                }),
+              }).catch(e => console.warn("[sync-jotform] bonus notify failed:", e));
+            }
+          }
+        }
+      } catch (notifyErr) {
+        console.warn("[sync-jotform] bonus milestone check failed:", notifyErr);
+      }
     }
 
     return json({ ok: true, total: allSubs.length, imported, updated, skipped, nonActive, errors });

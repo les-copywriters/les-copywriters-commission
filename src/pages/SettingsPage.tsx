@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/i18n";
 import { supabase } from "@/lib/supabase";
@@ -163,6 +164,8 @@ function IntegrationRow({
 // ── Main component ────────────────────────────────────────────────────────────
 const SettingsPage = () => {
   const { user, session, logout, refreshProfile } = useAuth();
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab") ?? "profile";
   const { t, locale, setLocale } = useLanguage();
   const updateProfile = useUpdateProfile();
   const { data: globalSettings = [] } = useGlobalSettings();
@@ -170,6 +173,9 @@ const SettingsPage = () => {
   // Profile tab
   const [displayName, setDisplayName] = useState(user?.name ?? "");
   const [savingName, setSavingName]   = useState(false);
+
+  // Keep the input in sync if the profile is refreshed (e.g. after save or external change)
+  useEffect(() => { setDisplayName(user?.name ?? ""); }, [user?.name]);
 
   // Security tab
   const [currentPw, setCurrentPw]   = useState("");
@@ -411,7 +417,7 @@ const SettingsPage = () => {
           </div>
         </div>
 
-        <Tabs defaultValue="profile" className="space-y-10">
+        <Tabs defaultValue={initialTab} className="space-y-10">
           <TabsList className="bg-muted/30 border border-border/40 p-1.5 rounded-[1.25rem] flex w-fit h-auto gap-1">
             <TabsTrigger value="profile" className="rounded-xl px-6 py-2.5 text-[10px] font-black uppercase tracking-widest gap-2 transition-all data-[state=active]:bg-background data-[state=active]:shadow-lg data-[state=active]:text-primary">
               <UserCircle className="h-3.5 w-3.5" />{t("settings.tab.profile")}

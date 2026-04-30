@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+
 import {
   Activity,
   ArrowDownLeft,
@@ -46,6 +47,7 @@ import {
 } from "recharts";
 
 type DatePreset = "thisMonth" | "lastMonth" | "last3m" | "last6m" | "thisYear" | "allTime" | "custom";
+type SyncMutationResult = { results?: Array<{ errors?: string[]; rows_written?: number; records_seen?: number }> };
 
 const CHART_COLORS = {
   primary: "hsl(var(--primary))",
@@ -246,9 +248,34 @@ const SetterDashboardPage = () => {
   const syncErrorMessage = error instanceof Error ? error.message : t("setterDashboard.loadErrorBody");
   const looksLikeMissingTable = /setter_(call|funnel)_metrics_daily|schema cache/i.test(syncErrorMessage);
 
+  const myMapping = isSetter ? setterMappings.find((m) => m.profileId === user?.id) : null;
+  const needsOnboarding = isSetter && (!myMapping || (!myMapping.aircallUserId && !myMapping.iclosedUserId));
+
   return (
     <AppLayout>
       <div className="space-y-10 animate-in fade-in duration-500">
+
+        {needsOnboarding && (
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-500">
+            <div className="flex items-start gap-4">
+              <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-black text-sm text-amber-600">No integrations configured yet</p>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Connect your Aircall and iClosed accounts so your calls and meeting outcomes sync automatically.
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              className="shrink-0 rounded-xl h-10 px-5 font-black uppercase tracking-widest text-[10px] shadow-lg shadow-amber-500/20 bg-amber-500 hover:bg-amber-600 text-white"
+              onClick={() => navigate("/settings?tab=apikeys")}
+            >
+              Set Up Now
+            </Button>
+          </div>
+        )}
+
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-5">
           <div>
             <div className="flex items-center gap-2.5">
@@ -298,7 +325,7 @@ const SetterDashboardPage = () => {
                     { source: "aircall", profileId: scopedSetterId },
                     {
                       onSuccess: (data) => {
-                        const r = (data as any)?.results?.[0];
+                        const r = (data as SyncMutationResult)?.results?.[0];
                         if (r?.errors?.length) toast.error(`Aircall: ${r.errors[0]}`);
                         else if (r?.rows_written > 0) toast.success(`Aircall synced — ${r.rows_written} rows written`);
                         else if (r?.records_seen > 0) toast.success("Aircall sync complete — all calls are up to date.");
@@ -323,7 +350,7 @@ const SetterDashboardPage = () => {
                     { source: "iclosed", profileId: scopedSetterId },
                     {
                       onSuccess: (data) => {
-                        const r = (data as any)?.results?.[0];
+                        const r = (data as SyncMutationResult)?.results?.[0];
                         if (r?.errors?.length) toast.error(`iClosed: ${r.errors[0]}`);
                         else if (r?.rows_written > 0) toast.success(`iClosed synced — ${r.rows_written} rows written`);
                         else toast.success("iClosed sync complete — all events are up to date.");

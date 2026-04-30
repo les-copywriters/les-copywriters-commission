@@ -9,7 +9,7 @@ Deno.serve(async (req) => {
   if (!caller.userId) return json({ ok: false, error: "Unauthorized" }, 401);
 
   let body: {
-    source?: any;
+    source?: string;
     start_date?: string;
     end_date?: string;
     profile_id?: string;
@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
   if (body.validate_only) {
     if (caller.role !== "admin") return json({ ok: false, error: "Only admins can validate global keys" }, 403);
     const global = await getGlobalSettings(supabase);
-    const results: Record<string, any> = {};
+    const results: Record<string, { ok: boolean; status?: number; error?: string }> = {};
 
     // Test Aircall
     try {

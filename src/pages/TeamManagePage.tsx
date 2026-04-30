@@ -13,12 +13,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Pencil, UserPlus, UserCog, RefreshCw, Shield, Search, Filter } from "lucide-react";
+import { Pencil, UserPlus, UserCog, RefreshCw, Shield, Search, Trash2, AlertTriangle } from "lucide-react";
 
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { User, UserRole } from "@/types";
 import { useAuth } from "@/context/AuthContext";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -57,7 +58,9 @@ const TeamManagePage = () => {
   const [inviteEmail, setInviteEmail] = useState("");
   const [invitePassword, setInvitePassword] = useState("");
   const [inviteRole, setInviteRole] = useState<UserRole>("closer");
-  const [inviting, setInviting]           = useState(false);
+  const [inviting, setInviting]     = useState(false);
+  const [removing, setRemoving]     = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<User | null>(null);
 
   const loadErrorMessage = profilesError instanceof Error ? profilesError.message : "Failed to load team members.";
 
@@ -113,6 +116,25 @@ const TeamManagePage = () => {
     setInviting(false);
   };
 
+  const handleRemove = async () => {
+    if (!removeTarget) return;
+    setRemoving(true);
+    const { data, error } = await supabase.functions.invoke("deactivate-user", {
+      body: { userId: removeTarget.id },
+    });
+    const errMsg = error
+      ? ((await (error as { context?: { json?: () => Promise<{ error?: string }> } }).context?.json?.().catch(() => null))?.error ?? error.message)
+      : (data?.error as string | undefined);
+    if (errMsg) {
+      toast.error(errMsg);
+    } else {
+      toast.success(`${removeTarget.name} has been removed. Their commission history is preserved.`);
+      setRemoveTarget(null);
+      queryClient.invalidateQueries({ queryKey: ["profiles"] });
+    }
+    setRemoving(false);
+  };
+
   return (
     <AppLayout>
       <div className="space-y-10 animate-in fade-in duration-500">
@@ -148,7 +170,7 @@ const TeamManagePage = () => {
             
             <Tabs 
               value={activeTab} 
-              onValueChange={(v) => setActiveTab(v as any)} 
+              onValueChange={(v) => setActiveTab(v as "all" | UserRole)} 
               className="w-full lg:w-auto"
             >
               <TabsList className="bg-muted/30 border border-border/40 p-1 rounded-xl h-12 w-full sm:w-auto gap-1">
@@ -232,18 +254,24 @@ const TeamManagePage = () => {
                         </TableCell>
                         <TableCell className="py-6 pr-10 text-right">
                           {profile.id !== currentUser?.id && (
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              onClick={() => {
-                                setEditing(profile);
-                                setEditName(profile.name);
-                                setEditRole(profile.role);
-                              }}
-                              className="h-10 w-10 rounded-2xl hover:bg-primary/10 hover:text-primary transition-all active:scale-90"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => { setEditing(profile); setEditName(profile.name); setEditRole(profile.role); }}
+                                className="h-10 w-10 rounded-2xl hover:bg-primary/10 hover:text-primary transition-all active:scale-90"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setRemoveTarget(profile)}
+                                className="h-10 w-10 rounded-2xl hover:bg-rose-500/10 hover:text-rose-500 transition-all active:scale-90"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           )}
                         </TableCell>
                       </TableRow>
@@ -345,6 +373,38 @@ const TeamManagePage = () => {
           </div>
         </DialogContent>
       </Dialog>
+      <AlertDialog open={!!removeTarget} onOpenChange={(open) => !open && setRemoveTarget(null)}>
+        <AlertDialogContent className="rounded-[2.5rem] border-none shadow-2xl p-0 overflow-hidden">
+          <div className="p-10">
+            <AlertDialogHeader className="items-center text-center space-y-6">
+              <div className="h-20 w-20 bg-rose-500/10 rounded-full flex items-center justify-center">
+                <Trash2 className="h-10 w-10 text-rose-500" />
+              </div>
+              <div>
+                <AlertDialogTitle className="text-2xl font-black tracking-tight">Remove {removeTarget?.name}?</AlertDialogTitle>
+                <AlertDialogDescription className="text-base font-medium mt-3 leading-relaxed max-w-xs">
+                  Their login will be revoked immediately. All historical commission data is preserved.
+                  <span className="text-rose-500 font-black uppercase tracking-widest text-[10px] block mt-4">Permanent Action</span>
+                </AlertDialogDescription>
+              </div>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="flex-col sm:flex-row gap-4 mt-10">
+              <AlertDialogCancel className="w-full h-14 rounded-2xl border-none bg-muted/50 hover:bg-muted font-black uppercase tracking-widest text-xs transition-all">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleRemove}
+                disabled={removing}
+                className="w-full h-14 rounded-2xl bg-rose-500 hover:bg-rose-600 font-black uppercase tracking-widest text-xs shadow-xl shadow-rose-500/20 transition-all hover:scale-[1.02] active:scale-95"
+              >
+                {removing ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
+                {removing ? "Removing..." : "Remove Member"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </AppLayout>
   );
 };

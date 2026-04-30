@@ -181,7 +181,7 @@ const AppSidebar = ({
           {isAdmin && (
             <NavGroup
               label="Admin Hub"
-              items={adminItems.filter(item => item.to !== '/coaching')}
+              items={adminItems}
               pathname={pathname}
               onNavigate={onNavigate}
             />

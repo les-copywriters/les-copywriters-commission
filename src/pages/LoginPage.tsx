@@ -2,11 +2,12 @@ import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/i18n";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/lib/supabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Lock, Mail, Sparkles, ShieldCheck, PieChart, AlertCircle } from "lucide-react";
+import { Lock, Mail, Sparkles, ShieldCheck, PieChart, AlertCircle, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const LoginPage = () => {
@@ -14,6 +15,12 @@ const LoginPage = () => {
   const [password, setPassword] = useState("");
   const [error, setError]       = useState<string | null>(null);
   const [loading, setLoading]   = useState(false);
+
+  const [resetMode, setResetMode]     = useState(false);
+  const [resetEmail, setResetEmail]   = useState("");
+  const [resetSent, setResetSent]     = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+
   const { login } = useAuth();
   const navigate  = useNavigate();
   const { t }     = useLanguage();
@@ -30,6 +37,21 @@ const LoginPage = () => {
       setError("An unexpected error occurred. Please try again.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetEmail.trim()) return;
+    setResetLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail.trim().toLowerCase(), {
+      redirectTo: `${window.location.origin}/password-reset`,
+    });
+    setResetLoading(false);
+    if (error) {
+      setError(error.message);
+    } else {
+      setResetSent(true);
     }
   };
 
@@ -105,69 +127,98 @@ const LoginPage = () => {
         </div>
 
         <div className="w-full max-w-[400px] space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-1000">
-          <div className="space-y-2">
-            <h2 className="text-3xl font-black tracking-tight">{t("login.title")}</h2>
-            <p className="text-muted-foreground font-medium text-base leading-relaxed">{t("login.description")}</p>
-          </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-[10px] font-black uppercase tracking-[0.1em] text-muted-foreground ml-1">{t("login.email")}</Label>
-              <div className="group relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground transition-colors group-focus-within:text-primary pointer-events-none" />
-                <Input
-                  id="email"
-                  type="email"
-                  className="pl-12 h-14 rounded-2xl border-2 bg-muted/20 focus-visible:ring-primary/20 focus-visible:border-primary transition-all font-medium text-md"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="name@company.com"
-                  required
-                  autoComplete="email"
-                />
+          {!resetMode ? (
+            <>
+              <div className="space-y-2">
+                <h2 className="text-3xl font-black tracking-tight">{t("login.title")}</h2>
+                <p className="text-muted-foreground font-medium text-base leading-relaxed">{t("login.description")}</p>
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between ml-1 leading-none">
-                <Label htmlFor="password" className="text-[10px] font-black uppercase tracking-[0.1em] text-muted-foreground">{t("login.password")}</Label>
-                <button type="button" className="text-[10px] font-black uppercase tracking-widest text-primary hover:text-primary/80 transition-colors">Forgot?</button>
-              </div>
-              <div className="group relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground transition-colors group-focus-within:text-primary pointer-events-none" />
-                <Input
-                  id="password"
-                  type="password"
-                  className="pl-12 h-14 rounded-2xl border-2 bg-muted/20 focus-visible:ring-primary/20 focus-visible:border-primary transition-all font-medium"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  autoComplete="current-password"
-                />
-              </div>
-            </div>
-
-            {error && (
-              <div className="rounded-[1.5rem] bg-rose-500/5 border border-rose-500/10 p-4 flex items-center gap-3 animate-in shake duration-500">
-                <AlertCircle className="h-5 w-5 text-rose-500 shrink-0" />
-                <p className="text-sm font-bold text-rose-500 leading-tight">{error}</p>
-              </div>
-            )}
-
-            <Button type="submit" className="w-full h-14 rounded-2xl text-[13px] font-black uppercase tracking-[0.15em] shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all" disabled={loading}>
-              {loading ? (
-                <div className="flex items-center gap-2">
-                  <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  {t("common.loading")}
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-[10px] font-black uppercase tracking-[0.1em] text-muted-foreground ml-1">{t("login.email")}</Label>
+                  <div className="group relative">
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground transition-colors group-focus-within:text-primary pointer-events-none" />
+                    <Input id="email" type="email" className="pl-12 h-14 rounded-2xl border-2 bg-muted/20 focus-visible:ring-primary/20 focus-visible:border-primary transition-all font-medium text-md" value={email} onChange={e => setEmail(e.target.value)} placeholder="name@company.com" required autoComplete="email" />
+                  </div>
                 </div>
-              ) : t("login.submit")}
-            </Button>
-          </form>
 
-          <p className="text-center text-xs text-muted-foreground font-medium pt-4">
-            Authorized personnel only. Access monitored.
-          </p>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between ml-1 leading-none">
+                    <Label htmlFor="password" className="text-[10px] font-black uppercase tracking-[0.1em] text-muted-foreground">{t("login.password")}</Label>
+                    <button type="button" onClick={() => { setResetMode(true); setError(null); setResetEmail(email); }} className="text-[10px] font-black uppercase tracking-widest text-primary hover:text-primary/80 transition-colors">Forgot?</button>
+                  </div>
+                  <div className="group relative">
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground transition-colors group-focus-within:text-primary pointer-events-none" />
+                    <Input id="password" type="password" className="pl-12 h-14 rounded-2xl border-2 bg-muted/20 focus-visible:ring-primary/20 focus-visible:border-primary transition-all font-medium" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required autoComplete="current-password" />
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="rounded-[1.5rem] bg-rose-500/5 border border-rose-500/10 p-4 flex items-center gap-3 animate-in shake duration-500">
+                    <AlertCircle className="h-5 w-5 text-rose-500 shrink-0" />
+                    <p className="text-sm font-bold text-rose-500 leading-tight">{error}</p>
+                  </div>
+                )}
+
+                <Button type="submit" className="w-full h-14 rounded-2xl text-[13px] font-black uppercase tracking-[0.15em] shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all" disabled={loading}>
+                  {loading ? <div className="flex items-center gap-2"><div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{t("common.loading")}</div> : t("login.submit")}
+                </Button>
+              </form>
+
+              <p className="text-center text-xs text-muted-foreground font-medium pt-4">Authorized personnel only. Access monitored.</p>
+            </>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <h2 className="text-3xl font-black tracking-tight">Reset Password</h2>
+                <p className="text-muted-foreground font-medium text-base leading-relaxed">
+                  Enter your email and we'll send a reset link.
+                </p>
+              </div>
+
+              {resetSent ? (
+                <div className="space-y-6">
+                  <div className="rounded-[1.5rem] bg-emerald-500/5 border border-emerald-500/10 p-6 flex flex-col items-center gap-4 text-center animate-in fade-in duration-500">
+                    <CheckCircle2 className="h-10 w-10 text-emerald-500" />
+                    <div>
+                      <p className="font-black text-base">Email sent</p>
+                      <p className="text-sm text-muted-foreground mt-1">Check your inbox for <span className="font-bold text-foreground">{resetEmail}</span> and follow the link to set a new password.</p>
+                    </div>
+                  </div>
+                  <Button variant="ghost" className="w-full h-12 rounded-2xl font-black uppercase tracking-widest text-xs gap-2" onClick={() => { setResetMode(false); setResetSent(false); setError(null); }}>
+                    <ArrowLeft className="h-4 w-4" /> Back to login
+                  </Button>
+                </div>
+              ) : (
+                <form onSubmit={handleResetPassword} className="space-y-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="resetEmail" className="text-[10px] font-black uppercase tracking-[0.1em] text-muted-foreground ml-1">Email Address</Label>
+                    <div className="group relative">
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground transition-colors group-focus-within:text-primary pointer-events-none" />
+                      <Input id="resetEmail" type="email" className="pl-12 h-14 rounded-2xl border-2 bg-muted/20 focus-visible:ring-primary/20 focus-visible:border-primary transition-all font-medium" value={resetEmail} onChange={e => setResetEmail(e.target.value)} placeholder="name@company.com" required autoComplete="email" />
+                    </div>
+                  </div>
+
+                  {error && (
+                    <div className="rounded-[1.5rem] bg-rose-500/5 border border-rose-500/10 p-4 flex items-center gap-3">
+                      <AlertCircle className="h-5 w-5 text-rose-500 shrink-0" />
+                      <p className="text-sm font-bold text-rose-500 leading-tight">{error}</p>
+                    </div>
+                  )}
+
+                  <Button type="submit" className="w-full h-14 rounded-2xl text-[13px] font-black uppercase tracking-[0.15em] shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all" disabled={resetLoading}>
+                    {resetLoading ? <div className="flex items-center gap-2"><div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Sending...</div> : "Send Reset Link"}
+                  </Button>
+
+                  <Button type="button" variant="ghost" className="w-full h-12 rounded-2xl font-black uppercase tracking-widest text-xs gap-2" onClick={() => { setResetMode(false); setError(null); }}>
+                    <ArrowLeft className="h-4 w-4" /> Back to login
+                  </Button>
+                </form>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -85,7 +85,41 @@ Deno.serve(async (req) => {
   }
 
   const finishedAt = new Date().toISOString();
-  const allOk = Object.values(results).every((r: any) => r.ok !== false);
+  const allOk = Object.values(results).every((r) => (r as { ok?: boolean }).ok !== false);
+
+  // ── Sync failure alerting ───────────────────────────────────────────────────
+  // After each run, check if any source has failed 3+ consecutive times and
+  // fire an email alert to all admins via the notify function.
+  try {
+    const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
+    const sb = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      { auth: { autoRefreshToken: false, persistSession: false } },
+    );
+
+    for (const source of ["jotform", "aircall", "iclosed"]) {
+      const { data: recentRuns } = await sb
+        .from("integration_sync_runs")
+        .select("status, errors")
+        .eq("source", source)
+        .order("started_at", { ascending: false })
+        .limit(3);
+
+      if (!recentRuns || recentRuns.length < 3) continue;
+      const allFailed = recentRuns.every(r => r.status === "error");
+      if (!allFailed) continue;
+
+      const lastError = (recentRuns[0]?.errors as string[] | null)?.[0] ?? "Unknown error";
+      await invokeCronFunction("notify", cronSecret, {
+        event: "sync_failure",
+        payload: { source, consecutiveFails: 3, lastError },
+      });
+      console.log(`[auto-sync] sent sync_failure alert for ${source}`);
+    }
+  } catch (alertErr) {
+    console.warn("[auto-sync] failed to send sync failure alert:", alertErr);
+  }
 
   return json({ ok: allOk, startedAt, finishedAt, results });
 });

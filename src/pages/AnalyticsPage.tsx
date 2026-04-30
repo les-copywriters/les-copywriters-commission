@@ -57,7 +57,7 @@ const CHART_COLORS = {
   border:  "rgba(128,128,128,0.12)",
 };
 
-const ChartCard = ({ title, icon: Icon, children }: { title: string; icon?: any; children: React.ReactNode }) => (
+const ChartCard = ({ title, icon: Icon, children }: { title: string; icon?: React.ElementType; children: React.ReactNode }) => (
   <Card className="border-none shadow-sm bg-background/50 backdrop-blur-sm overflow-hidden rounded-2xl">
     <div className="px-6 pt-5 pb-0 flex items-center gap-2.5">
       {Icon && <div className="p-1.5 rounded-md bg-primary/10 text-primary"><Icon className="h-3.5 w-3.5" /></div>}

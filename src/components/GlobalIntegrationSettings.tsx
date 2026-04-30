@@ -20,6 +20,8 @@ const EXPECTED_KEYS = [
   { key: 'iclosed_api_base_url', label: 'Global iClosed API Base URL', secret: false },
   { key: 'jotform_api_key', label: 'Global Jotform API Key', secret: true },
   { key: 'jotform_form_id', label: 'Global Jotform Form ID', secret: false },
+  { key: 'closer_commission_rate', label: 'Closer Commission Rate (default 0.088 = 8.8%)', secret: false },
+  { key: 'setter_commission_rate', label: 'Setter Commission Rate (default 0.01 = 1.0%)', secret: false },
 ];
 
 const GlobalIntegrationSettings = () => {
@@ -59,11 +61,12 @@ const GlobalIntegrationSettings = () => {
     queryFn: async () => {
       const { data } = await supabaseClient
         .from("integration_sync_runs")
-        .select("id, service, source, status, finished_at, rows_written, started_at")
+        .select("id, service, source, status, finished_at, rows_written, started_at, errors")
         .order("started_at", { ascending: false })
         .limit(10);
-      
-      const latest: Record<string, any> = {};
+
+      type SyncRun = NonNullable<typeof data>[number];
+      const latest: Record<string, SyncRun> = {};
       data?.forEach(run => {
         const key = run.service || run.source;
         if (!latest[key]) latest[key] = run;
@@ -92,6 +95,17 @@ const GlobalIntegrationSettings = () => {
   const handleSave = (key: string) => {
     const value = localValues[key] ?? settings.find(s => s.key === key)?.value;
     const config = EXPECTED_KEYS.find(k => k.key === key);
+
+    // Validation for commission rates
+    if (key === 'closer_commission_rate' || key === 'setter_commission_rate') {
+      const numValue = parseFloat(value ?? "0");
+      if (numValue > 1) {
+        toast.error(`Invalid rate for ${config?.label}`, { 
+          description: "Commission rates must be decimals (e.g., 0.088 for 8.8%). Values > 1 are not allowed." 
+        });
+        return;
+      }
+    }
     
     updateSetting.mutate(
       { 
@@ -232,6 +246,100 @@ const GlobalIntegrationSettings = () => {
           })}
         </div>
       </CardContent>
+
+      {/* Connection test results */}
+      {testResults && (
+        <div className="px-8 pb-4 space-y-3">
+          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+            <Activity className="h-3.5 w-3.5" /> Connection Test Results
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {Object.entries(testResults).map(([source, result]) => (
+              <div
+                key={source}
+                className={cn(
+                  "flex items-start gap-3 rounded-2xl border px-4 py-3",
+                  result.ok
+                    ? "border-emerald-500/20 bg-emerald-500/5"
+                    : "border-rose-500/20 bg-rose-500/5",
+                )}
+              >
+                {result.ok
+                  ? <CheckCircle2 className="h-4 w-4 text-emerald-500 mt-0.5 shrink-0" />
+                  : <XCircle className="h-4 w-4 text-rose-500 mt-0.5 shrink-0" />}
+                <div className="min-w-0">
+                  <p className="text-sm font-black uppercase tracking-widest">{source}</p>
+                  {result.error && (
+                    <p className="text-[11px] text-rose-500 font-medium mt-0.5 line-clamp-2">{result.error}</p>
+                  )}
+                  {result.status && (
+                    <p className="text-[11px] text-muted-foreground mt-0.5">HTTP {result.status}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Sync run history */}
+      {syncStatus && Object.keys(syncStatus.latest).length > 0 && (
+        <div className="px-8 pb-8 space-y-3">
+          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+            <History className="h-3.5 w-3.5" /> Last Sync Run Per Integration
+          </p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {["jotform", "aircall", "iclosed"].map((src) => {
+              const run = syncStatus.latest[src];
+              if (!run) return (
+                <div key={src} className="rounded-2xl border border-border/30 bg-muted/10 px-4 py-3">
+                  <p className="text-sm font-black uppercase tracking-widest text-muted-foreground/50">{src}</p>
+                  <p className="text-[11px] text-muted-foreground mt-1 italic">No run recorded</p>
+                </div>
+              );
+
+              const ageMs = run.started_at ? Date.now() - new Date(run.started_at).getTime() : null;
+              const ageMin = ageMs !== null ? Math.floor(ageMs / 60000) : null;
+              const ageLabel = ageMin === null ? "—"
+                : ageMin < 1 ? "just now"
+                : ageMin < 60 ? `${ageMin}m ago`
+                : ageMin < 1440 ? `${Math.floor(ageMin / 60)}h ago`
+                : `${Math.floor(ageMin / 1440)}d ago`;
+
+              const isStale = ageMin !== null && ageMin > 360;
+              const isError = run.status === "error" || run.status === "partial";
+              const tone = isError || isStale ? "rose" : "emerald";
+              const firstError = Array.isArray(run.errors) ? (run.errors as string[])[0] : null;
+
+              return (
+                <div
+                  key={src}
+                  className={cn(
+                    "rounded-2xl border px-4 py-3 space-y-2",
+                    tone === "rose" ? "border-rose-500/20 bg-rose-500/5" : "border-emerald-500/20 bg-emerald-500/5",
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-black uppercase tracking-widest">{src}</p>
+                    <span className={cn(
+                      "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border",
+                      tone === "rose" ? "border-rose-500/30 text-rose-600 bg-rose-500/10" : "border-emerald-500/30 text-emerald-600 bg-emerald-500/10",
+                    )}>
+                      {run.status}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    {ageLabel} · {run.rows_written ?? 0} rows written
+                  </p>
+                  {firstError && (
+                    <p className="text-[11px] text-rose-500 font-medium leading-tight line-clamp-2">{firstError}</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </Card>
   );
 };

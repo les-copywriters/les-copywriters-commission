@@ -100,7 +100,7 @@ const CoachingPage = () => {
   const toggleCall = (id: string) => {
     setSelectedCallIds((current) => {
       const next = new Set(current);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) { next.delete(id); } else { next.add(id); }
       return next;
     });
   };

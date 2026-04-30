@@ -18,7 +18,7 @@ const getInitialLocale = (): Locale => {
   try {
     const stored = localStorage.getItem("locale");
     if (stored === "en" || stored === "fr") return stored;
-  } catch {}
+  } catch { /* ignore – localStorage unavailable */ }
   return "fr";
 };
 
@@ -27,7 +27,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
 
   const setLocale = useCallback((l: Locale) => {
     setLocaleState(l);
-    try { localStorage.setItem("locale", l); } catch {}
+    try { localStorage.setItem("locale", l); } catch { /* ignore */ }
   }, []);
 
   const t = useCallback((key: string): string => {

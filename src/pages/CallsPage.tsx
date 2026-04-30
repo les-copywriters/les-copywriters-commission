@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAnalyzeCall, useCallAnalyses, useSyncFathom } from "@/hooks/useCallAnalysis";
+import { useProfiles } from "@/hooks/useProfiles";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/i18n";
 import { CallAnalysis } from "@/types";
@@ -97,7 +98,14 @@ const CallsPage = () => {
   const isAdmin = user?.role === "admin";
   const isCloser = user?.role === "closer";
 
-  const { data: calls = [], isLoading } = useCallAnalyses(isAdmin ? undefined : user?.id);
+  const { data: profiles = [] } = useProfiles();
+  const closers = profiles.filter(p => p.role === "closer");
+  const closerNameMap = new Map(profiles.map(p => [p.id, p.name]));
+
+  const [closerFilter, setCloserFilter] = useState("all");
+  const { data: calls = [], isLoading } = useCallAnalyses(
+    isAdmin ? (closerFilter !== "all" ? closerFilter : undefined) : user?.id
+  );
   const syncFathom = useSyncFathom();
   const analyzeCall = useAnalyzeCall();
 
@@ -167,6 +175,7 @@ const CallsPage = () => {
     transcriptFilter !== "all",
     sortBy !== "newest",
     query.trim().length > 0,
+    isAdmin && closerFilter !== "all",
   ].filter(Boolean).length;
 
   const handleSync = () => {
@@ -236,8 +245,20 @@ const CallsPage = () => {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3">
-
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+            {isAdmin && (
+              <Select value={closerFilter} onValueChange={setCloserFilter}>
+                <SelectTrigger className="h-10 w-44 rounded-xl border-border/60 text-sm">
+                  <SelectValue placeholder="All closers" />
+                </SelectTrigger>
+                <SelectContent className="rounded-2xl">
+                  <SelectItem value="all">All Closers</SelectItem>
+                  {closers.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             {(isCloser || isAdmin) && (
               <Button
                 variant="outline"
@@ -421,6 +442,7 @@ const CallsPage = () => {
                       setScoreFilter("all");
                       setTranscriptFilter("all");
                       setSortBy("newest");
+                      setCloserFilter("all");
                       setVisible(12);
                     }}
                   >
@@ -464,6 +486,11 @@ const CallsPage = () => {
                                   {status.label}
                                 </Badge>
                                 {call.score !== null ? <ScorePill score={call.score} /> : null}
+                                {isAdmin && (
+                                  <Badge variant="outline" className="text-[11px] font-semibold text-muted-foreground border-border/60 bg-muted/20">
+                                    {closerNameMap.get(call.closerId) ?? "Unknown"}
+                                  </Badge>
+                                )}
                                 {!call.transcript && (
                                   <Badge variant="outline" className="text-[11px] font-semibold text-muted-foreground border-muted/60">
                                     <VideoOff className="h-3 w-3 mr-1" />

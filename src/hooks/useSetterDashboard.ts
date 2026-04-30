@@ -288,9 +288,9 @@ export type SetterCallRecord = {
   notes: string | null;
   transcription: string | null;
   summary: string | null;
-  aiTopics: any;
-  aiSentiments: any;
-  talkListenRatio: any;
+  aiTopics: unknown;
+  aiSentiments: unknown;
+  talkListenRatio: unknown;
 };
 
 function extractNameFromPayload(payload: unknown): string | null {

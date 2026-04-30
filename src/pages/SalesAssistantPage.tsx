@@ -22,10 +22,6 @@ const SalesAssistantPage = () => {
   const canAccessAssistant = user?.role === "admin" || user?.role === "closer";
   const [searchParams, setSearchParams] = useSearchParams();
 
-  if (!canAccessAssistant) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
   const [selectedCloserId, setSelectedCloserId] = useState(() => searchParams.get("closer") ?? "");
   const [selectedCallId, setSelectedCallId] = useState(() => searchParams.get("call"));
   const [selectedThreadId, setSelectedThreadId] = useState(() => searchParams.get("thread"));
@@ -45,7 +41,7 @@ const SalesAssistantPage = () => {
   });
 
   const assistantCloserId = isAdmin ? (selectedCloserId || "") : (user?.id ?? "");
-  const { data: calls = [], isLoading } = useCallAnalyses(assistantCloserId || undefined);
+  const { data: calls = [] } = useCallAnalyses(assistantCloserId || undefined);
 
   const selectedCall = useMemo(
     () => calls.find((call) => call.id === selectedCallId) ?? null,
@@ -82,6 +78,10 @@ const SalesAssistantPage = () => {
 
     setSearchParams(next, { replace: true });
   }, [searchParams, selectedCallId, selectedCloserId, selectedThreadId, setSearchParams]);
+
+  if (!canAccessAssistant) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   return (
     <AppLayout>
