@@ -151,15 +151,17 @@ const MessageBubble = ({
             <TypingDots />
           ) : isAssistant ? (
             <ReactMarkdown
-              className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed
-                [&_p]:mb-3 [&_p:last-child]:mb-0
-                [&_strong]:font-bold [&_strong]:text-foreground
-                [&_em]:italic
-                [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-3 [&_ol>li]:mb-1.5
-                [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-3 [&_ul>li]:mb-1.5
-                [&_h1]:text-base [&_h1]:font-black [&_h1]:mb-2
-                [&_h2]:text-sm [&_h2]:font-black [&_h2]:mb-2
-                [&_h3]:text-sm [&_h3]:font-bold [&_h3]:mb-1"
+              components={{
+                p:      ({ children }) => <p className="mb-3 last:mb-0 text-sm leading-relaxed">{children}</p>,
+                strong: ({ children }) => <strong className="font-bold text-foreground">{children}</strong>,
+                em:     ({ children }) => <em className="italic">{children}</em>,
+                ol:     ({ children }) => <ol className="list-decimal pl-5 mb-3 space-y-1.5 text-sm">{children}</ol>,
+                ul:     ({ children }) => <ul className="list-disc pl-5 mb-3 space-y-1.5 text-sm">{children}</ul>,
+                li:     ({ children }) => <li className="leading-relaxed">{children}</li>,
+                h1:     ({ children }) => <h1 className="text-base font-black mb-2">{children}</h1>,
+                h2:     ({ children }) => <h2 className="text-sm font-black mb-2">{children}</h2>,
+                h3:     ({ children }) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
+              }}
             >
               {message.content}
             </ReactMarkdown>
@@ -247,17 +249,6 @@ const SalesAssistantPanel = ({
     textarea.style.height = `${Math.min(textarea.scrollHeight, 220)}px`;
   }, [draft]);
 
-  // Auto-scroll to the latest message whenever the list grows
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [combinedMessages.length]);
-
-  // After every render, record how many messages are currently visible
-  // so the next render knows which ones are genuinely new
-  useEffect(() => {
-    seenCount.current = combinedMessages.length;
-  });
-
   const handleSend = (event?: FormEvent) => {
     event?.preventDefault();
     const message = draft.trim();
@@ -313,6 +304,17 @@ const SalesAssistantPanel = ({
     }
     return optimistic;
   }, [messages, optimisticPrompt]);
+
+  // Auto-scroll whenever the list grows (new message or typing indicator)
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [combinedMessages.length]);
+
+  // Track how many messages were visible after each render so only
+  // genuinely new ones get the slide-in animation next render
+  useEffect(() => {
+    seenCount.current = combinedMessages.length;
+  });
 
   const groupedThreads = useMemo(() => {
     const activeThreads = threads.filter(t => t.isArchived === showArchived);
