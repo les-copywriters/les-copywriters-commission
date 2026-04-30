@@ -1,3 +1,16 @@
+/**
+ * invite-user — creates a new team member and sends them an invitation email.
+ *
+ * The user receives an email with a secure link. Clicking it takes them to
+ * /password-reset where they set their own password. No temporary password
+ * is ever generated or communicated by the admin.
+ *
+ * Requires SITE_URL secret so the invite email redirects to the correct domain:
+ *   supabase secrets set SITE_URL=https://your-app.vercel.app
+ *
+ * Also add https://your-app.vercel.app/password-reset to Supabase Auth →
+ * URL Configuration → Redirect URLs.
+ */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -15,32 +28,22 @@ const json = (body: unknown, status = 200) =>
   });
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
-
-  if (req.method !== "POST") {
-    return json({ ok: false, error: "Method not allowed" }, 405);
-  }
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method !== "POST") return json({ ok: false, error: "Method not allowed" }, 405);
 
   try {
     // ── Verify caller is an authenticated admin ─────────────────────────────
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return json({ ok: false, error: "Missing authorization header" }, 401);
-    }
+    if (!authHeader) return json({ ok: false, error: "Missing authorization header" }, 401);
 
-    // Use the caller's JWT to look up their profile
     const callerClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
+      { global: { headers: { Authorization: authHeader } } },
     );
 
     const { data: { user: caller }, error: callerError } = await callerClient.auth.getUser();
-    if (callerError || !caller) {
-      return json({ ok: false, error: "Unauthorized" }, 401);
-    }
+    if (callerError || !caller) return json({ ok: false, error: "Unauthorized" }, 401);
 
     const { data: callerProfile, error: profileError } = await callerClient
       .from("profiles")
@@ -48,67 +51,50 @@ Deno.serve(async (req) => {
       .eq("id", caller.id)
       .single();
 
-    if (profileError) {
-      return json({ ok: false, error: profileError.message }, 403);
-    }
-
-    if (callerProfile?.role !== "admin") {
-      return json({ ok: false, error: "Admin access required" }, 403);
-    }
+    if (profileError) return json({ ok: false, error: profileError.message }, 403);
+    if (callerProfile?.role !== "admin") return json({ ok: false, error: "Admin access required" }, 403);
 
     // ── Parse and validate request body ─────────────────────────────────────
-    const { name, email, password, role } = await req.json() as {
+    const { name, email, role } = await req.json() as {
       name: string;
       email: string;
-      password: string;
       role: "closer" | "setter" | "admin";
     };
 
-    const normalizedName = name?.trim() ?? "";
+    const normalizedName  = name?.trim() ?? "";
     const normalizedEmail = email?.trim().toLowerCase() ?? "";
-    const normalizedPassword = password ?? "";
 
-    if (!normalizedName || !normalizedEmail || !normalizedPassword || !role) {
-      return json({ ok: false, error: "name, email, password and role are required" }, 400);
-    }
-    if (!EMAIL_REGEX.test(normalizedEmail)) {
-      return json({ ok: false, error: "Invalid email" }, 400);
-    }
-    if (normalizedPassword.length < 8) {
-      return json({ ok: false, error: "Password must be at least 8 characters" }, 400);
-    }
-    if (!VALID_ROLES.has(role)) {
-      return json({ ok: false, error: "Invalid role" }, 400);
-    }
+    if (!normalizedName)                       return json({ ok: false, error: "Name is required" }, 400);
+    if (!EMAIL_REGEX.test(normalizedEmail))    return json({ ok: false, error: "Invalid email address" }, 400);
+    if (!role || !VALID_ROLES.has(role))       return json({ ok: false, error: "Invalid role" }, 400);
 
-    // ── Create auth user + profile (service role) ────────────────────────────
     const adminClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      { auth: { autoRefreshToken: false, persistSession: false } }
+      { auth: { autoRefreshToken: false, persistSession: false } },
     );
 
-    const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
-      email: normalizedEmail,
-      password: normalizedPassword,
-      email_confirm: true,
-    });
+    // ── Send invitation email with a secure set-password link ───────────────
+    const siteUrl = Deno.env.get("SITE_URL") ?? "http://localhost:8080";
+    const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
+      normalizedEmail,
+      { redirectTo: `${siteUrl}/password-reset` },
+    );
 
-    if (createError) {
-      return json({ ok: false, error: createError.message }, 422);
-    }
+    if (inviteError) return json({ ok: false, error: inviteError.message }, 422);
 
+    // ── Create the profile row so the role is available immediately ─────────
     const { error: insertError } = await adminClient
       .from("profiles")
-      .insert({ id: newUser.user.id, name: normalizedName, role });
+      .insert({ id: inviteData.user.id, name: normalizedName, role });
 
     if (insertError) {
-      // Roll back auth user if profile insert fails
-      await adminClient.auth.admin.deleteUser(newUser.user.id);
+      // Roll back the auth user so the invite can be retried cleanly
+      await adminClient.auth.admin.deleteUser(inviteData.user.id);
       return json({ ok: false, error: insertError.message }, 500);
     }
 
-    return json({ ok: true, id: newUser.user.id });
+    return json({ ok: true, id: inviteData.user.id });
 
   } catch (err) {
     console.error("[invite-user]", err);

@@ -14,19 +14,19 @@ const PasswordResetPage = () => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isInvite, setIsInvite] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check if we are in a recovery flow
+    // Detect whether this is a new user invite or a password reset
+    const hash = window.location.hash;
+    if (hash.includes("type=invite")) setIsInvite(true);
+
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      // If there's no session, we might still be okay if the URL has a hash with access_token
-      // Supabase Auth usually handles the hash and creates a session automatically if it's a recovery link.
       if (!session) {
-        // If no session after a brief moment, they might have just landed here without a link
-        const hash = window.location.hash;
         if (!hash || !hash.includes("access_token")) {
-          setError("Invalid or expired reset link. Please request a new one.");
+          setError("Invalid or expired link. Please request a new one.");
         }
       }
     };
@@ -78,8 +78,12 @@ const PasswordResetPage = () => {
             <img src="/Les Copywriters Logo.jpg" alt="Logo" className="h-full w-full object-cover" />
           </div>
           <div className="text-center">
-            <h1 className="text-2xl font-black text-white tracking-tight">Set New Password</h1>
-            <p className="text-white/50 text-[10px] font-black uppercase tracking-[0.2em] mt-1">Security Update</p>
+            <h1 className="text-2xl font-black text-white tracking-tight">
+              {isInvite ? "Welcome — Set Your Password" : "Set New Password"}
+            </h1>
+            <p className="text-white/50 text-[10px] font-black uppercase tracking-[0.2em] mt-1">
+              {isInvite ? "Create your account password" : "Security Update"}
+            </p>
           </div>
         </div>
 
@@ -92,9 +96,13 @@ const PasswordResetPage = () => {
                     <CheckCircle2 className="h-10 w-10 text-emerald-500" />
                   </div>
                   <div className="space-y-2">
-                    <h3 className="text-xl font-black">Password Changed</h3>
+                    <h3 className="text-xl font-black">
+                      {isInvite ? "Account Ready!" : "Password Changed"}
+                    </h3>
                     <p className="text-muted-foreground font-medium text-sm leading-relaxed">
-                      Your password has been successfully updated. You can now log in with your new credentials.
+                      {isInvite
+                        ? "Your account has been set up. Log in with your email and new password to get started."
+                        : "Your password has been updated. You can now log in with your new credentials."}
                     </p>
                   </div>
                 </div>

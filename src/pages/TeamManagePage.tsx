@@ -56,7 +56,6 @@ const TeamManagePage = () => {
   const [editRole, setEditRole] = useState<UserRole>("closer");
   const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
-  const [invitePassword, setInvitePassword] = useState("");
   const [inviteRole, setInviteRole] = useState<UserRole>("closer");
   const [inviting, setInviting]     = useState(false);
   const [removing, setRemoving]     = useState(false);
@@ -90,11 +89,10 @@ const TeamManagePage = () => {
   const handleInvite = async () => {
     if (!inviteName.trim()) { toast.error(t("teamManage.validation.name")); return; }
     if (!EMAIL_REGEX.test(inviteEmail)) { toast.error(t("teamManage.validation.email")); return; }
-    if (invitePassword.length < 8) { toast.error(t("teamManage.validation.password")); return; }
 
     setInviting(true);
     const { data, error } = await supabase.functions.invoke("invite-user", {
-      body: { name: inviteName.trim(), email: inviteEmail.trim().toLowerCase(), password: invitePassword, role: inviteRole },
+      body: { name: inviteName.trim(), email: inviteEmail.trim().toLowerCase(), role: inviteRole },
     });
 
     let inviteErrorMessage: string | null = null;
@@ -110,7 +108,7 @@ const TeamManagePage = () => {
     } else {
       toast.success(t("teamManage.inviteSuccess"));
       setInviteOpen(false);
-      setInviteName(""); setInviteEmail(""); setInvitePassword(""); setInviteRole("closer");
+      setInviteName(""); setInviteEmail(""); setInviteRole("closer");
       queryClient.invalidateQueries({ queryKey: ["profiles"] });
     }
     setInviting(false);
@@ -336,22 +334,20 @@ const TeamManagePage = () => {
               <DialogTitle className="text-2xl font-black tracking-tight">{t("teamManage.inviteTitle")}</DialogTitle>
             </DialogHeader>
             <div className="space-y-6">
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                An invitation email will be sent automatically. The user clicks the link and sets their own password — no temporary password needed.
+              </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                  <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Identity Name</Label>
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Full Name</Label>
                   <Input value={inviteName} onChange={e => setInviteName(e.target.value)} className="h-12 rounded-2xl border-2 bg-muted/20" placeholder="Jean Dupont" />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Work Email</Label>
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Email Address</Label>
                   <Input type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} className="h-12 rounded-2xl border-2 bg-muted/20" placeholder="jean@example.com" />
                 </div>
               </div>
-              
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Temporary Security Key</Label>
-                <Input type="password" value={invitePassword} onChange={e => setInvitePassword(e.target.value)} className="h-12 rounded-2xl border-2 bg-muted/20" autoComplete="new-password" />
-              </div>
-              
+
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">System Role Access</Label>
                 <Select value={inviteRole} onValueChange={v => setInviteRole(v as UserRole)}>

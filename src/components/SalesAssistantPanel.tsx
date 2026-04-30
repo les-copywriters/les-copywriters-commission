@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { useAssistantMessages, useAssistantThreads, useDeleteAssistantThread, useSalesAssistant, useUpdateAssistantThread } from "@/hooks/useSalesAssistant";
 import { AssistantMessage, CallAnalysis } from "@/types";
 import { cn } from "@/lib/utils";
@@ -65,9 +66,11 @@ type Props = {
 };
 
 const suggestedPrompts = [
-  "What went wrong in this call?",
+  "What did I do well in this call?",
+  "Where did I lose momentum?",
+  "What's my biggest area to improve right now?",
+  "Help me handle the price objection better.",
   "What patterns do you see across my recent calls?",
-  "Give me my top 3 coaching priorities.",
 ];
 
 const LoadingMessages = () => (
@@ -93,40 +96,79 @@ const formatTime = (value: string) => {
   }
 };
 
+const TypingDots = () => (
+  <div className="flex items-center gap-1.5 px-1 py-1">
+    {[0, 1, 2].map((i) => (
+      <span
+        key={i}
+        className="h-2 w-2 rounded-full bg-muted-foreground/50 animate-bounce"
+        style={{ animationDelay: `${i * 160}ms`, animationDuration: "900ms" }}
+      />
+    ))}
+  </div>
+);
+
 const MessageBubble = ({
   message,
   pending = false,
+  isNew = false,
   callsById,
   onOpenCall,
 }: {
   message: AssistantMessage | { role: "user" | "assistant"; content: string; citations?: AssistantMessage["citations"]; createdAt?: string };
   pending?: boolean;
+  isNew?: boolean;
   callsById: Map<string, CallAnalysis>;
   onOpenCall: (call: CallAnalysis) => void;
 }) => {
   const isAssistant = message.role === "assistant";
 
   return (
-    <div className={cn("flex gap-3", isAssistant ? "items-start" : "justify-end")}>
+    <div
+      className={cn(
+        "flex gap-3",
+        isAssistant ? "items-start" : "justify-end",
+        isNew && "animate-in fade-in slide-in-from-bottom-3 fill-mode-both",
+      )}
+      style={isNew ? { animationDuration: "350ms" } : undefined}
+    >
       {isAssistant && (
         <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-primary/10 bg-primary/8 text-primary shadow-sm">
-          {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
+          <Bot className="h-4 w-4" />
         </div>
       )}
 
       <div className="max-w-[87%] space-y-2">
         <div
           className={cn(
-            "rounded-[24px] border px-4 py-3 shadow-sm",
+            "rounded-[24px] border shadow-sm",
             isAssistant
-              ? "border-border/50 bg-background/90 text-card-foreground"
-              : "border-primary/15 bg-primary text-primary-foreground",
+              ? "border-border/50 bg-background/90 text-card-foreground px-4 py-3"
+              : "border-primary/15 bg-primary text-primary-foreground px-4 py-3",
           )}
         >
-          <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
+          {pending && isAssistant ? (
+            <TypingDots />
+          ) : isAssistant ? (
+            <ReactMarkdown
+              className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed
+                [&_p]:mb-3 [&_p:last-child]:mb-0
+                [&_strong]:font-bold [&_strong]:text-foreground
+                [&_em]:italic
+                [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-3 [&_ol>li]:mb-1.5
+                [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-3 [&_ul>li]:mb-1.5
+                [&_h1]:text-base [&_h1]:font-black [&_h1]:mb-2
+                [&_h2]:text-sm [&_h2]:font-black [&_h2]:mb-2
+                [&_h3]:text-sm [&_h3]:font-bold [&_h3]:mb-1"
+            >
+              {message.content}
+            </ReactMarkdown>
+          ) : (
+            <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
+          )}
         </div>
 
-        {isAssistant && message.citations && message.citations.length > 0 && (
+        {!pending && isAssistant && message.citations && message.citations.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {message.citations.map((citation) => {
               const call = callsById.get(citation.callId);
@@ -152,9 +194,9 @@ const MessageBubble = ({
           </div>
         )}
 
-        {message.createdAt && (
+        {!pending && message.createdAt && (
           <p className={cn("px-1 text-[11px] text-muted-foreground", !isAssistant && "text-right")}>
-            {pending ? "Sending..." : formatTime(message.createdAt)}
+            {formatTime(message.createdAt)}
           </p>
         )}
       </div>
@@ -192,16 +234,29 @@ const SalesAssistantPanel = ({
   const [renameTarget, setRenameTarget] = useState<{ id: string; current: string | null } | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const bottomRef    = useRef<HTMLDivElement | null>(null);
+  // Track how many messages were already visible so only new ones animate
+  const seenCount    = useRef(0);
 
   const callsById = useMemo(() => new Map(calls.map((call) => [call.id, call])), [calls]);
 
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-
     textarea.style.height = "0px";
     textarea.style.height = `${Math.min(textarea.scrollHeight, 220)}px`;
   }, [draft]);
+
+  // Auto-scroll to the latest message whenever the list grows
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [combinedMessages.length]);
+
+  // After every render, record how many messages are currently visible
+  // so the next render knows which ones are genuinely new
+  useEffect(() => {
+    seenCount.current = combinedMessages.length;
+  });
 
   const handleSend = (event?: FormEvent) => {
     event?.preventDefault();
@@ -252,7 +307,7 @@ const SalesAssistantPanel = ({
       });
       optimistic.push({
         role: "assistant",
-        content: "Thinking through your call history and coaching memory...",
+        content: "",
         citations: [],
       });
     }
@@ -354,7 +409,7 @@ const SalesAssistantPanel = ({
               <Bot className="h-4 w-4" />
             </div>
             <div>
-              <p className="text-sm font-black uppercase tracking-widest text-foreground">Sales Assistant</p>
+              <p className="text-sm font-black uppercase tracking-widest text-foreground">Max — Your Sales Coach</p>
               {closerName && <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Coaching {closerName}</p>}
             </div>
           </div>
@@ -545,10 +600,10 @@ const SalesAssistantPanel = ({
                         <Bot className="h-7 w-7" />
                       </div>
                       <p className="mt-5 text-2xl font-black tracking-tight text-foreground">
-                        Start a conversation
+                        Hey — I'm Max 👋
                       </p>
                       <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
-                        Ask about a sales call, objection handling, or patterns across recent conversations.
+                        Your personal sales coach. Ask me about your calls, objection handling, closing patterns, or just say hi.
                       </p>
                       <div className="mt-7 flex max-w-3xl flex-wrap justify-center gap-3">
                         {suggestedPrompts.map((prompt) => (
@@ -569,11 +624,13 @@ const SalesAssistantPanel = ({
                         <MessageBubble
                           key={"id" in message ? message.id : `optimistic-${index}`}
                           message={message}
+                          isNew={index >= seenCount.current}
                           pending={optimisticPrompt !== null && index === combinedMessages.length - 1 && message.role === "assistant"}
                           callsById={callsById}
                           onOpenCall={onOpenCall}
                         />
                       ))}
+                      <div ref={bottomRef} className="h-px" />
                     </div>
                   )}
                 </ScrollArea>
@@ -603,7 +660,7 @@ const SalesAssistantPanel = ({
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
                     onKeyDown={handleComposerKeyDown}
-                    placeholder="Message Sales Assistant..."
+                    placeholder="Ask Max anything — calls, objections, patterns, or just say hi..."
                     rows={1}
                     className="min-h-0 resize-none overflow-y-auto border-0 bg-transparent px-4 py-3 pr-16 text-sm leading-relaxed shadow-none focus-visible:ring-0"
                     disabled={assistant.isPending || !closerId}
