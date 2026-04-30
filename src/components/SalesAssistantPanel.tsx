@@ -177,9 +177,23 @@ const MessageBubble = ({
           )}
         </div>
 
-        {!pending && isAssistant && message.citations && message.citations.length > 0 && (
+        {!pending && isAssistant && message.citations && message.citations.filter(c =>
+          // Only show citations when Max is referencing something specific —
+          // skip generic "Referenced by the assistant" auto-citations
+          c.reason &&
+          c.reason !== "Referenced by the assistant." &&
+          c.reason !== "Referenced by the assistant" &&
+          c.reason !== "Selected call context." &&
+          c.reason.length > 25
+        ).length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {message.citations.map((citation) => {
+            {message.citations.filter(c =>
+              c.reason &&
+              c.reason !== "Referenced by the assistant." &&
+              c.reason !== "Referenced by the assistant" &&
+              c.reason !== "Selected call context." &&
+              c.reason.length > 25
+            ).map((citation) => {
               const call = callsById.get(citation.callId);
               return (
                 <button

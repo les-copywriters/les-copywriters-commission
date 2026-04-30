@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CallAnalysis } from "@/types";
-import { useAnalyzeCall } from "@/hooks/useCallAnalysis";
+import { useAnalyzeCall, useFullCallAnalysis } from "@/hooks/useCallAnalysis";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useLanguage } from "@/i18n";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -103,12 +104,26 @@ const CallDetailsDialog = ({ call, open, onOpenChange }: Props) => {
   const analyze = useAnalyzeCall();
   const [showTranscript, setShowTranscript] = useState(false);
 
+  // Fetch the full record (with transcript) when the dialog opens.
+  // The list query omits transcripts for performance, so we load on demand.
+  const { data: fullCall, isLoading: loadingFull } = useFullCallAnalysis(
+    open && call ? call.id : null
+  );
+  // Merge: use the full record if available, fall back to the lightweight list record
+  const effectiveCall = fullCall ?? call;
+
+  useEffect(() => {
+    if (effectiveCall) {
+      setShowTranscript(effectiveCall.status === "synced" || effectiveCall.status === "pending");
+    }
+  }, [effectiveCall?.id, effectiveCall?.status]);
+
   if (!call) return null;
 
-  const status   = statusConfig[call.status];
-  const duration = call.durationSeconds ? `${Math.round(call.durationSeconds / 60)} min` : "—";
-  const feedback = call.feedback;
-  const details  = call.analysisDetails;
+  const status   = statusConfig[effectiveCall!.status];
+  const duration = effectiveCall!.durationSeconds ? `${Math.round(effectiveCall!.durationSeconds / 60)} min` : "—";
+  const feedback = effectiveCall!.feedback;
+  const details  = effectiveCall!.analysisDetails;
 
   const handleAnalyze = () => {
     analyze.mutate(call.id, {
@@ -128,17 +143,17 @@ const CallDetailsDialog = ({ call, open, onOpenChange }: Props) => {
               <Badge variant="outline" className={cn("gap-1.5 font-semibold text-xs", status.className)}>
                 {status.icon}{status.label}
               </Badge>
-              {call.score !== null && (
+              {effectiveCall!.score !== null && (
                 <Badge variant="outline" className="border-primary/20 text-primary font-bold px-3 py-1">
-                  {call.score}/100
+                  {effectiveCall!.score}/100
                 </Badge>
               )}
             </div>
             <DialogTitle className="text-xl font-black tracking-tight leading-tight">
-              {call.callTitle ?? t("calls.untitledCall")}
+              {effectiveCall!.callTitle ?? t("calls.untitledCall")}
             </DialogTitle>
             <div className="flex flex-wrap items-center gap-4 mt-3 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" />{call.callDate ?? "No date"}</span>
+              <span className="inline-flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" />{effectiveCall!.callDate ?? "No date"}</span>
               <span className="inline-flex items-center gap-1.5"><Clock3 className="h-3.5 w-3.5" />{duration}</span>
             </div>
           </DialogHeader>
@@ -147,7 +162,7 @@ const CallDetailsDialog = ({ call, open, onOpenChange }: Props) => {
         <div className="p-8 space-y-8">
 
           {/* Not yet analyzed — prompt the closer */}
-          {call.status === "synced" && call.score === null && (
+          {effectiveCall!.status === "synced" && effectiveCall!.score === null && (
             <div className="flex items-start gap-4 p-5 rounded-2xl bg-primary/5 border border-primary/15">
               <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
                 <Sparkles className="h-4.5 w-4.5" />
@@ -162,9 +177,9 @@ const CallDetailsDialog = ({ call, open, onOpenChange }: Props) => {
           )}
 
           {/* Score + summary */}
-          {call.status === "done" && call.score !== null && feedback && (
+          {effectiveCall!.status === "done" && effectiveCall!.score !== null && feedback && (
             <div className="flex flex-col sm:flex-row gap-6">
-              <ScoreBlock score={call.score} />
+              <ScoreBlock score={effectiveCall!.score} />
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">{t("calls.summary")}</p>
                 <p className="text-sm leading-relaxed text-foreground/90">{feedback.summary}</p>
@@ -278,7 +293,7 @@ const CallDetailsDialog = ({ call, open, onOpenChange }: Props) => {
           )}
 
           {/* Analyzing state */}
-          {call.status === "analyzing" && (
+          {effectiveCall!.status === "analyzing" && (
             <div className="flex items-center gap-3 p-4 rounded-2xl bg-amber-500/5 border border-amber-500/20">
               <Loader2 className="h-5 w-5 text-amber-500 animate-spin shrink-0" />
               <p className="text-sm font-medium text-amber-600 dark:text-amber-400">{t("calls.analyzingMessage")}</p>
@@ -286,26 +301,54 @@ const CallDetailsDialog = ({ call, open, onOpenChange }: Props) => {
           )}
 
           {/* Error state */}
-          {call.status === "error" && (
+          {effectiveCall!.status === "error" && (
             <div className="flex items-start gap-3 p-4 rounded-2xl bg-rose-500/5 border border-rose-500/20">
               <AlertCircle className="h-5 w-5 text-rose-500 shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-bold text-rose-600 dark:text-rose-400">{t("calls.analyzeError")}</p>
-                {call.errorMessage && <p className="text-xs text-muted-foreground mt-1">{call.errorMessage}</p>}
+                {effectiveCall!.errorMessage && <p className="text-xs text-muted-foreground mt-1">{effectiveCall!.errorMessage}</p>}
               </div>
             </div>
           )}
 
           {/* No transcript */}
-          {call.status === "pending" && !call.transcript && (
+          {effectiveCall!.status === "pending" && !effectiveCall!.transcript && (
             <div className="flex items-center gap-3 p-4 rounded-2xl bg-muted/30 border border-border/40">
               <AlertCircle className="h-5 w-5 text-muted-foreground shrink-0" />
               <p className="text-sm text-muted-foreground">{t("calls.noTranscript")}</p>
             </div>
           )}
 
+          {/* Loading skeleton while transcript fetches */}
+          {loadingFull && !fullCall && (
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-32 rounded" />
+              <Skeleton className="h-48 w-full rounded-2xl" />
+            </div>
+          )}
+
+          {/* Full transcript — shown before Analyze so the closer can read it first */}
+          {effectiveCall!.transcript && (
+            <div className="space-y-3">
+              <button
+                className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => setShowTranscript((v) => !v)}
+              >
+                {showTranscript ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                {t("calls.transcript")}
+              </button>
+              {showTranscript && (
+                <div className="rounded-2xl bg-muted/20 border border-border/30 p-5">
+                  <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap font-mono">
+                    {effectiveCall!.transcript}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Analyze button */}
-          {(call.status === "synced" || call.status === "error") && call.transcript && (
+          {(effectiveCall!.status === "synced" || effectiveCall!.status === "error") && effectiveCall!.transcript && (
             <>
               <Separator className="opacity-40" />
               <Button className="w-full rounded-2xl h-12 font-bold gap-2" disabled={analyze.isPending} onClick={handleAnalyze}>
@@ -313,29 +356,6 @@ const CallDetailsDialog = ({ call, open, onOpenChange }: Props) => {
                   ? <><Loader2 className="h-4 w-4 animate-spin" />{t("calls.analyzing")}</>
                   : <><Sparkles className="h-4 w-4" />{t("calls.analyzeButton")}</>}
               </Button>
-            </>
-          )}
-
-          {/* Full transcript toggle */}
-          {call.transcript && (
-            <>
-              <Separator className="opacity-40" />
-              <div className="space-y-3">
-                <button
-                  className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors"
-                  onClick={() => setShowTranscript((v) => !v)}
-                >
-                  {showTranscript ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                  {t("calls.transcript")}
-                </button>
-                {showTranscript && (
-                  <div className="rounded-2xl bg-muted/20 border border-border/30 p-5 max-h-72 overflow-y-auto">
-                    <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap font-mono">
-                      {call.transcript}
-                    </p>
-                  </div>
-                )}
-              </div>
             </>
           )}
         </div>

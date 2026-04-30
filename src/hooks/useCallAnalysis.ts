@@ -94,13 +94,18 @@ const mapCloserProfile = (row: CloserProfileRow): CloserProfile => ({
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
 
+// Lightweight list — no transcript column (transcripts can be 50KB+ each).
+// Use this for all list/picker views. Fetch the full record only when opening
+// a detail dialog via useFullCallAnalysis(id).
+const LIST_COLUMNS = "id,closer_id,fathom_meeting_id,call_title,call_date,call_started_at,duration_seconds,score,status,error_message,created_at,updated_at,feedback,analysis_details";
+
 export const useCallAnalyses = (closerId?: string) =>
   useQuery({
     queryKey: ["call_analyses", closerId ?? "all"],
     queryFn: async (): Promise<CallAnalysis[]> => {
       let query = supabase
         .from("call_analyses")
-        .select("*")
+        .select(LIST_COLUMNS)
         .order("call_date", { ascending: false });
 
       if (closerId) query = query.eq("closer_id", closerId);
@@ -110,11 +115,28 @@ export const useCallAnalyses = (closerId?: string) =>
       return (data as CallRow[]).map(mapCall);
     },
     refetchInterval: (query) => {
-      // Poll every 5 seconds while any call is still being analyzed
       const data = query.state.data;
       const hasAnalyzing = Array.isArray(data) && data.some((c) => c.status === "analyzing");
       return hasAnalyzing ? 5000 : false;
     },
+  });
+
+// Full single-call fetch including transcript — used by CallDetailsDialog.
+export const useFullCallAnalysis = (callId: string | null) =>
+  useQuery({
+    queryKey: ["call_analysis_full", callId],
+    queryFn: async (): Promise<CallAnalysis | null> => {
+      if (!callId) return null;
+      const { data, error } = await supabase
+        .from("call_analyses")
+        .select("*")
+        .eq("id", callId)
+        .single();
+      if (error) throw new Error(error.message);
+      return mapCall(data as CallRow);
+    },
+    enabled: !!callId,
+    staleTime: 30_000,
   });
 
 export const useCloserFramework = (closerId: string | null) =>
