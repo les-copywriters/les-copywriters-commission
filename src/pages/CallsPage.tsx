@@ -121,12 +121,14 @@ const CallsPage = () => {
   const [analyzingCallId, setAnalyzingCallId] = useState<string | null>(null);
 
   const stats = useMemo(() => {
-    const analyzed = calls.filter((call) => call.status === "done").length;
-    const ready = calls.filter((call) => call.status === "synced" && call.transcript).length;
-    const issues = calls.filter((call) => call.status === "error").length;
-    const noTranscript = calls.filter((call) => !call.transcript).length;
-    const scores = calls.filter((call) => call.score !== null).map((call) => call.score as number);
-    const avgScore = scores.length > 0 ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : null;
+    const analyzed    = calls.filter((call) => call.status === "done").length;
+    // "synced" status means the transcript exists in DB (list query omits it for perf)
+    const ready       = calls.filter((call) => call.status === "synced").length;
+    const issues      = calls.filter((call) => call.status === "error").length;
+    // "pending" status means no transcript yet
+    const noTranscript = calls.filter((call) => call.status === "pending").length;
+    const scores      = calls.filter((call) => call.score !== null).map((call) => call.score as number);
+    const avgScore    = scores.length > 0 ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : null;
 
     return { total: calls.length, analyzed, ready, issues, noTranscript, avgScore };
   }, [calls]);
@@ -135,14 +137,15 @@ const CallsPage = () => {
     const normalizedQuery = query.trim().toLowerCase();
 
     const filtered = calls.filter((call) => {
-      if (quickFilter === "ready" && !(call.status === "synced" && call.transcript)) return false;
-      if (quickFilter === "done" && call.status !== "done") return false;
-      if (quickFilter === "issues" && call.status !== "error") return false;
-      if (quickFilter === "noTranscript" && !!call.transcript) return false;
+      if (quickFilter === "ready"        && call.status !== "synced")  return false;
+      if (quickFilter === "done"         && call.status !== "done")    return false;
+      if (quickFilter === "issues"       && call.status !== "error")   return false;
+      if (quickFilter === "noTranscript" && call.status !== "pending") return false;
 
       if (statusFilter !== "all" && call.status !== statusFilter) return false;
-      if (transcriptFilter === "withTranscript" && !call.transcript) return false;
-      if (transcriptFilter === "withoutTranscript" && !!call.transcript) return false;
+      // transcript presence is inferred from status (list query omits the column for perf)
+      if (transcriptFilter === "withTranscript"    && call.status === "pending") return false;
+      if (transcriptFilter === "withoutTranscript" && call.status !== "pending") return false;
 
       if (scoreFilter === "high" && ((call.score ?? -1) < 80)) return false;
       if (scoreFilter === "mid" && (call.score === null || call.score < 60 || call.score >= 80)) return false;
@@ -509,7 +512,7 @@ const CallsPage = () => {
                   <div className="space-y-4">
                     {filteredCalls.slice(0, visible).map((call) => {
                       const status = statusConfig[call.status];
-                      const canAnalyze = (call.status === "synced" || call.status === "error") && !!call.transcript;
+                      const canAnalyze = call.status === "synced" || call.status === "error";
                       const isAnalyzingThisCall = analyzingCallId === call.id;
                       const duration = call.durationSeconds ? `${Math.round(call.durationSeconds / 60)} min` : "—";
 
@@ -532,7 +535,7 @@ const CallsPage = () => {
                                     {closerNameMap.get(call.closerId) ?? "Unknown"}
                                   </Badge>
                                 )}
-                                {!call.transcript && (
+                                {call.status === "pending" && (
                                   <Badge variant="outline" className="text-[11px] font-semibold text-muted-foreground border-muted/60">
                                     <VideoOff className="h-3 w-3 mr-1" />
                                     No transcript
@@ -556,7 +559,7 @@ const CallsPage = () => {
                               </div>
 
                               <p className="mt-4 text-sm text-muted-foreground leading-relaxed line-clamp-2">
-                                {call.feedback?.summary ?? (call.transcript
+                                {call.feedback?.summary ?? (call.status !== "pending"
                                   ? "Transcript is available for detailed review and AI analysis."
                                   : "This recording synced without transcript content yet.")}
                               </p>

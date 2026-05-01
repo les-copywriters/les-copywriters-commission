@@ -29,7 +29,7 @@ const fetchRefunds = async (): Promise<Refund[]> => {
 };
 
 export const useRefunds = () =>
-  useQuery({ queryKey: ["refunds"], queryFn: fetchRefunds });
+  useQuery({ queryKey: ["refunds"], queryFn: fetchRefunds, staleTime: 60_000, retry: 1 });
 
 export const useUpdateRefundStatus = () => {
   const qc = useQueryClient();

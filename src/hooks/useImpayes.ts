@@ -24,4 +24,4 @@ const fetchImpayes = async (): Promise<Impaye[]> => {
 };
 
 export const useImpayes = () =>
-  useQuery({ queryKey: ["impayes"], queryFn: fetchImpayes });
+  useQuery({ queryKey: ["impayes"], queryFn: fetchImpayes, staleTime: 60_000, retry: 1 });

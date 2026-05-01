@@ -74,7 +74,7 @@ const fetchSales = async (): Promise<Sale[]> => {
 };
 
 export const useSales = () =>
-  useQuery({ queryKey: ["sales"], queryFn: fetchSales });
+  useQuery({ queryKey: ["sales"], queryFn: fetchSales, staleTime: 60_000, retry: 1 });
 
 export type NewSaleInput = {
   date: string;

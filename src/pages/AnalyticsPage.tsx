@@ -24,7 +24,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, Legend
 } from "recharts";
-import { cn } from "@/lib/utils";
+import { cn, ls } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type DatePreset = "thisMonth" | "lastMonth" | "last3m" | "last6m" | "thisYear" | "lastYear" | "allTime" | "custom";
@@ -81,18 +81,18 @@ const AnalyticsPage = () => {
 
   // ── Filter state ────────────────────────────────────────────────────────────
   const [datePreset, setDatePreset] = useState<DatePreset>(
-    () => (localStorage.getItem("analytics.datePreset") as DatePreset | null) ?? "thisMonth"
+    () => (ls.get("analytics.datePreset", "thisMonth") as DatePreset)
   );
   const [customStart, setCustomStart] = useState(
-    () => localStorage.getItem("analytics.customStart") ?? ""
+    () => ls.get("analytics.customStart")
   );
   const [customEnd, setCustomEnd] = useState(
-    () => localStorage.getItem("analytics.customEnd") ?? ""
+    () => ls.get("analytics.customEnd")
   );
 
-  useEffect(() => { localStorage.setItem("analytics.datePreset", datePreset); }, [datePreset]);
-  useEffect(() => { localStorage.setItem("analytics.customStart", customStart); }, [customStart]);
-  useEffect(() => { localStorage.setItem("analytics.customEnd", customEnd); }, [customEnd]);
+  useEffect(() => { ls.set("analytics.datePreset", datePreset); }, [datePreset]);
+  useEffect(() => { ls.set("analytics.customStart", customStart); }, [customStart]);
+  useEffect(() => { ls.set("analytics.customEnd", customEnd); }, [customEnd]);
   const [filterProduct,    setFilterProduct]    = useState("all");
   const [filterType,       setFilterType]       = useState<PaymentFilter>("all");
   const [filterStatus,     setFilterStatus]     = useState<StatusFilter>("all");

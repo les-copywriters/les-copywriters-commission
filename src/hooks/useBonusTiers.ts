@@ -12,7 +12,7 @@ const fetchTiers = async (): Promise<BonusTier[]> => {
 };
 
 export const useBonusTiers = () =>
-  useQuery({ queryKey: ["bonus_tiers"], queryFn: fetchTiers });
+  useQuery({ queryKey: ["bonus_tiers"], queryFn: fetchTiers, staleTime: 60_000, retry: 1 });
 
 export const useAddBonusTier = () => {
   const qc = useQueryClient();

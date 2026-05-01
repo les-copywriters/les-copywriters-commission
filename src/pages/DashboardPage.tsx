@@ -23,7 +23,7 @@ import { TrendingUp, TrendingDown, AlertTriangle, Wallet, DollarSign, ShoppingCa
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { cn } from "@/lib/utils";
+import { cn, ls } from "@/lib/utils";
 import { useSyncJotform } from "@/hooks/useSyncJotform";
 import { toast } from "sonner";
 import SaleDetailsDialog from "@/components/SaleDetailsDialog";
@@ -66,11 +66,24 @@ const CHART_COLORS = {
 const DashboardPage = () => {
   const { t, locale } = useLanguage();
   const { user }      = useAuth();
-  const { data: allSales   = [], isLoading: loadingSales   } = useSales();
-  const { data: allRefunds = [], isLoading: loadingRefunds } = useRefunds();
-  const { data: allImpayes = [], isLoading: loadingImpayes } = useImpayes();
-  const { data: tiers = [] } = useBonusTiers();
+  const { data: allSales   = [], isLoading: loadingSales,   isError: salesFailed,   error: salesError   } = useSales();
+  const { data: allRefunds = [], isLoading: loadingRefunds, isError: refundsFailed, error: refundsError } = useRefunds();
+  const { data: allImpayes = [], isLoading: loadingImpayes, isError: impayesFailed, error: impayesError } = useImpayes();
+  const { data: tiers = [],                                 isError: tiersFailed,  error: tiersError  } = useBonusTiers();
   const sync = useSyncJotform();
+
+  useEffect(() => {
+    if (salesFailed)   toast.error(`${t("sync.error")}: ${salesError?.message}`);
+  }, [salesFailed]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (refundsFailed) toast.error(`${t("sync.error")}: ${refundsError?.message}`);
+  }, [refundsFailed]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (impayesFailed) toast.error(`${t("sync.error")}: ${impayesError?.message}`);
+  }, [impayesFailed]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (tiersFailed)   toast.error(`${t("sync.error")}: ${tiersError?.message}`);
+  }, [tiersFailed]);   // eslint-disable-line react-hooks/exhaustive-deps
   const funnelSync = useSyncSetterDashboard();
 
   const isAdmin  = user?.role === "admin";
@@ -83,9 +96,9 @@ const DashboardPage = () => {
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [bonusDialog, setBonusDialog] = useState<{ month: string; kind: BonusDrilldownKind } | null>(null);
   const [datePreset, setDatePreset] = useState<SetterDatePreset>(
-    () => (localStorage.getItem("dashboard.datePreset") as SetterDatePreset | null) ?? "thisMonth"
+    () => (ls.get("dashboard.datePreset", "thisMonth") as SetterDatePreset)
   );
-  useEffect(() => { localStorage.setItem("dashboard.datePreset", datePreset); }, [datePreset]);
+  useEffect(() => { ls.set("dashboard.datePreset", datePreset); }, [datePreset]);
 
   const dateRange = useMemo(() => computeSetterDateRange(datePreset, "", ""), [datePreset]);
   const { data: metrics } = useSetterDashboardMetrics({

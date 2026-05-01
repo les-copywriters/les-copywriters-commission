@@ -45,8 +45,11 @@ const SalesAssistantPage = () => {
     ? (selectedCloserId ? closerLookup.get(selectedCloserId) ?? null : null)
     : (user?.name ?? null);
 
+  // Include done + synced (has transcript in DB) + error (failed analysis but has transcript).
+  // "pending" calls have no transcript yet so Max can't use them as context.
+  // Note: list query omits transcript column for performance; status is the reliable proxy.
   const focusableCalls = useMemo(
-    () => calls.filter((call) => call.status === "done" || call.transcript),
+    () => calls.filter((call) => call.status === "done" || call.status === "synced" || call.status === "error"),
     [calls],
   );
 
