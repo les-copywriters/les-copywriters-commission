@@ -70,6 +70,25 @@ type FunnelAggregate = {
   raw_payload: Record<string, unknown>;
 };
 
+type IClosedEventRecord = {
+  profile_id: string;
+  iclosed_event_id: string;
+  iclosed_setter_id: string | null;
+  iclosed_closer_id: string | null;
+  date_time: string | null;
+  invitee_name: string | null;
+  invitee_email: string | null;
+  phone_number: string | null;
+  call_type: string | null;
+  outcome: string | null;
+  no_sale_reason: string | null;
+  cancelled_by: string | null;
+  cancel_reason: string | null;
+  amount_collected: number;
+  amount_contracted: number;
+  raw_payload: Record<string, unknown>;
+};
+
 export function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -316,10 +335,11 @@ function pushFunnelMetric(
 
 // Syncs one setter's iClosed account using their own API credentials.
 async function syncIClosedForSetter(
+  supabase: SupabaseClient,
   mapping: SetterMapping,
   startDate?: string,
   endDate?: string,
-): Promise<{ rows: FunnelAggregate[]; recordsSeen: number }> {
+): Promise<{ rows: FunnelAggregate[]; recordsSeen: number; upsertError?: string }> {
   const apiKey = mapping.iclosed_api_key;
   const baseUrl = mapping.iclosed_api_base_url;
   if (!apiKey || !baseUrl) return { rows: [], recordsSeen: 0 };
@@ -327,19 +347,42 @@ async function syncIClosedForSetter(
   const { start, end } = getDateWindow(startDate, endDate);
   const base = normalizeIClosedBaseUrl(baseUrl);
   const rows: FunnelAggregate[] = [];
+  const eventRecords: IClosedEventRecord[] = [];
   let totalSeen = 0;
   let page = 1;
 
+  // ── Diagnostic probe: check if the API returns ANY events with no filters ──
+  try {
+    const probe = await fetchJson(`${base}/eventCalls?limit=1`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    const probeWrapper = (probe.data && typeof probe.data === "object" && !Array.isArray(probe.data))
+      ? probe.data as Record<string, unknown> : probe;
+    const probeItems = Array.isArray(probeWrapper.eventCalls) ? probeWrapper.eventCalls
+      : Array.isArray(probe.eventCalls) ? probe.eventCalls
+      : Array.isArray(probe.data) ? probe.data : [];
+    console.log(`[iclosed] probe (no filters): ${probeItems.length} item(s) returned. Response keys: ${Object.keys(probe).join(", ")}`);
+    if (probeItems.length > 0) {
+      const first = probeItems[0] as Record<string, unknown>;
+      console.log(`[iclosed] probe first event id=${first.id} keys: ${Object.keys(first).join(", ")}`);
+    }
+  } catch (err) {
+    console.log(`[iclosed] probe failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
   while (page <= 20) {
+    // Fetch ALL event types from 2025 onwards — older data is irrelevant for
+    // current performance tracking and would slow down syncs unnecessarily.
+    // eventType=ALL is required; without it iClosed defaults to one call type only.
+    // The upsert is idempotent (UNIQUE on iclosed_event_id + profile_id).
     const params = new URLSearchParams({
       eventType: "ALL",
-      dateFrom: start,
-      dateTo: end,
+      createdAtStart: "2025-01-01T00:00:00Z",
+      orderColumn: "updatedAt",
+      orderBy: "desc",
       limit: "100",
       page: String(page),
     });
-    // Filter by setter — iClosed links setters via SettedClaim, use setterIds param
-    if (mapping.iclosed_user_id) params.set("setterIds", mapping.iclosed_user_id);
 
     const url = `${base}/eventCalls?${params}`;
     console.log(`[iclosed] fetching: ${url}`);
@@ -367,48 +410,180 @@ async function syncIClosedForSetter(
 
     if (!items.length) break;
 
+    // Log the first event's structure once so we can see what fields iClosed returns
+    if (page === 1 && items.length > 0) {
+      const sample = items[0] as Record<string, unknown>;
+      console.log(`[iclosed] first event keys: ${Object.keys(sample).join(", ")}`);
+      const sc = sample.SettedClaim ?? sample.settedClaim;
+      if (sc && typeof sc === "object") {
+        console.log(`[iclosed] first event SettedClaim keys: ${Object.keys(sc as object).join(", ")}`);
+        console.log(`[iclosed] first event SettedClaim: ${JSON.stringify(sc)}`);
+      } else {
+        console.log(`[iclosed] first event has no SettedClaim. setter-related keys: ${Object.keys(sample).filter(k => k.toLowerCase().includes("setter") || k.toLowerCase().includes("set")).join(", ")}`);
+      }
+    }
+
     for (const raw of items) {
       const item = raw as Record<string, unknown>;
+
+      // Count ALL items from the API — before any filtering
+      totalSeen++;
+
       const metricDate = normalizeDate(String(item.dateTime ?? item.date_time ?? ""));
 
-      // Outcome can be on the event call directly OR on the setter's SettedClaim
-      const settedClaim = item.SettedClaim as Record<string, unknown> | null | undefined;
+      // iClosed uses either "SettedClaim" or "settedClaim" depending on the account
+      const settedClaim = (item.SettedClaim ?? item.settedClaim) as Record<string, unknown> | null | undefined;
       const outcome = String(item.outcome ?? settedClaim?.outcome ?? "").toUpperCase();
 
+      const cancelledBy = String(item.cancelledBy ?? item.cancelled_by ?? "").toLowerCase() || null;
+      const noSaleReason = String(item.noSaleReason ?? item.no_sale_reason ?? "").toUpperCase() || null;
+
+      const deals = Array.isArray(item.deals) ? (item.deals as Record<string, unknown>[]) : [];
+      const amountCollected = deals
+        .filter(d => String(d.status ?? "").toUpperCase() === "PAID")
+        .reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
+      const amountContracted = deals.reduce((sum, d) => sum + Number(d.amount ?? 0), 0);
+
+      // All setter entries from the setters array (not just index 0)
+      const settersArr = Array.isArray(item.setters) ? (item.setters as Record<string, unknown>[]) : [];
+
+      const iclosedSetterId = String(
+        settedClaim?.userId ?? settedClaim?.id ?? settedClaim?.setterId ??
+        settersArr[0]?.id ?? mapping.iclosed_user_id ?? ""
+      ) || null;
+
+      // ── Client-side setter attribution ────────────────────────────────────
+      // Collect every possible ID that could represent this setter on the event.
+      // iClosed accounts vary in which field they use.
+      if (mapping.iclosed_user_id) {
+        const claimIds = [
+          // SettedClaim fields (classic setter attribution)
+          settedClaim?.setterId,
+          settedClaim?.setter_id,
+          settedClaim?.userId,
+          settedClaim?.user_id,
+          settedClaim?.id,
+          // All entries in the setters[] array
+          ...settersArr.flatMap(s => [s.id, s.userId, s.setterId, s.setter_id, s.user_id]),
+          // Direct event-level setter fields
+          item.setterId,
+          item.setter_id,
+          item.settedById,
+          // Fallback: match by closer/host ID — some iClosed accounts store the
+          // "setter" (in our sense) as the call host/closer in iClosed terminology.
+          item.userId,
+          item.user_id,
+        ].filter(Boolean).map(id => String(id));
+
+        if (claimIds.length === 0) {
+          if (totalSeen <= 3) {
+            console.log(`[iclosed] event ${item.id} has no attribution fields at all, skipping`);
+          }
+          continue;
+        }
+
+        if (!claimIds.includes(mapping.iclosed_user_id)) {
+          continue; // Event belongs to a different setter
+        }
+      } else {
+        console.log(`[iclosed] profile ${mapping.profile_id} has no iclosed_user_id configured`);
+        continue;
+      }
+
+      // ── Build raw event record ────────────────────────────────────────────
+      eventRecords.push({
+        profile_id: mapping.profile_id,
+        iclosed_event_id: String(item.id ?? ""),
+        iclosed_setter_id: iclosedSetterId,
+        iclosed_closer_id: String(item.userId ?? item.user_id ?? "") || null,
+        date_time: String(item.dateTime ?? item.date_time ?? "") || null,
+        invitee_name: String(item.inviteeName ?? item.invitee_name ?? item.contactName ?? "") || null,
+        invitee_email: String(item.inviteeEmail ?? item.invitee_email ?? "") || null,
+        phone_number: String(item.phoneNumber ?? item.phone_number ?? "") || null,
+        call_type: String(item.callType ?? item.call_type ?? "") || null,
+        outcome: outcome || null,
+        no_sale_reason: noSaleReason,
+        cancelled_by: cancelledBy,
+        cancel_reason: String(item.cancelReason ?? item.cancel_reason ?? "") || null,
+        amount_collected: amountCollected,
+        amount_contracted: amountContracted,
+        raw_payload: item,
+      });
+
+      // ── Daily aggregate (kept for backwards compatibility) ────────────────
       // Every booked call with a setter claim = lead validated
       pushFunnelMetric(rows, mapping.profile_id, "iclosed", metricDate, "leads_validated");
 
-      // Canceled by admin or contact
-      if (outcome === "ADMIN_CANCELLED" || outcome === "CONTACT_CANCELLED") {
+      // Canceled by setter (cancelledBy field) OR by contact/admin via noSaleReason
+      if (cancelledBy === "setter" || noSaleReason === "ADMIN_CANCELLED" || noSaleReason === "CONTACT_CANCELLED") {
         pushFunnelMetric(rows, mapping.profile_id, "iclosed", metricDate, "leads_canceled");
       }
 
-      // Showed up = had a real outcome (not a cancel or no-show, and not empty)
-      if (outcome && outcome !== "NO_SHOW" && outcome !== "ADMIN_CANCELLED" && outcome !== "CONTACT_CANCELLED") {
+      // Showed up = had a real outcome (not a cancel or no-show)
+      if (
+        outcome &&
+        noSaleReason !== "NO_SHOW" &&
+        cancelledBy !== "setter" &&
+        noSaleReason !== "ADMIN_CANCELLED" &&
+        noSaleReason !== "CONTACT_CANCELLED"
+      ) {
         pushFunnelMetric(rows, mapping.profile_id, "iclosed", metricDate, "show_ups");
       }
 
-      // Closed = APPROVED (sale made)
-      if (outcome === "APPROVED") {
+      // Closed = WON (sale made)
+      if (outcome === "WON") {
         pushFunnelMetric(rows, mapping.profile_id, "iclosed", metricDate, "closes");
       }
-
-      totalSeen++;
     }
 
     if (items.length < 100) break;
     page++;
   }
 
-  return { rows: groupFunnelRows(rows), recordsSeen: totalSeen };
+  // Upsert raw event records into iclosed_event_records
+  if (eventRecords.length > 0) {
+    // Deduplicate by iclosed_event_id + profile_id before upserting
+    const seen = new Set<string>();
+    const deduped = eventRecords.filter(r => {
+      const key = `${r.iclosed_event_id}:${r.profile_id}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    const BATCH = 100;
+    let error: { message: string } | null = null;
+    for (let i = 0; i < deduped.length; i += BATCH) {
+      const { error: batchErr } = await supabase
+        .from("iclosed_event_records")
+        .upsert(deduped.slice(i, i + BATCH), { onConflict: "iclosed_event_id,profile_id" });
+      if (batchErr) { error = batchErr; break; }
+    }
+    if (error) {
+      const isMissing = /does not exist|relation/i.test(error.message);
+      const msg = isMissing
+        ? `iclosed_event_records table missing — run migration 20260502_iclosed_event_records.sql in Supabase SQL editor`
+        : `iclosed_event_records upsert failed: ${error.message}`;
+      console.warn(`[iclosed] ${msg}`);
+      // Return as a partial error so callers can surface it to the user
+      return { rows: groupFunnelRows(rows), recordsSeen: totalSeen, upsertError: msg };
+    } else {
+      console.log(`[iclosed] upserted ${deduped.length} raw event records`);
+    }
+  }
+
+  return { rows: groupFunnelRows(rows), recordsSeen: totalSeen, upsertError: undefined };
 }
 
 async function upsertCallRecords(supabase: SupabaseClient, records: CallRecord[]) {
   if (!records.length) return 0;
-  const { error } = await supabase.from("setter_call_records").upsert(records, {
-    onConflict: "aircall_call_id,profile_id",
-  });
-  if (error) throw new Error(error.message);
+  const BATCH = 100;
+  for (let i = 0; i < records.length; i += BATCH) {
+    const { error } = await supabase.from("setter_call_records").upsert(
+      records.slice(i, i + BATCH),
+      { onConflict: "aircall_call_id,profile_id" },
+    );
+    if (error) throw new Error(error.message);
+  }
   return records.length;
 }
 
@@ -573,7 +748,16 @@ export async function runSetterDashboardSync(options: {
     errors: string[];
   }> = [];
 
+  // Global time budget — Supabase kills functions at 150s.
+  // Stop gracefully at 120s so finishRun can still write results.
+  const GLOBAL_BUDGET_MS = 120_000;
+  const syncStart = Date.now();
+
   for (const selectedSource of selectedSources) {
+    if (Date.now() - syncStart > GLOBAL_BUDGET_MS) {
+      console.log(`[sync] time budget reached before starting ${selectedSource} — skipping`);
+      break;
+    }
     const runId = await createRun(supabase, selectedSource, mode, triggeredBy, startDate, endDate);
     let totalRecordsSeen = 0;
     let totalRowsWritten = 0;
@@ -778,14 +962,20 @@ export async function runSetterDashboardSync(options: {
       } else if (selectedSource === "iclosed") {
         const allFunnelRows: FunnelAggregate[] = [];
         for (const mapping of rows) {
+          if (Date.now() - syncStart > GLOBAL_BUDGET_MS) {
+            console.log(`[iclosed] time budget reached — stopping before mapping ${mapping.profile_id}`);
+            errors.push("Time budget reached — run sync again to continue");
+            break;
+          }
           if (!mapping.iclosed_api_key || !mapping.iclosed_api_base_url) {
             errors.push(`${mapping.profile_id}: Missing iClosed API key or Base URL (check Global Settings)`);
             continue;
           }
           try {
-            const synced = await syncIClosedForSetter(mapping, startDate, endDate);
+            const synced = await syncIClosedForSetter(supabase, mapping, startDate, endDate);
             allFunnelRows.push(...synced.rows);
             totalRecordsSeen += synced.recordsSeen;
+            if (synced.upsertError) errors.push(synced.upsertError);
           } catch (err) {
             errors.push(`${mapping.profile_id}: ${err instanceof Error ? err.message : String(err)}`);
           }

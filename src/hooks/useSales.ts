@@ -153,6 +153,22 @@ export const useUpdateCommission = () => {
   });
 };
 
+export const useReassignCloser = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ saleId, closerId, closerName, closerCommission }: {
+      saleId: string; closerId: string; closerName: string; closerCommission: number;
+    }) => {
+      const { error } = await supabase
+        .from("sales")
+        .update({ closer_id: closerId, closer_commission: closerCommission })
+        .eq("id", saleId);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sales"] }),
+  });
+};
+
 export const useDeleteSale = () => {
   const qc = useQueryClient();
   return useMutation({
@@ -161,5 +177,43 @@ export const useDeleteSale = () => {
       if (error) throw new Error(error.message);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sales"] }),
+  });
+};
+
+export const useMarkAsRefunded = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, amount, date }: { id: string; amount: number; date: string }) => {
+      const { error: saleErr } = await supabase.from("sales").update({ refunded: true }).eq("id", id);
+      if (saleErr) throw new Error(saleErr.message);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: refundErr } = await (supabase as any).from("refunds").insert({
+        sale_id: id, amount, date, status: "approved",
+      });
+      if (refundErr) throw new Error(refundErr.message);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sales"] });
+      qc.invalidateQueries({ queryKey: ["refunds"] });
+    },
+  });
+};
+
+export const useMarkAsImpaye = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, amount, date }: { id: string; amount: number; date: string }) => {
+      const { error: saleErr } = await supabase.from("sales").update({ impaye: true }).eq("id", id);
+      if (saleErr) throw new Error(saleErr.message);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: impayeErr } = await (supabase as any).from("impayes").insert({
+        sale_id: id, amount, date,
+      });
+      if (impayeErr) throw new Error(impayeErr.message);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sales"] });
+      qc.invalidateQueries({ queryKey: ["impayes"] });
+    },
   });
 };

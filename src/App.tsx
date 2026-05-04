@@ -125,10 +125,11 @@ const AppRoutes = () => (
     <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
     <Route path="/team" element={<AdminRoute><TeamPage /></AdminRoute>} />
     <Route path="/team/manage" element={<AdminRoute><TeamManagePage /></AdminRoute>} />
-    <Route path="/team/closer/:name" element={<AdminRoute><CloserDetailPage /></AdminRoute>} />
+    <Route path="/team/closer/:name" element={<CloserOrAdminRoute><CloserDetailPage /></CloserOrAdminRoute>} />
     <Route path="/team/setter/:name" element={<AdminRoute><SetterDetailPage /></AdminRoute>} />
     <Route path="/analytics" element={<ProtectedRoute><AnalyticsPage /></ProtectedRoute>} />
     <Route path="/setter-dashboard" element={<SetterOrAdminRoute><SetterDashboardPage /></SetterOrAdminRoute>} />
+    <Route path="/setter-dashboard/setter/:profileId" element={<SetterOrAdminRoute><SetterDetailPage /></SetterOrAdminRoute>} />
     <Route path="/setter-dashboard/calls/:callId" element={<SetterOrAdminRoute><SetterCallDetailPage /></SetterOrAdminRoute>} />
     <Route path="/calls" element={<CloserOrAdminRoute><CallsPage /></CloserOrAdminRoute>} />
     <Route path="/assistant" element={<CloserOrAdminRoute><SalesAssistantPage /></CloserOrAdminRoute>} />

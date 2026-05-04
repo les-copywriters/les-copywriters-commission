@@ -33,6 +33,7 @@ export type User = {
   id: string;
   name: string;
   role: UserRole;
+  isActive: boolean;
 };
 
 export type Refund = {

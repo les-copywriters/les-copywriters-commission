@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { computeCallDisplayStatus, normalizePhone } from "@/lib/setterOps";
 import {
   IntegrationSyncRun,
   SetterCallMetricDaily,
@@ -268,6 +269,11 @@ export const useSyncSetterDashboard = () => {
       qc.invalidateQueries({ queryKey: ["setter_dashboard_metrics"] });
       qc.invalidateQueries({ queryKey: ["setter_sync_health"] });
       qc.invalidateQueries({ queryKey: ["setter_call_records"] });
+      // Invalidate the new RPC-based queries so the leaderboard and charts
+      // refresh automatically after every sync without a manual page reload.
+      qc.invalidateQueries({ queryKey: ["setter_performance"] });
+      qc.invalidateQueries({ queryKey: ["setter_daily_activity"] });
+      qc.invalidateQueries({ queryKey: ["setter_call_history"] });
     },
   });
 };
@@ -321,6 +327,183 @@ function extractNameFromPayload(payload: unknown): string | null {
 
   return null;
 }
+
+// ── Per-setter performance via RPC ────────────────────────────────────────────
+
+export type SetterPerformanceRow = {
+  profileId: string;
+  fullName: string;
+  dialed: number;
+  pickup: number;
+  pickupRatePct: number;
+  validated: number;
+  shows: number;
+  noShows: number;
+  showRatePct: number;
+  setterCancellations: number;
+  cancelRatePct: number;
+  closed: number;
+  closeRatePct: number;
+  totalEncaisse: number;
+  eurPerValidated: number;
+  avgDurationSeconds: number;
+};
+
+export type DailyActivityPoint = {
+  profileId: string;
+  date: string;
+  dialed: number;
+  pickup: number;
+  validated: number;
+};
+
+export const useSetterPerformance = (dateFrom: string, dateTo: string) =>
+  useQuery({
+    queryKey: ["setter_performance", dateFrom, dateTo],
+    queryFn: async (): Promise<SetterPerformanceRow[]> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any).rpc("setter_performance_range", {
+        date_from: dateFrom,
+        date_to: dateTo,
+      });
+      if (error) throw new Error(error.message);
+      return ((data ?? []) as Record<string, unknown>[]).map(r => ({
+        profileId: String(r.profile_id),
+        fullName: String(r.full_name ?? ""),
+        dialed: Number(r.dialed ?? 0),
+        pickup: Number(r.pickup ?? 0),
+        pickupRatePct: Number(r.pickup_rate_pct ?? 0),
+        validated: Number(r.validated ?? 0),
+        shows: Number(r.shows ?? 0),
+        noShows: Number(r.no_shows ?? 0),
+        showRatePct: Number(r.show_rate_pct ?? 0),
+        setterCancellations: Number(r.setter_cancellations ?? 0),
+        cancelRatePct: Number(r.cancel_rate_pct ?? 0),
+        closed: Number(r.closed ?? 0),
+        closeRatePct: Number(r.close_rate_pct ?? 0),
+        totalEncaisse: Number(r.total_encaisse ?? 0),
+        eurPerValidated: Number(r.eur_per_validated ?? 0),
+        avgDurationSeconds: Number(r.avg_duration_seconds ?? 0),
+      }));
+    },
+    staleTime: 1000 * 60,
+  });
+
+export const useSetterDailyActivity = (dateFrom: string, dateTo: string, profileId?: string) =>
+  useQuery({
+    queryKey: ["setter_daily_activity", dateFrom, dateTo, profileId ?? "all"],
+    queryFn: async (): Promise<DailyActivityPoint[]> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any).rpc("setter_daily_activity", {
+        date_from: dateFrom,
+        date_to: dateTo,
+        p_profile_id: profileId ?? null,
+      });
+      if (error) throw new Error(error.message);
+      return ((data ?? []) as Record<string, unknown>[]).map(r => ({
+        profileId: String(r.profile_id),
+        date: String(r.activity_date ?? ""),
+        dialed: Number(r.dialed ?? 0),
+        pickup: Number(r.pickup ?? 0),
+        validated: Number(r.validated ?? 0),
+      }));
+    },
+    staleTime: 1000 * 60,
+  });
+
+// ── Per-setter call history with computed iClosed status ──────────────────────
+
+export type SetterCallHistoryRow = {
+  id: number;
+  profileId: string;
+  startedAt: string | null;
+  durationSeconds: number;
+  contactName: string | null;
+  contactPhone: string | null;
+  recordingUrl: string | null;
+  // Computed display status
+  displayStatus: "closed" | "annule_setter" | "no_show" | "valide" | "pas_decroche";
+  amountCollected: number;
+  // Raw iClosed event if matched
+  iclosedEventId: string | null;
+  outcome: string | null;
+  cancelledBy: string | null;
+};
+
+export const useSetterCallHistory = (profileId: string, dateFrom: string, dateTo: string) =>
+  useQuery({
+    queryKey: ["setter_call_history", profileId, dateFrom, dateTo],
+    queryFn: async (): Promise<SetterCallHistoryRow[]> => {
+      const [callsRes, eventsRes] = await Promise.all([
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any)
+          .from("setter_call_records")
+          .select("id, profile_id, started_at, duration_seconds, talk_time_seconds, contact_name, contact_phone, recording_url, status, raw_payload")
+          .eq("profile_id", profileId)
+          .gte("started_at", `${dateFrom}T00:00:00Z`)
+          .lte("started_at", `${dateTo}T23:59:59Z`)
+          .order("started_at", { ascending: false })
+          .limit(2000),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any)
+          .from("iclosed_event_records")
+          .select("id, profile_id, iclosed_event_id, phone_number, date_time, outcome, no_sale_reason, cancelled_by, amount_collected")
+          .eq("profile_id", profileId)
+          .gte("date_time", `${dateFrom}T00:00:00Z`)
+          .lte("date_time", `${dateTo}T23:59:59Z`),
+      ]);
+
+      if (callsRes.error) throw new Error(callsRes.error.message);
+      if (eventsRes.error) throw new Error(eventsRes.error.message);
+
+      const calls = (callsRes.data ?? []) as Record<string, unknown>[];
+      const events = (eventsRes.data ?? []) as Record<string, unknown>[];
+
+      // Index iClosed events by normalized phone for matching
+      const eventsByPhone = new Map<string, Record<string, unknown>>();
+      for (const ev of events) {
+        const phone = String(ev.phone_number ?? "");
+        if (phone) eventsByPhone.set(normalizePhone(phone), ev);
+      }
+
+      return calls.map(c => {
+        const phone = String(c.contact_phone ?? "");
+        const rawPayload = c.raw_payload as Record<string, unknown> | null | undefined;
+        const contactName =
+          String(c.contact_name ?? "").trim() ||
+          extractNameFromPayload(rawPayload) ||
+          null;
+
+        const aircallStatus = String(c.status ?? "").toLowerCase();
+        const answered = aircallStatus === "answered" || aircallStatus === "done";
+
+        // Try to match an iClosed event by phone
+        const ev = phone ? eventsByPhone.get(normalizePhone(phone)) : undefined;
+        const outcome = ev ? String(ev.outcome ?? "").toUpperCase() : null;
+        const noSaleReason = ev ? String(ev.no_sale_reason ?? "").toUpperCase() : null;
+        const cancelledBy = ev ? String(ev.cancelled_by ?? "").toLowerCase() : null;
+        const amountCollected = ev ? Number(ev.amount_collected ?? 0) : 0;
+
+        const displayStatus = computeCallDisplayStatus({ answered, cancelledBy, noSaleReason, outcome });
+
+        return {
+          id: Number(c.id),
+          profileId: String(c.profile_id),
+          startedAt: c.started_at ? String(c.started_at) : null,
+          durationSeconds: Number(c.duration_seconds ?? c.talk_time_seconds ?? 0),
+          contactName,
+          contactPhone: phone || null,
+          recordingUrl: String(c.recording_url ?? "") || null,
+          displayStatus,
+          amountCollected,
+          iclosedEventId: ev ? String(ev.iclosed_event_id ?? ev.id ?? "") : null,
+          outcome,
+          cancelledBy,
+        };
+      });
+    },
+    staleTime: 1000 * 60,
+  });
 
 export const useSetterCallRecords = (profileId?: string, startDate?: string, endDate?: string) => {
   return useQuery({

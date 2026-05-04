@@ -130,4 +130,78 @@ describe("monthlyBonusBreakdown", () => {
   it("returns empty array for no sales", () => {
     expect(monthlyBonusBreakdown([], tiers)).toHaveLength(0);
   });
+
+  it("each month entry has the correct validated count", () => {
+    const sales = [
+      makeSale({ id: "s1", date: "2026-01-10" }),
+      makeSale({ id: "s2", date: "2026-01-20" }),
+      makeSale({ id: "s3", date: "2026-01-25", refunded: true }), // should not count
+    ];
+    const result = monthlyBonusBreakdown(sales, tiers);
+    const jan = result.find(r => r.month === "2026-01");
+    expect(jan?.validatedCount).toBe(2);
+  });
+
+  it("applies tier correctly in monthly context", () => {
+    // 10 sales in April → tier2 (500€ volume + 500€ PIF = 1000€)
+    const sales = Array.from({ length: 10 }, (_, i) =>
+      makeSale({ id: `s${i}`, date: "2026-04-15" })
+    );
+    const result = monthlyBonusBreakdown(sales, tiers);
+    const april = result.find(r => r.month === "2026-04");
+    expect(april?.volumeBonus).toBe(500);
+    expect(april?.pifBonus).toBe(500); // 10 × €50
+    expect(april?.total).toBe(1000);
+  });
+
+  it("a single sale triggers no volume tier but a PIF bonus", () => {
+    const sales = [makeSale({ id: "s1", date: "2026-02-10" })];
+    const result = monthlyBonusBreakdown(sales, tiers);
+    const feb = result.find(r => r.month === "2026-02");
+    expect(feb?.volumeTier).toBeNull();
+    expect(feb?.pifBonus).toBe(50); // 1 × €50
+    expect(feb?.total).toBe(50);
+  });
+
+  it("all refunded in a month → zero bonus", () => {
+    const sales = Array.from({ length: 10 }, (_, i) =>
+      makeSale({ id: `s${i}`, date: "2026-03-10", refunded: true })
+    );
+    const result = monthlyBonusBreakdown(sales, tiers);
+    const march = result.find(r => r.month === "2026-03");
+    expect(march?.total).toBe(0);
+    expect(march?.volumeTier).toBeNull();
+  });
+});
+
+// ── calculateMonthBonus edge cases ────────────────────────────────────────────
+
+describe("calculateMonthBonus — additional edge cases", () => {
+  it("installment sales count toward validated total for tier", () => {
+    // Mix of PIF and installments — all count toward the volume tier
+    const sales = [
+      ...Array.from({ length: 5 }, (_, i) => ({ id: `pif${i}`, date: "2026-04-01", clientName: "C", clientEmail: "c@c.com", product: "P", closer: "J", setter: null, closerId: "c1", setterId: null, amount: 1000, closerCommission: 88, setterCommission: 10, refunded: false, impaye: false, paymentType: "pif" as const })),
+      ...Array.from({ length: 5 }, (_, i) => ({ id: `inst${i}`, date: "2026-04-01", clientName: "C", clientEmail: "c@c.com", product: "P", closer: "J", setter: null, closerId: "c1", setterId: null, amount: 1000, closerCommission: 88, setterCommission: 10, refunded: false, impaye: false, paymentType: "installments" as const })),
+    ];
+    const tiers2 = [{ id: "t1", minSales: 10, bonusAmount: 500 }];
+    const result = calculateMonthBonus(sales, tiers2);
+    expect(result.validatedCount).toBe(10);
+    expect(result.volumeTier?.id).toBe("t1");
+    expect(result.pifCount).toBe(5); // only PIF sales
+    expect(result.pifBonus).toBe(250); // 5 × €50
+  });
+
+  it("exactly at tier boundary triggers tier", () => {
+    const tiers2 = [{ id: "t1", minSales: 3, bonusAmount: 150 }];
+    const sales = Array.from({ length: 3 }, (_, i) => ({ id: `s${i}`, date: "2026-04-01", clientName: "C", clientEmail: "c@c.com", product: "P", closer: "J", setter: null, closerId: "c1", setterId: null, amount: 1000, closerCommission: 88, setterCommission: 10, refunded: false, impaye: false, paymentType: "pif" as const }));
+    const result = calculateMonthBonus(sales, tiers2);
+    expect(result.volumeTier?.id).toBe("t1");
+  });
+
+  it("one below tier boundary does NOT trigger tier", () => {
+    const tiers2 = [{ id: "t1", minSales: 3, bonusAmount: 150 }];
+    const sales = Array.from({ length: 2 }, (_, i) => ({ id: `s${i}`, date: "2026-04-01", clientName: "C", clientEmail: "c@c.com", product: "P", closer: "J", setter: null, closerId: "c1", setterId: null, amount: 1000, closerCommission: 88, setterCommission: 10, refunded: false, impaye: false, paymentType: "pif" as const }));
+    const result = calculateMonthBonus(sales, tiers2);
+    expect(result.volumeTier).toBeNull();
+  });
 });

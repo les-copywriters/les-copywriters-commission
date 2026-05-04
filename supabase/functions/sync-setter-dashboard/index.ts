@@ -1,3 +1,8 @@
+// After any change to _shared/setterDashboard.ts, redeploy this function:
+//   supabase functions deploy sync-setter-dashboard
+// And apply DB migrations before testing:
+//   20260502_iclosed_event_records.sql
+//   20260502_setter_performance_rpc.sql
 import { CORS, getAdminClient, getGlobalSettings, json, normalizeIClosedBaseUrl, resolveCaller, runSetterDashboardSync } from "../_shared/setterDashboard.ts";
 
 Deno.serve(async (req) => {

@@ -1,11 +1,10 @@
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 
-import { useProfiles, useUpdateProfile } from "@/hooks/useProfiles";
+import { useProfiles, useUpdateProfile, useToggleProfileActive } from "@/hooks/useProfiles";
 import { useLanguage } from "@/i18n";
 import { supabase } from "@/lib/supabase";
 import AppLayout from "@/components/AppLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Pencil, UserPlus, UserCog, RefreshCw, Shield, Search, Trash2, AlertTriangle } from "lucide-react";
+import { Archive, ArchiveRestore, Pencil, UserPlus, UserCog, RefreshCw, Shield, Search, Trash2, AlertTriangle } from "lucide-react";
 
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -43,14 +42,15 @@ const TeamManagePage = () => {
     refetch: refetchProfiles,
   } = useProfiles();
   const updateProfile = useUpdateProfile();
+  const toggleActive  = useToggleProfileActive();
   const queryClient = useQueryClient();
 
   // Dialog states
   const [editing, setEditing] = useState<User | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [activeTab, setActiveTab] = useState<"all" | UserRole>("all");
-  
+  const [activeTab, setActiveTab] = useState<"all" | UserRole | "archived">("all");
+
   // Form states
   const [editName, setEditName] = useState("");
   const [editRole, setEditRole] = useState<UserRole>("closer");
@@ -66,9 +66,14 @@ const TeamManagePage = () => {
   const filteredProfiles = useMemo(() => {
     const q = search.trim().toLowerCase();
     return profiles.filter((profile) => {
+      if (activeTab === "archived") return !profile.isActive && profile.name.toLowerCase().includes(q || "");
       if (activeTab !== "all" && profile.role !== activeTab) return false;
       if (!q) return true;
       return profile.name.toLowerCase().includes(q);
+    }).sort((a, b) => {
+      // Active members first, then archived
+      if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+      return a.name.localeCompare(b.name);
     });
   }, [profiles, search, activeTab]);
 
@@ -135,269 +140,295 @@ const TeamManagePage = () => {
 
   return (
     <AppLayout>
-      <div className="space-y-10 animate-in fade-in duration-500">
+      <div className="space-y-6 animate-in fade-in duration-500">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-          <div className="flex items-center gap-5">
-            <div className="flex h-14 w-14 items-center justify-center rounded-[1.25rem] bg-primary/10 shadow-inner">
-              <UserCog className="h-7 w-7 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black tracking-tight">{t("teamManage.title")}</h1>
-              <p className="text-muted-foreground font-medium uppercase tracking-widest text-[10px] mt-1">{t("teamManage.subtitle")}</p>
-            </div>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{t("teamManage.subtitle")}</p>
+            <h1 className="text-xl font-semibold">{t("teamManage.title")}</h1>
           </div>
-          <Button onClick={() => setInviteOpen(true)} className="h-12 px-6 rounded-2xl gap-2 shadow-xl shadow-primary/20 transition-all hover:scale-[1.02] active:scale-[0.95] font-black uppercase tracking-widest text-xs">
+          <Button onClick={() => setInviteOpen(true)} className="rounded-lg h-9 px-4 text-xs font-medium gap-2">
             <UserPlus className="h-4 w-4" />
             {t("teamManage.inviteMember")}
           </Button>
         </div>
 
         {/* Filters & Search */}
-        <Card className="border-none shadow-premium rounded-[2rem] overflow-hidden bg-background/50 backdrop-blur-sm">
-          <CardContent className="p-6 flex flex-col lg:flex-row items-center justify-between gap-6">
-            <div className="relative w-full lg:max-w-md group">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+        <div className="rounded-xl border border-border/40 overflow-hidden bg-background">
+          <div className="px-4 py-3 bg-muted/30 border-b border-border/40">
+            <p className="text-sm font-medium">Filters</p>
+          </div>
+          <div className="p-4 flex flex-col lg:flex-row items-center justify-between gap-4">
+            <div className="relative w-full lg:max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search by name..."
-                className="h-12 pl-12 rounded-xl border-2 bg-muted/20 focus-visible:ring-primary/20 focus-visible:border-primary transition-all font-medium"
+                className="h-9 pl-9 rounded-lg border-border/50 bg-muted/20 text-sm"
               />
             </div>
-            
-            <Tabs 
-              value={activeTab} 
-              onValueChange={(v) => setActiveTab(v as "all" | UserRole)} 
+
+            <Tabs
+              value={activeTab}
+              onValueChange={(v) => setActiveTab(v as "all" | UserRole | "archived")}
               className="w-full lg:w-auto"
             >
-              <TabsList className="bg-muted/30 border border-border/40 p-1 rounded-xl h-12 w-full sm:w-auto gap-1">
-                <TabsTrigger value="all" className="rounded-lg px-6 font-black uppercase tracking-widest text-[10px] transition-all data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg shadow-primary/20">All</TabsTrigger>
-                <TabsTrigger value="closer" className="rounded-lg px-6 font-black uppercase tracking-widest text-[10px] transition-all data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg shadow-primary/20">{t("role.closer")}</TabsTrigger>
-                <TabsTrigger value="setter" className="rounded-lg px-6 font-black uppercase tracking-widest text-[10px] transition-all data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg shadow-primary/20">{t("role.setter")}</TabsTrigger>
-                <TabsTrigger value="admin" className="rounded-lg px-6 font-black uppercase tracking-widest text-[10px] transition-all data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg shadow-primary/20">{t("role.admin")}</TabsTrigger>
+              <TabsList className="bg-muted/30 border border-border/40 p-0.5 rounded-lg h-9 w-full sm:w-auto">
+                <TabsTrigger value="all" className="rounded-md px-4 text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  All <span className="ml-1 text-[10px] text-muted-foreground">({profiles.filter(p => p.isActive).length})</span>
+                </TabsTrigger>
+                <TabsTrigger value="closer" className="rounded-md px-4 text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm">{t("role.closer")}</TabsTrigger>
+                <TabsTrigger value="setter" className="rounded-md px-4 text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm">{t("role.setter")}</TabsTrigger>
+                <TabsTrigger value="admin" className="rounded-md px-4 text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm">{t("role.admin")}</TabsTrigger>
+                <TabsTrigger value="archived" className="rounded-md px-4 text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm text-muted-foreground">
+                  Archived <span className="ml-1 text-[10px]">({profiles.filter(p => !p.isActive).length})</span>
+                </TabsTrigger>
               </TabsList>
             </Tabs>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Master Table */}
-        <Card className="border-none shadow-premium rounded-[2.5rem] overflow-hidden bg-background">
-          <CardContent className="p-0">
-            {profilesLoadFailed ? (
-              <div className="p-10">
-                <Alert variant="destructive" className="rounded-[2rem] border-none shadow-lg bg-rose-500/10 p-6">
-                  <AlertTriangle className="h-5 w-5 text-rose-500" />
-                  <AlertTitle className="font-black uppercase tracking-widest text-rose-500">Load Error</AlertTitle>
-                  <AlertDescription className="mt-4 flex flex-col gap-6">
-                    <p className="font-medium opacity-90">{loadErrorMessage}</p>
-                    <Button size="sm" variant="outline" className="w-fit rounded-xl border-rose-500/20 text-rose-500 font-bold hover:bg-rose-500/10" onClick={() => refetchProfiles()}>Retry</Button>
-                  </AlertDescription>
-                </Alert>
-              </div>
-            ) : isLoading ? (
-              <div className="p-10 space-y-4">
-                {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-2xl" />)}
-              </div>
-            ) : filteredProfiles.length === 0 ? (
-              <div className="text-center py-32 grayscale opacity-40">
-                <div className="h-20 w-20 bg-muted/30 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <UserCog className="h-10 w-10 text-muted-foreground/40" />
-                </div>
-                <p className="text-xl font-black tracking-tight text-muted-foreground/60">No members found</p>
-                <p className="text-sm text-muted-foreground/40 mt-1">Try adjusting your search or filters</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader className="bg-muted/30">
-                    <TableRow className="border-none">
-                      <TableHead className="py-5 pl-10 text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t("teamManage.name")}</TableHead>
-                      <TableHead className="py-5 text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t("teamManage.role")}</TableHead>
-                      <TableHead className="py-5 text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t("teamManage.email")}</TableHead>
-                      <TableHead className="py-5 pr-10 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t("table.actions")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredProfiles.map((profile) => (
-                      <TableRow key={profile.id} className="group hover:bg-muted/10 transition-all border-border/30">
-                        <TableCell className="py-6 pl-10">
-                          <div className="flex items-center gap-5">
-                            <div className={cn(
-                              "flex h-12 w-12 items-center justify-center rounded-2xl font-black text-sm shadow-xl transition-all duration-500 group-hover:scale-110 group-hover:rotate-3",
-                              profile.role === 'admin' ? "bg-amber-500/10 text-amber-600 shadow-amber-500/10" :
-                              profile.role === 'closer' ? "bg-primary/10 text-primary shadow-primary/10" :
-                              "bg-emerald-500/10 text-emerald-600 shadow-emerald-500/10"
-                            )}>
-                              {profile.name.split(" ").map(n => n[0]).join("").toUpperCase()}
-                            </div>
-                            <div>
-                              <p className="font-black text-base tracking-tight leading-none">{profile.name}</p>
-                              {profile.id === currentUser?.id && <span className="text-[9px] font-black text-primary uppercase tracking-widest mt-1.5 block opacity-70">Authenticated Profile</span>}
-                            </div>
+        <div className="rounded-xl border border-border/40 overflow-hidden bg-background">
+          {profilesLoadFailed ? (
+            <div className="p-6">
+              <Alert variant="destructive" className="rounded-lg border-destructive/20 bg-destructive/5">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle className="font-medium">Load Error</AlertTitle>
+                <AlertDescription className="mt-2 flex flex-col gap-3">
+                  <p className="text-sm">{loadErrorMessage}</p>
+                  <Button size="sm" variant="outline" className="w-fit rounded-lg border-destructive/20 text-destructive text-xs" onClick={() => refetchProfiles()}>Retry</Button>
+                </AlertDescription>
+              </Alert>
+            </div>
+          ) : isLoading ? (
+            <div className="p-4 space-y-3">
+              {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-lg" />)}
+            </div>
+          ) : filteredProfiles.length === 0 ? (
+            <div className="text-center py-16">
+              <p className="text-sm font-medium text-muted-foreground">No members found</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">Try adjusting your search or filters</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-muted/30">
+                  <TableRow className="border-none">
+                    <TableHead className="py-2.5 pl-4 text-[11px] font-medium text-muted-foreground">{t("teamManage.name")}</TableHead>
+                    <TableHead className="py-2.5 text-[11px] font-medium text-muted-foreground">{t("teamManage.role")}</TableHead>
+                    <TableHead className="py-2.5 text-[11px] font-medium text-muted-foreground">{t("teamManage.email")}</TableHead>
+                    <TableHead className="py-2.5 pr-4 text-right text-[11px] font-medium text-muted-foreground">{t("table.actions")}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredProfiles.map((profile) => (
+                    <TableRow key={profile.id} className={cn(
+                      "border-border/20 transition-colors",
+                      profile.isActive ? "hover:bg-muted/20" : "opacity-50 bg-muted/10 hover:bg-muted/20"
+                    )}>
+                      <TableCell className="py-3 pl-4">
+                        <div className="flex items-center gap-3">
+                          <div className={cn(
+                            "flex h-8 w-8 items-center justify-center rounded-full font-medium text-sm",
+                            profile.isActive
+                              ? profile.role === 'admin' ? "bg-amber-500/10 text-amber-600" :
+                                profile.role === 'closer' ? "bg-primary/10 text-primary" :
+                                "bg-emerald-500/10 text-emerald-600"
+                              : "bg-muted text-muted-foreground"
+                          )}>
+                            {profile.name.split(" ").map(n => n[0]).join("").toUpperCase()}
                           </div>
-                        </TableCell>
-                        <TableCell className="py-6">
+                          <div>
+                            <p className="font-medium text-sm">{profile.name}</p>
+                            {profile.id === currentUser?.id && <span className="text-[10px] text-primary">You</span>}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-3">
+                        <div className="flex items-center gap-1.5">
                           <Badge variant="outline" className={cn(
-                            "px-4 py-1 border font-black uppercase tracking-widest text-[9px] h-6 rounded-full shadow-sm",
+                            "px-2 py-0.5 border rounded-md text-[10px]",
                             roleVariant[profile.role]
                           )}>
                             {profile.role}
                           </Badge>
-                        </TableCell>
-                        <TableCell className="py-6">
-                          <span className="text-xs font-bold text-muted-foreground/60 italic flex items-center gap-2">
-                             Cloud Managed • SSO Active
-                          </span>
-                        </TableCell>
-                        <TableCell className="py-6 pr-10 text-right">
-                          {profile.id !== currentUser?.id && (
-                            <div className="flex items-center justify-end gap-2">
+                          {!profile.isActive && (
+                            <Badge variant="outline" className="px-2 py-0.5 border rounded-md text-[10px] border-border/40 text-muted-foreground bg-muted/20">
+                              archived
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-3">
+                        <span className="text-xs text-muted-foreground/60">
+                          Cloud Managed · SSO Active
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-3 pr-4 text-right">
+                        {profile.id !== currentUser?.id && (
+                          <div className="flex items-center justify-end gap-1.5">
+                            {profile.isActive && (
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => { setEditing(profile); setEditName(profile.name); setEditRole(profile.role); }}
-                                className="h-10 w-10 rounded-2xl hover:bg-primary/10 hover:text-primary transition-all active:scale-90"
+                                className="h-8 w-8 rounded-lg hover:bg-primary/10 hover:text-primary transition-all"
                               >
-                                <Pencil className="h-4 w-4" />
+                                <Pencil className="h-3.5 w-3.5" />
                               </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title={profile.isActive ? "Archive (mark as legacy)" : "Restore to active team"}
+                              onClick={() => toggleActive.mutate(
+                                { id: profile.id, isActive: !profile.isActive },
+                                {
+                                  onSuccess: () => toast.success(profile.isActive
+                                    ? `${profile.name} archived — historical data preserved`
+                                    : `${profile.name} restored to active team`),
+                                  onError: (e) => toast.error(e.message),
+                                }
+                              )}
+                              className={cn(
+                                "h-8 w-8 rounded-lg transition-all",
+                                profile.isActive
+                                  ? "hover:bg-amber-500/10 hover:text-amber-600"
+                                  : "hover:bg-emerald-500/10 hover:text-emerald-600"
+                              )}
+                            >
+                              {profile.isActive
+                                ? <Archive className="h-3.5 w-3.5" />
+                                : <ArchiveRestore className="h-3.5 w-3.5" />}
+                            </Button>
+                            {profile.isActive && (
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => setRemoveTarget(profile)}
-                                className="h-10 w-10 rounded-2xl hover:bg-rose-500/10 hover:text-rose-500 transition-all active:scale-90"
+                                className="h-8 w-8 rounded-lg hover:bg-rose-500/10 hover:text-rose-500 transition-all"
                               >
-                                <Trash2 className="h-4 w-4" />
+                                <Trash2 className="h-3.5 w-3.5" />
                               </Button>
-                            </div>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-        
-        <div className="p-6 rounded-[1.5rem] border border-dashed border-border/60 bg-muted/5 flex items-center gap-4 group hover:bg-muted/10 transition-colors">
-          <div className="h-10 w-10 rounded-xl bg-background flex items-center justify-center border border-border/40 shadow-sm transition-transform group-hover:rotate-12">
-            <Shield className="h-5 w-5 text-muted-foreground/60" />
-          </div>
-          <p className="text-xs text-muted-foreground font-black uppercase tracking-widest opacity-60">{t("teamManage.addNote")}</p>
+                            )}
+                          </div>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
+
+        <div className="px-4 py-3 rounded-lg border border-dashed border-border/60 flex items-center gap-3">
+          <Shield className="h-4 w-4 text-muted-foreground/50 shrink-0" />
+          <p className="text-xs text-muted-foreground/60">{t("teamManage.addNote")}</p>
         </div>
       </div>
 
-      {/* Modern Dialogs */}
+      {/* Dialogs */}
       <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
-        <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl rounded-[2.5rem]">
-          <div className="bg-gradient-to-br from-primary/10 via-background to-background p-10">
-            <DialogHeader className="mb-8 text-center">
-              <DialogTitle className="text-2xl font-black tracking-tight">{t("teamManage.editTitle")}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-8">
-              <div className="space-y-3">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Full Identity Name</Label>
-                <Input 
-                  value={editName} 
-                  onChange={e => setEditName(e.target.value)} 
-                  className="h-14 rounded-2xl border-2 bg-muted/20 focus-visible:ring-primary/20 focus-visible:border-primary px-5 font-black transition-all"
-                />
-              </div>
-              <div className="space-y-3">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">System Privilege Level</Label>
-                <Select value={editRole} onValueChange={v => setEditRole(v as UserRole)}>
-                  <SelectTrigger className="h-14 rounded-2xl border-2 bg-muted/20 focus-visible:ring-primary/20 focus-visible:border-primary px-5 font-black transition-all">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-2xl border-none shadow-2xl">
-                    <SelectItem value="closer" className="rounded-xl font-bold py-3">{t("role.closer")}</SelectItem>
-                    <SelectItem value="setter" className="rounded-xl font-bold py-3">{t("role.setter")}</SelectItem>
-                    <SelectItem value="admin" className="rounded-xl font-bold py-3">{t("role.admin")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button onClick={handleSave} className="w-full h-14 rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-primary/20 transition-all hover:scale-[1.02] active:scale-95 mt-4" disabled={updateProfile.isPending}>
-                {updateProfile.isPending ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
-                {t("admin.save")}
-              </Button>
+        <DialogContent className="max-w-md rounded-xl border border-border/40 bg-background p-6">
+          <DialogHeader className="mb-4">
+            <DialogTitle className="text-base font-semibold">{t("teamManage.editTitle")}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Full Name</Label>
+              <Input
+                value={editName}
+                onChange={e => setEditName(e.target.value)}
+                className="h-9 rounded-lg text-sm"
+              />
             </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Role</Label>
+              <Select value={editRole} onValueChange={v => setEditRole(v as UserRole)}>
+                <SelectTrigger className="h-9 rounded-lg text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="rounded-lg">
+                  <SelectItem value="closer">{t("role.closer")}</SelectItem>
+                  <SelectItem value="setter">{t("role.setter")}</SelectItem>
+                  <SelectItem value="admin">{t("role.admin")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={handleSave} className="w-full rounded-lg h-9 text-xs font-medium" disabled={updateProfile.isPending}>
+              {updateProfile.isPending ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
+              {t("admin.save")}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-        <DialogContent className="max-w-xl p-0 overflow-hidden border-none shadow-2xl rounded-[2.5rem]">
-          <div className="bg-gradient-to-br from-primary/10 via-background to-background p-10">
-            <DialogHeader className="mb-8 text-center">
-              <DialogTitle className="text-2xl font-black tracking-tight">{t("teamManage.inviteTitle")}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-6">
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                An invitation email will be sent automatically. The user clicks the link and sets their own password — no temporary password needed.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                 <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Full Name</Label>
-                  <Input value={inviteName} onChange={e => setInviteName(e.target.value)} className="h-12 rounded-2xl border-2 bg-muted/20" placeholder="Jean Dupont" />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Email Address</Label>
-                  <Input type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} className="h-12 rounded-2xl border-2 bg-muted/20" placeholder="jean@example.com" />
-                </div>
+        <DialogContent className="max-w-lg rounded-xl border border-border/40 bg-background p-6">
+          <DialogHeader className="mb-4">
+            <DialogTitle className="text-base font-semibold">{t("teamManage.inviteTitle")}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              An invitation email will be sent automatically. The user clicks the link and sets their own password.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Full Name</Label>
+                <Input value={inviteName} onChange={e => setInviteName(e.target.value)} className="h-9 rounded-lg text-sm" placeholder="Jean Dupont" />
               </div>
-
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">System Role Access</Label>
-                <Select value={inviteRole} onValueChange={v => setInviteRole(v as UserRole)}>
-                  <SelectTrigger className="h-12 rounded-2xl border-2 bg-muted/20 font-black uppercase tracking-widest text-[10px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-2xl border-none shadow-2xl">
-                    <SelectItem value="closer" className="rounded-xl font-bold py-3">{t("role.closer")}</SelectItem>
-                    <SelectItem value="setter" className="rounded-xl font-bold py-3">{t("role.setter")}</SelectItem>
-                    <SelectItem value="admin" className="rounded-xl font-bold py-3">{t("role.admin")}</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Email Address</Label>
+                <Input type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} className="h-9 rounded-lg text-sm" placeholder="jean@example.com" />
               </div>
-              
-              <Button onClick={handleInvite} className="w-full h-14 rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-primary/20 transition-all hover:scale-[1.02] active:scale-95 mt-6" disabled={inviting}>
-                {inviting ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : t("teamManage.inviteConfirm")}
-              </Button>
             </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Role</Label>
+              <Select value={inviteRole} onValueChange={v => setInviteRole(v as UserRole)}>
+                <SelectTrigger className="h-9 rounded-lg text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="rounded-lg">
+                  <SelectItem value="closer">{t("role.closer")}</SelectItem>
+                  <SelectItem value="setter">{t("role.setter")}</SelectItem>
+                  <SelectItem value="admin">{t("role.admin")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Button onClick={handleInvite} className="w-full rounded-lg h-9 text-xs font-medium" disabled={inviting}>
+              {inviting ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
+              {inviting ? "Sending..." : t("teamManage.inviteConfirm")}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
+
       <AlertDialog open={!!removeTarget} onOpenChange={(open) => !open && setRemoveTarget(null)}>
-        <AlertDialogContent className="rounded-[2.5rem] border-none shadow-2xl p-0 overflow-hidden">
-          <div className="p-10">
-            <AlertDialogHeader className="items-center text-center space-y-6">
-              <div className="h-20 w-20 bg-rose-500/10 rounded-full flex items-center justify-center">
-                <Trash2 className="h-10 w-10 text-rose-500" />
-              </div>
-              <div>
-                <AlertDialogTitle className="text-2xl font-black tracking-tight">Remove {removeTarget?.name}?</AlertDialogTitle>
-                <AlertDialogDescription className="text-base font-medium mt-3 leading-relaxed max-w-xs">
-                  Their login will be revoked immediately. All historical commission data is preserved.
-                  <span className="text-rose-500 font-black uppercase tracking-widest text-[10px] block mt-4">Permanent Action</span>
-                </AlertDialogDescription>
-              </div>
-            </AlertDialogHeader>
-            <AlertDialogFooter className="flex-col sm:flex-row gap-4 mt-10">
-              <AlertDialogCancel className="w-full h-14 rounded-2xl border-none bg-muted/50 hover:bg-muted font-black uppercase tracking-widest text-xs transition-all">
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleRemove}
-                disabled={removing}
-                className="w-full h-14 rounded-2xl bg-rose-500 hover:bg-rose-600 font-black uppercase tracking-widest text-xs shadow-xl shadow-rose-500/20 transition-all hover:scale-[1.02] active:scale-95"
-              >
-                {removing ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
-                {removing ? "Removing..." : "Remove Member"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </div>
+        <AlertDialogContent className="rounded-xl border border-border/40 bg-background p-6">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base font-semibold">Remove {removeTarget?.name}?</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground mt-1">
+              Their login will be revoked immediately. All historical commission data is preserved.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 mt-4">
+            <AlertDialogCancel className="rounded-lg h-9 border-border/60 text-sm">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRemove}
+              disabled={removing}
+              className="rounded-lg h-9 bg-rose-500 hover:bg-rose-600 text-sm"
+            >
+              {removing ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
+              {removing ? "Removing..." : "Remove Member"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 

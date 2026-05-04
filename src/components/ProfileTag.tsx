@@ -5,7 +5,6 @@ import { useLanguage } from "@/i18n";
 import { useAuth } from "@/context/AuthContext";
 import { formatCurrency } from "@/lib/formatCurrency";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ArrowUpRight, User as UserIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -41,7 +40,7 @@ const ProfileTag = ({ personId, personName, role }: Props) => {
   }, [allSales, personId, role, isAdmin]);
 
   if (!personName || !personId) {
-    return <span className="text-muted-foreground text-[10px] font-medium italic">—</span>;
+    return <span className="text-muted-foreground text-xs">—</span>;
   }
 
   const initials = personName
@@ -56,65 +55,80 @@ const ProfileTag = ({ personId, personName, role }: Props) => {
       ? `/team/setter/${encodeURIComponent(personName)}`
       : `/team/closer/${encodeURIComponent(personName)}`;
 
+  const avatarClass = role === "closer"
+    ? "bg-primary/10 text-primary"
+    : "bg-emerald-500/10 text-emerald-600";
+
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button className="group flex items-center gap-3 text-xs font-black transition-all hover:text-primary active:scale-95 uppercase tracking-tight">
+        <button className="group flex items-center gap-2 text-xs font-medium transition-colors hover:text-primary">
           <div className={cn(
-            "flex h-7 w-7 shrink-0 items-center justify-center rounded-xl text-[10px] font-black shadow-inner transition-all duration-500 group-hover:rotate-6 group-hover:scale-110",
-            role === "closer" ? "bg-primary/10 text-primary" : "bg-emerald-500/10 text-emerald-600"
+            "flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[10px] font-semibold",
+            avatarClass
           )}>
             {initials}
           </div>
-          <span className="underline-offset-4 group-hover:underline decoration-primary/30">{personName}</span>
+          <span className="group-hover:text-primary transition-colors">{personName}</span>
         </button>
       </PopoverTrigger>
 
-      <PopoverContent className="w-72 p-0 overflow-hidden shadow-premium border-none rounded-[2rem] animate-in fade-in zoom-in-95 duration-300" align="start" side="top" sideOffset={12}>
-        <div className="bg-gradient-to-br from-background via-background to-muted/20 p-6">
-          <div className="flex items-center gap-4 mb-6">
-            <div className={cn(
-              "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-xs font-black shadow-xl",
-              role === "closer" ? "bg-primary/10 text-primary" : "bg-emerald-500/10 text-emerald-600"
-            )}>
-              {initials}
-            </div>
-            <div className="min-w-0">
-              <p className="text-base font-black leading-none truncate tracking-tight">{personName}</p>
-              <Badge variant="outline" className={cn(
-                "text-[8px] font-black px-2 py-0.5 mt-2 border-none shadow-sm uppercase h-4.5 rounded-full",
-                role === "closer" ? "bg-primary text-white shadow-primary/20" : "bg-emerald-500 text-white shadow-emerald-500/20"
-              )}>
-                {t(`role.${role}`)}
-              </Badge>
-            </div>
+      <PopoverContent
+        className="w-64 p-0 overflow-hidden rounded-xl border border-border/40 bg-background shadow-md"
+        align="start"
+        side="top"
+        sideOffset={8}
+      >
+        {/* Header */}
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-border/40 bg-muted/30">
+          <div className={cn(
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold",
+            avatarClass
+          )}>
+            {initials}
           </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold truncate">{personName}</p>
+            <span className={cn(
+              "inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium mt-0.5",
+              role === "closer"
+                ? "bg-primary/10 text-primary border-primary/20"
+                : "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+            )}>
+              {t(`role.${role}`)}
+            </span>
+          </div>
+        </div>
 
+        <div className="p-4 space-y-3">
           {isAdmin && stats ? (
-            <div className="space-y-5">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 rounded-2xl bg-muted/30 border border-border/40">
-                  <p className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/60 mb-1">{t("detail.totalSales")}</p>
-                  <p className="text-base font-black tabular-nums">{stats.total}</p>
+            <>
+              {/* Stats grid */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-lg bg-muted/50 px-3 py-2">
+                  <p className="text-[11px] text-muted-foreground">{t("detail.totalSales")}</p>
+                  <p className="text-base font-semibold tabular-nums mt-0.5">{stats.total}</p>
                 </div>
-                <div className="p-3 rounded-2xl bg-muted/30 border border-border/40">
-                  <p className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/60 mb-1">Validated</p>
-                  <p className="text-base font-black tabular-nums text-emerald-500">{stats.validated}</p>
+                <div className="rounded-lg bg-muted/50 px-3 py-2">
+                  <p className="text-[11px] text-muted-foreground">Validated</p>
+                  <p className="text-base font-semibold tabular-nums text-emerald-600 mt-0.5">{stats.validated}</p>
                 </div>
               </div>
 
-              <div className="px-1">
-                <p className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/40 mb-1.5">Estimated Performance Revenue</p>
-                <p className="text-2xl font-black text-primary tabular-nums tracking-tighter">
+              {/* Commission */}
+              <div className="rounded-lg bg-muted/50 px-3 py-2">
+                <p className="text-[11px] text-muted-foreground">Estimated revenue</p>
+                <p className="text-lg font-semibold text-primary tabular-nums mt-0.5">
                   {formatCurrency(stats.commission, locale)}
                 </p>
               </div>
 
+              {/* Refunds/Unpaid — only shown when non-zero */}
               {(stats.refunds > 0 || stats.impayes > 0) && (
-                <div className="p-3 rounded-2xl bg-rose-500/5 border border-rose-500/10">
-                   <p className="text-[8px] font-black uppercase tracking-widest text-rose-500/60 mb-1.5">{t("detail.refundsUnpaid")}</p>
-                   <p className="text-[10px] font-black text-rose-600 tabular-nums uppercase tracking-widest">
-                    {stats.refunds} Refunds / {stats.impayes} Unpaid
+                <div className="rounded-lg bg-rose-500/5 border border-rose-500/15 px-3 py-2">
+                  <p className="text-[11px] text-muted-foreground">{t("detail.refundsUnpaid")}</p>
+                  <p className="text-sm font-medium text-rose-600 mt-0.5">
+                    {stats.refunds} refunds · {stats.impayes} unpaid
                   </p>
                 </div>
               )}
@@ -123,16 +137,16 @@ const ProfileTag = ({ personId, personName, role }: Props) => {
 
               <Link
                 to={profilePath}
-                className="flex items-center justify-between text-[10px] text-primary hover:text-primary/80 font-black uppercase tracking-[0.2em] transition-all hover:translate-x-1"
+                className="flex items-center justify-between text-xs font-medium text-primary hover:text-primary/80 transition-colors"
               >
                 {t("setter.viewProfile")}
-                <ArrowUpRight className="h-4 w-4" />
+                <ArrowUpRight className="h-3.5 w-3.5" />
               </Link>
-            </div>
+            </>
           ) : (
-            <div className="flex items-center gap-3 py-3 px-1 text-[10px] text-muted-foreground font-black uppercase tracking-widest opacity-40">
-              <UserIcon className="h-4 w-4" />
-              Identity Encrypted
+            <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+              <UserIcon className="h-3.5 w-3.5" />
+              Profile details visible to admins only
             </div>
           )}
         </div>

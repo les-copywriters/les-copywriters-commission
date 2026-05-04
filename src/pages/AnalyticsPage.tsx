@@ -47,8 +47,8 @@ function computeDateRange(preset: DatePreset, customStart: string, customEnd: st
     case "last6m":     return { start: utc(y, m - 5, 1), end: today };
     case "thisYear":   return { start: `${y}-01-01`, end: today };
     case "lastYear":   return { start: `${y - 1}-01-01`, end: `${y - 1}-12-31` };
-    case "allTime":    return { start: "2000-01-01", end: today };
-    case "custom":     return { start: customStart || "2000-01-01", end: customEnd || today };
+    case "allTime":    return { start: "2023-01-01", end: today };
+    case "custom":     return { start: customStart || "2023-01-01", end: customEnd || today };
   }
 }
 
@@ -58,13 +58,13 @@ const CHART_COLORS = {
 };
 
 const ChartCard = ({ title, icon: Icon, children }: { title: string; icon?: React.ElementType; children: React.ReactNode }) => (
-  <Card className="border-none shadow-sm bg-background/50 backdrop-blur-sm overflow-hidden rounded-2xl">
-    <div className="px-6 pt-5 pb-0 flex items-center gap-2.5">
-      {Icon && <div className="p-1.5 rounded-md bg-primary/10 text-primary"><Icon className="h-3.5 w-3.5" /></div>}
-      <h3 className="font-semibold text-sm text-foreground/70">{title}</h3>
+  <div className="rounded-xl border border-border/40 overflow-hidden bg-background">
+    <div className="flex items-center gap-2 px-4 py-3 bg-muted/30 border-b border-border/40">
+      {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
+      <p className="text-sm font-medium">{title}</p>
     </div>
-    <CardContent className="p-6 pt-4">{children}</CardContent>
-  </Card>
+    <div className="p-4">{children}</div>
+  </div>
 );
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -255,13 +255,13 @@ const AnalyticsPage = () => {
 
   return (
     <AppLayout>
-      <div className="space-y-10 animate-in fade-in duration-500">
+      <div className="space-y-6 animate-in fade-in duration-500">
 
         {/* ── Header ────────────────────────────────────────────────────────── */}
-        <div className="space-y-5">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">{t("analytics.title")}</h1>
-            <p className="text-sm text-muted-foreground mt-1">{t("analytics.subtitle")}</p>
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{t("analytics.subtitle")}</p>
+            <h1 className="text-xl font-semibold">{t("analytics.title")}</h1>
           </div>
 
           <div className="flex flex-wrap gap-1.5">
@@ -270,7 +270,7 @@ const AnalyticsPage = () => {
                 key={key}
                 onClick={() => setDatePreset(key)}
                 className={cn(
-                  "rounded-lg px-3.5 py-1.5 text-xs font-medium transition-all",
+                  "rounded-lg px-3 py-1.5 text-xs font-medium transition-all",
                   datePreset === key
                     ? "bg-primary text-white shadow-sm"
                     : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -282,56 +282,51 @@ const AnalyticsPage = () => {
           </div>
         </div>
 
-        {/* ── Custom date inputs ─────────────────────────────────────────────── */}
+        {/* ── Custom date inputs — single inline row ─────────────────────────── */}
         {datePreset === "custom" && (
-          <div className="flex flex-wrap gap-5 items-end bg-muted/10 px-5 py-4 rounded-xl border border-border/40 animate-in slide-in-from-top-2 duration-200">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="flex items-center gap-3 flex-wrap animate-in slide-in-from-top-2 duration-200">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Calendar className="h-3.5 w-3.5" />
               <span>Custom range</span>
             </div>
-            <div className="flex flex-wrap gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">From</Label>
-                <Input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="h-9 w-40 rounded-lg text-sm" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">To</Label>
-                <Input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="h-9 w-40 rounded-lg text-sm" />
-              </div>
+            <div className="flex items-center gap-2">
+              <Input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="h-8 w-36 rounded-lg text-sm" />
+              <span className="text-xs text-muted-foreground">→</span>
+              <Input type="date" value={customEnd}   onChange={e => setCustomEnd(e.target.value)}   className="h-8 w-36 rounded-lg text-sm" />
             </div>
           </div>
         )}
 
         {/* ── Filter toolbar ─────────────────────────────────────────────────── */}
-        <div className="rounded-2xl border border-border/40 bg-muted/10 p-4 space-y-3">
-          <div className="flex flex-wrap gap-3 items-center">
+        <div className="rounded-lg border border-border/40 bg-muted/10 p-3 space-y-2">
+          <div className="flex flex-wrap gap-2 items-center">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 placeholder="Search client or deal..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="h-9 w-56 pl-9 rounded-lg text-sm bg-background border-border/50"
+                className="h-9 w-52 pl-8 rounded-lg text-sm bg-background border-border/50"
               />
             </div>
 
-            <div className="h-5 w-px bg-border/50 hidden sm:block" />
+            <div className="h-4 w-px bg-border/50 hidden sm:block" />
 
             <Select value={filterProduct} onValueChange={setFilterProduct}>
-              <SelectTrigger className="h-9 w-40 rounded-lg text-sm bg-background border-border/50">
+              <SelectTrigger className="h-9 w-36 rounded-lg text-sm bg-background border-border/50">
                 <SelectValue placeholder="Product" />
               </SelectTrigger>
-              <SelectContent className="rounded-xl shadow-lg">
+              <SelectContent className="rounded-lg">
                 <SelectItem value="all">All Products</SelectItem>
                 {products.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
               </SelectContent>
             </Select>
 
             <Select value={filterType} onValueChange={v => setFilterType(v as PaymentFilter)}>
-              <SelectTrigger className="h-9 w-36 rounded-lg text-sm bg-background border-border/50">
+              <SelectTrigger className="h-9 w-32 rounded-lg text-sm bg-background border-border/50">
                 <SelectValue placeholder="Type" />
               </SelectTrigger>
-              <SelectContent className="rounded-xl shadow-lg">
+              <SelectContent className="rounded-lg">
                 <SelectItem value="all">All Types</SelectItem>
                 <SelectItem value="pif">PIF</SelectItem>
                 <SelectItem value="installments">Installments</SelectItem>
@@ -339,10 +334,10 @@ const AnalyticsPage = () => {
             </Select>
 
             <Select value={filterStatus} onValueChange={v => setFilterStatus(v as StatusFilter)}>
-              <SelectTrigger className="h-9 w-36 rounded-lg text-sm bg-background border-border/50">
+              <SelectTrigger className="h-9 w-32 rounded-lg text-sm bg-background border-border/50">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
-              <SelectContent className="rounded-xl shadow-lg">
+              <SelectContent className="rounded-lg">
                 <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="paid">Paid</SelectItem>
                 <SelectItem value="refunded">Refunded</SelectItem>
@@ -352,10 +347,10 @@ const AnalyticsPage = () => {
 
             {isAdmin && (
               <Select value={filterCloser} onValueChange={setFilterCloser}>
-                <SelectTrigger className="h-9 w-40 rounded-lg text-sm bg-background border-border/50">
+                <SelectTrigger className="h-9 w-36 rounded-lg text-sm bg-background border-border/50">
                   <SelectValue placeholder="Closer" />
                 </SelectTrigger>
-                <SelectContent className="rounded-xl shadow-lg">
+                <SelectContent className="rounded-lg">
                   <SelectItem value="all">All Closers</SelectItem>
                   {closers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                 </SelectContent>
@@ -364,10 +359,10 @@ const AnalyticsPage = () => {
 
             {isAdmin && (
               <Select value={filterSetter} onValueChange={setFilterSetter}>
-                <SelectTrigger className="h-9 w-40 rounded-lg text-sm bg-background border-border/50">
+                <SelectTrigger className="h-9 w-36 rounded-lg text-sm bg-background border-border/50">
                   <SelectValue placeholder="Setter" />
                 </SelectTrigger>
-                <SelectContent className="rounded-xl shadow-lg">
+                <SelectContent className="rounded-lg">
                   <SelectItem value="all">All Setters</SelectItem>
                   {setters.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                 </SelectContent>
@@ -375,7 +370,7 @@ const AnalyticsPage = () => {
             )}
 
             {hasActiveFilters && (
-              <Button variant="ghost" size="sm" className="h-9 px-3 gap-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-lg text-sm ml-auto" onClick={resetFilters}>
+              <Button variant="ghost" size="sm" className="h-9 px-2.5 gap-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-lg text-xs ml-auto" onClick={resetFilters}>
                 <X className="h-3.5 w-3.5" /> Clear
               </Button>
             )}
@@ -384,18 +379,18 @@ const AnalyticsPage = () => {
 
         {/* ── KPI cards ──────────────────────────────────────────────────────── */}
         {isLoading ? (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-3xl" />)}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-lg" />)}
           </div>
         ) : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[
-              <StatCard title={t("analytics.kpi.totalComm")} value={fmt(metrics.totalComm)} subtitle={`${metrics.validatedCount} ${t("analytics.kpi.validated")}`} accent="blue" icon={<DollarSign className="h-5 w-5" />} />,
-              <StatCard title={t("analytics.kpi.avgComm")} value={fmt(metrics.avgComm)} subtitle={t("analytics.kpi.perValidatedSale")} accent="blue" icon={<TrendingUp className="h-5 w-5" />} />,
-              <StatCard title={t("analytics.kpi.volume")} value={fmt(metrics.totalVolume)} subtitle={`${filteredSales.length} ${t("analytics.kpi.transactions")}`} accent="green" icon={<Target className="h-5 w-5" />} />,
-              <StatCard title={t("analytics.kpi.salesCount")} value={String(metrics.validatedCount)} subtitle={`${metrics.refundCount + metrics.unpaidCount} ${t("analytics.kpi.exceptions")}`} accent="green" icon={<ShoppingCart className="h-5 w-5" />} />,
-              <StatCard title={t("analytics.kpi.refundRate")} value={`${metrics.refundRate.toFixed(1)}%`} subtitle={`${metrics.refundCount} ${t("status.refunded").toLowerCase()} · ${metrics.unpaidCount} ${t("status.unpaid").toLowerCase()}`} trend={metrics.refundRate > 10 ? "down" : "neutral"} accent="red" icon={<AlertTriangle className="h-5 w-5" />} />,
-              <StatCard title={t("analytics.kpi.pifRate")} value={`${metrics.pifRate.toFixed(1)}%`} subtitle={`${filteredSales.filter(s => s.paymentType === "pif" && !s.refunded && !s.impaye).length} PIF Sales`} accent="orange" icon={<Percent className="h-5 w-5" />} />,
+              <StatCard title={t("analytics.kpi.totalComm")} value={fmt(metrics.totalComm)} subtitle={`${metrics.validatedCount} ${t("analytics.kpi.validated")}`} accent="blue" icon={<DollarSign className="h-4 w-4" />} />,
+              <StatCard title={t("analytics.kpi.avgComm")} value={fmt(metrics.avgComm)} subtitle={t("analytics.kpi.perValidatedSale")} accent="blue" icon={<TrendingUp className="h-4 w-4" />} />,
+              <StatCard title={t("analytics.kpi.volume")} value={fmt(metrics.totalVolume)} subtitle={`${filteredSales.length} ${t("analytics.kpi.transactions")}`} accent="green" icon={<Target className="h-4 w-4" />} />,
+              <StatCard title={t("analytics.kpi.salesCount")} value={String(metrics.validatedCount)} subtitle={`${metrics.refundCount + metrics.unpaidCount} ${t("analytics.kpi.exceptions")}`} accent="green" icon={<ShoppingCart className="h-4 w-4" />} />,
+              <StatCard title={t("analytics.kpi.refundRate")} value={`${metrics.refundRate.toFixed(1)}%`} subtitle={`${metrics.refundCount} ${t("status.refunded").toLowerCase()} · ${metrics.unpaidCount} ${t("status.unpaid").toLowerCase()}`} trend={metrics.refundRate > 10 ? "down" : "neutral"} accent="red" icon={<AlertTriangle className="h-4 w-4" />} />,
+              <StatCard title={t("analytics.kpi.pifRate")} value={`${metrics.pifRate.toFixed(1)}%`} subtitle={`${filteredSales.filter(s => s.paymentType === "pif" && !s.refunded && !s.impaye).length} PIF Sales`} accent="orange" icon={<Percent className="h-4 w-4" />} />,
             ].map((card, i) => (
               <div key={i} className="animate-in fade-in slide-in-from-bottom-4 fill-mode-both" style={{ animationDuration: "500ms", animationDelay: `${i * 75}ms` }}>
                 {card}
@@ -406,81 +401,70 @@ const AnalyticsPage = () => {
 
         {/* ── Closer: bonus progress ─────────────────────────────────────────── */}
         {isCloser && (
-          <Card className="border-none shadow-sm bg-gradient-to-br from-background via-background to-primary/5 p-8 rounded-[2.5rem] relative overflow-hidden group animate-in fade-in slide-in-from-bottom-6 fill-mode-both" style={{ animationDuration: "600ms", animationDelay: "500ms" }}>
-             <div className="absolute top-0 right-0 p-10 opacity-5 transform group-hover:scale-110 transition-transform">
-                <Gift className="h-32 w-32 text-primary" />
-             </div>
-             <div className="p-0 space-y-8 relative">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 bg-primary text-white rounded-2xl shadow-lg shadow-primary/20">
-                      <Gift className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-bold tracking-tight">{t("analytics.bonus.progress")}</h3>
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">{formatMonth(currentMonthKey, locale)} Performance</p>
-                    </div>
-                  </div>
-                  <Badge variant="outline" className="h-8 border-primary/20 text-primary font-black px-4 rounded-xl">
-                    {currentMonthValidated} Sales Validated
-                  </Badge>
-                </div>
-
-                {tiers.length === 0 ? (
-                  <p className="text-sm text-muted-foreground font-medium italic">{t("analytics.bonus.noTiers")}</p>
+          <div className="rounded-xl border border-border/40 overflow-hidden bg-background">
+            <div className="flex items-center justify-between px-4 py-3 bg-muted/30 border-b border-border/40">
+              <div className="flex items-center gap-2">
+                <Gift className="h-4 w-4 text-muted-foreground" />
+                <p className="text-sm font-medium">{t("analytics.bonus.progress")}</p>
+              </div>
+              <Badge variant="outline" className="rounded-md text-[10px] border-primary/20 text-primary">
+                {currentMonthValidated} Sales Validated
+              </Badge>
+            </div>
+            <div className="p-4 space-y-4">
+               {tiers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">{t("analytics.bonus.noTiers")}</p>
                 ) : (
-                  <div className="space-y-6">
-                    <div className="space-y-2">
-                       <div className="flex justify-between items-end mb-2">
-                          <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Progress to target</p>
-                          <p className="text-sm font-black text-primary tabular-nums">{progressPct.toFixed(0)}% Complete</p>
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                       <div className="flex justify-between items-end">
+                          <p className="text-xs text-muted-foreground">Progress to target</p>
+                          <p className="text-xs font-medium text-primary tabular-nums">{progressPct.toFixed(0)}%</p>
                        </div>
-                       <Progress value={animatedProgress} className="h-3 rounded-full bg-muted/40 [&>div]:transition-all [&>div]:duration-1000 [&>div]:ease-out" />
+                       <Progress value={animatedProgress} className="h-2 rounded-full bg-muted/40 [&>div]:transition-all [&>div]:duration-1000 [&>div]:ease-out" />
                     </div>
 
-                    <div className="flex flex-wrap gap-3">
+                    <div className="flex flex-wrap gap-2">
                       {sortedTiers.map((tier, i) => (
                         <div
                           key={tier.id}
                           className={cn(
-                            "flex flex-col items-center gap-1 flex-1 min-w-[120px] p-4 rounded-2xl border transition-all duration-300 animate-in fade-in zoom-in-95 fill-mode-both",
+                            "flex flex-col items-center gap-0.5 flex-1 min-w-[100px] px-3 py-2.5 rounded-lg border transition-all",
                             currentMonthValidated >= tier.minSales
-                              ? "bg-emerald-500 border-emerald-500/20 text-white shadow-lg shadow-emerald-500/10"
-                              : "bg-muted/10 border-border/40 text-muted-foreground grayscale opacity-60"
+                              ? "bg-emerald-500 border-emerald-500/20 text-white"
+                              : "bg-muted/10 border-border/40 text-muted-foreground opacity-60"
                           )}
                           style={{ animationDuration: "400ms", animationDelay: `${700 + i * 80}ms` }}
                         >
-                          <p className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">Tier</p>
-                          <p className="text-lg font-black leading-none">{tier.minSales}</p>
-                          <p className="text-[9px] font-bold uppercase tracking-wide mt-1">+{fmt(tier.bonusAmount)}</p>
-                          {currentMonthValidated >= tier.minSales && <div className="mt-2 h-4 w-4 bg-white/20 rounded-full flex items-center justify-center"><Check className="h-2.5 w-2.5" /></div>}
+                          <p className="text-[10px] font-medium leading-none">Tier</p>
+                          <p className="text-base font-semibold leading-none">{tier.minSales}</p>
+                          <p className="text-[10px] mt-0.5">+{fmt(tier.bonusAmount)}</p>
+                          {currentMonthValidated >= tier.minSales && <Check className="h-3 w-3 mt-0.5" />}
                         </div>
                       ))}
                     </div>
 
                     {nextTier && (
-                      <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10 flex items-center justify-between">
-                         <p className="text-sm font-medium text-primary-foreground/80">
-                           <span className="font-black text-primary">{nextTier.minSales - currentMonthValidated}</span> more sales to unlock next bonus
+                      <div className="bg-primary/5 px-3 py-2.5 rounded-lg border border-primary/10 flex items-center justify-between">
+                         <p className="text-sm text-muted-foreground">
+                           <span className="font-semibold text-primary">{nextTier.minSales - currentMonthValidated}</span> more sales to unlock next bonus
                          </p>
-                         <div className="h-8 w-8 bg-primary text-white rounded-lg flex items-center justify-center font-bold text-xs ring-4 ring-primary/10 animate-pulse">
-                           +€{nextTier.bonusAmount}
-                         </div>
+                         <Badge className="rounded-md text-xs font-medium">+€{nextTier.bonusAmount}</Badge>
                       </div>
                     )}
                   </div>
                 )}
-             </div>
-          </Card>
+            </div>
+          </div>
         )}
 
         {/* ── Charts Row 1 ───────────────────────────────────────────────────── */}
-        <div className="grid gap-6 lg:grid-cols-2 animate-in fade-in slide-in-from-bottom-4 fill-mode-both" style={{ animationDuration: "600ms", animationDelay: "200ms" }}>
+        <div className="grid gap-4 lg:grid-cols-2">
           <ChartCard title="Performance Trend" icon={TrendingUp}>
             {metrics.monthlyData.every(d => d.commission === 0) ? (
-              <p className="text-center py-20 text-sm text-muted-foreground italic">No historical data available</p>
+              <p className="text-center py-12 text-sm text-muted-foreground">No historical data available</p>
             ) : (
-              <ResponsiveContainer width="100%" height={280}>
+              <ResponsiveContainer width="100%" height={260}>
                 <AreaChart data={metrics.monthlyData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorCommAnal" x1="0" y1="0" x2="0" y2="1">
@@ -489,13 +473,13 @@ const AnalyticsPage = () => {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.border} vertical={false} />
-                  <XAxis dataKey="month" fontSize={10} font-weight="700" axisLine={false} tickLine={false} dy={10} />
-                  <YAxis fontSize={10} font-weight="700" axisLine={false} tickLine={false} tickFormatter={(v) => `€${v}`} />
-                  <Tooltip 
-                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.15)', fontWeight: 'bold', background: 'hsl(var(--card))', color: 'hsl(var(--card-foreground))' }}
-                    formatter={(v: number) => [fmt(v), t("analytics.kpi.totalComm")]} 
+                  <XAxis dataKey="month" fontSize={10} axisLine={false} tickLine={false} dy={10} />
+                  <YAxis fontSize={10} axisLine={false} tickLine={false} tickFormatter={(v) => `€${v}`} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: 8, border: "1px solid hsl(var(--border))", fontSize: 12, background: "hsl(var(--background))" }}
+                    formatter={(v: number) => [fmt(v), t("analytics.kpi.totalComm")]}
                   />
-                  <Area type="monotone" dataKey="commission" stroke={CHART_COLORS.primary} strokeWidth={3} fillOpacity={1} fill="url(#colorCommAnal)" />
+                  <Area type="monotone" dataKey="commission" stroke={CHART_COLORS.primary} strokeWidth={2} fillOpacity={1} fill="url(#colorCommAnal)" />
                 </AreaChart>
               </ResponsiveContainer>
             )}
@@ -503,18 +487,18 @@ const AnalyticsPage = () => {
 
           <ChartCard title={isAdmin ? t("analytics.chart.byCloser") : t("analytics.chart.byProduct")} icon={Layers}>
             {(isAdmin ? metrics.closerData : metrics.productData).length === 0 ? (
-              <p className="text-center py-20 text-sm text-muted-foreground italic">No distribution data available</p>
+              <p className="text-center py-12 text-sm text-muted-foreground">No distribution data available</p>
             ) : (
-              <ResponsiveContainer width="100%" height={280}>
+              <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={isAdmin ? metrics.closerData : metrics.productData}>
                   <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.border} vertical={false} />
-                  <XAxis dataKey="name" fontSize={10} font-weight="700" axisLine={false} tickLine={false} dy={10} />
-                  <YAxis fontSize={10} font-weight="700" axisLine={false} tickLine={false} tickFormatter={(v) => `€${v}`} />
-                  <Tooltip 
-                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.15)', fontWeight: 'bold', background: 'hsl(var(--card))', color: 'hsl(var(--card-foreground))' }}
-                    formatter={(v: number) => [fmt(v), t("analytics.kpi.totalComm")]} 
+                  <XAxis dataKey="name" fontSize={10} axisLine={false} tickLine={false} dy={10} />
+                  <YAxis fontSize={10} axisLine={false} tickLine={false} tickFormatter={(v) => `€${v}`} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: 8, border: "1px solid hsl(var(--border))", fontSize: 12, background: "hsl(var(--background))" }}
+                    formatter={(v: number) => [fmt(v), t("analytics.kpi.totalComm")]}
                   />
-                  <Bar dataKey="commission" fill={CHART_COLORS.primary} radius={[6, 6, 0, 0]} barSize={20} />
+                  <Bar dataKey="commission" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} barSize={18} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -522,24 +506,24 @@ const AnalyticsPage = () => {
         </div>
 
         {/* ── Charts Row 2 ───────────────────────────────────────────────────── */}
-        <div className="grid gap-6 lg:grid-cols-3 animate-in fade-in slide-in-from-bottom-4 fill-mode-both" style={{ animationDuration: "600ms", animationDelay: "350ms" }}>
+        <div className="grid gap-4 lg:grid-cols-3">
           {/* Revenue vs Commission dual bar */}
           <ChartCard title="Revenue vs Commission" icon={TrendingUp}>
             {metrics.monthlyFull.every(d => d.revenue === 0) ? (
-              <p className="text-center py-20 text-sm text-muted-foreground italic">No data for selected period</p>
+              <p className="text-center py-12 text-sm text-muted-foreground">No data for selected period</p>
             ) : (
-              <ResponsiveContainer width="100%" height={260}>
+              <ResponsiveContainer width="100%" height={240}>
                 <BarChart data={metrics.monthlyFull} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.border} vertical={false} />
                   <XAxis dataKey="month" fontSize={9} axisLine={false} tickLine={false} dy={8} />
                   <YAxis fontSize={9} axisLine={false} tickLine={false} tickFormatter={(v) => `€${(v/1000).toFixed(0)}k`} />
                   <Tooltip
-                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.15)', fontWeight: 'bold', background: 'hsl(var(--card))', color: 'hsl(var(--card-foreground))' }}
+                    contentStyle={{ borderRadius: 8, border: "1px solid hsl(var(--border))", fontSize: 12, background: "hsl(var(--background))" }}
                     formatter={(v: number, name: string) => [fmt(v), name === "revenue" ? "Revenue" : "Commission"]}
                   />
-                  <Legend formatter={(v) => v === "revenue" ? "Revenue" : "Commission"} wrapperStyle={{ fontSize: '10px', fontWeight: 700, paddingTop: '12px' }} />
-                  <Bar dataKey="revenue"    fill="hsl(var(--primary) / 0.25)" radius={[4,4,0,0]} barSize={14} />
-                  <Bar dataKey="commission" fill={CHART_COLORS.primary}       radius={[4,4,0,0]} barSize={14} />
+                  <Legend formatter={(v) => v === "revenue" ? "Revenue" : "Commission"} wrapperStyle={{ fontSize: '10px', paddingTop: '8px' }} />
+                  <Bar dataKey="revenue"    fill="hsl(var(--primary) / 0.25)" radius={[3,3,0,0]} barSize={12} />
+                  <Bar dataKey="commission" fill={CHART_COLORS.primary}       radius={[3,3,0,0]} barSize={12} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -548,9 +532,9 @@ const AnalyticsPage = () => {
           {/* Payment Mix donut */}
           <ChartCard title="Payment Mix" icon={Percent}>
             {metrics.pifCount === 0 && metrics.installCount === 0 ? (
-              <p className="text-center py-20 text-sm text-muted-foreground italic">No data</p>
+              <p className="text-center py-12 text-sm text-muted-foreground">No data</p>
             ) : (
-              <ResponsiveContainer width="100%" height={260}>
+              <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
                   <Pie
                     data={[
@@ -558,7 +542,7 @@ const AnalyticsPage = () => {
                       { name: "Installments", value: metrics.installCount },
                     ]}
                     cx="50%" cy="45%"
-                    innerRadius={65} outerRadius={95}
+                    innerRadius={55} outerRadius={80}
                     paddingAngle={4}
                     dataKey="value"
                     label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
@@ -568,7 +552,7 @@ const AnalyticsPage = () => {
                     <Cell fill="hsl(var(--primary) / 0.3)" />
                   </Pie>
                   <Tooltip
-                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.15)', fontWeight: 'bold', background: 'hsl(var(--card))', color: 'hsl(var(--card-foreground))' }}
+                    contentStyle={{ borderRadius: 8, border: "1px solid hsl(var(--border))", fontSize: 12, background: "hsl(var(--background))" }}
                     formatter={(v: number) => [`${v} sales`]}
                   />
                 </PieChart>
@@ -579,9 +563,9 @@ const AnalyticsPage = () => {
           {/* Sales Status donut */}
           <ChartCard title="Sales Status" icon={ShoppingCart}>
             {filteredSales.length === 0 ? (
-              <p className="text-center py-20 text-sm text-muted-foreground italic">No data</p>
+              <p className="text-center py-12 text-sm text-muted-foreground">No data</p>
             ) : (
-              <ResponsiveContainer width="100%" height={260}>
+              <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
                   <Pie
                     data={[
@@ -590,7 +574,7 @@ const AnalyticsPage = () => {
                       { name: "Unpaid",   value: metrics.unpaidCount },
                     ].filter(d => d.value > 0)}
                     cx="50%" cy="45%"
-                    innerRadius={65} outerRadius={95}
+                    innerRadius={55} outerRadius={80}
                     paddingAngle={4}
                     dataKey="value"
                     label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
@@ -601,7 +585,7 @@ const AnalyticsPage = () => {
                     <Cell fill="#ef4444" />
                   </Pie>
                   <Tooltip
-                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.15)', fontWeight: 'bold', background: 'hsl(var(--card))', color: 'hsl(var(--card-foreground))' }}
+                    contentStyle={{ borderRadius: 8, border: "1px solid hsl(var(--border))", fontSize: 12, background: "hsl(var(--background))" }}
                     formatter={(v: number) => [`${v} sales`]}
                   />
                 </PieChart>
@@ -611,66 +595,66 @@ const AnalyticsPage = () => {
         </div>
 
         {/* ── Transactions table ─────────────────────────────────────────────── */}
-        <Card className="border-none shadow-sm rounded-[2.5rem] overflow-hidden animate-in fade-in slide-in-from-bottom-4 fill-mode-both" style={{ animationDuration: "600ms", animationDelay: "500ms" }}>
-          <div className="p-8 border-b border-border/40 flex items-center justify-between">
-            <h3 className="font-black text-sm uppercase tracking-widest text-muted-foreground">{t("analytics.sales.title")}</h3>
-            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 font-bold h-8 px-4">
-               {filteredSales.length} Total Records
+        <div className="rounded-xl border border-border/40 overflow-hidden bg-background">
+          <div className="flex items-center justify-between px-4 py-3 bg-muted/30 border-b border-border/40">
+            <p className="text-sm font-medium">{t("analytics.sales.title")}</p>
+            <Badge variant="outline" className="rounded-md text-[10px] bg-primary/5 text-primary border-primary/20">
+              {filteredSales.length} Total Records
             </Badge>
           </div>
-          <CardContent className="p-0">
+          <div>
             {isLoading ? (
-              <div className="p-8 space-y-4">
-                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full rounded-xl" />)}
+              <div className="p-4 space-y-3">
+                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-lg" />)}
               </div>
             ) : filteredSales.length === 0 ? (
-              <div className="text-center py-20">
-                 <p className="text-muted-foreground font-medium italic">{t("analytics.noData")}</p>
+              <div className="text-center py-16">
+                 <p className="text-sm text-muted-foreground">{t("analytics.noData")}</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader className="bg-muted/30">
                     <TableRow className="border-none">
-                      <TableHead className="py-4 pl-8 text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t("table.date")}</TableHead>
-                      <TableHead className="py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t("table.client")}</TableHead>
-                      <TableHead className="py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t("table.product")}</TableHead>
-                      {isAdmin  && <TableHead className="py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t("table.closer")}</TableHead>}
-                      {isAdmin  && <TableHead className="py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t("table.setter")}</TableHead>}
-                      {!isAdmin && <TableHead className="py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">{isCloser ? t("table.setter") : t("table.closer")}</TableHead>}
-                      <TableHead className="py-4 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t("table.amount")}</TableHead>
-                      <TableHead className="py-4 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground">Commission</TableHead>
-                      <TableHead className="py-4 pr-8 text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t("table.status")}</TableHead>
+                      <TableHead className="py-2.5 pl-4 text-[11px] font-medium text-muted-foreground">{t("table.date")}</TableHead>
+                      <TableHead className="py-2.5 text-[11px] font-medium text-muted-foreground">{t("table.client")}</TableHead>
+                      <TableHead className="py-2.5 text-[11px] font-medium text-muted-foreground">{t("table.product")}</TableHead>
+                      {isAdmin  && <TableHead className="py-2.5 text-[11px] font-medium text-muted-foreground">{t("table.closer")}</TableHead>}
+                      {isAdmin  && <TableHead className="py-2.5 text-[11px] font-medium text-muted-foreground">{t("table.setter")}</TableHead>}
+                      {!isAdmin && <TableHead className="py-2.5 text-[11px] font-medium text-muted-foreground">{isCloser ? t("table.setter") : t("table.closer")}</TableHead>}
+                      <TableHead className="py-2.5 text-right text-[11px] font-medium text-muted-foreground">{t("table.amount")}</TableHead>
+                      <TableHead className="py-2.5 text-right text-[11px] font-medium text-muted-foreground">Commission</TableHead>
+                      <TableHead className="py-2.5 pr-4 text-[11px] font-medium text-muted-foreground">{t("table.status")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredSales.map(s => (
-                      <TableRow key={s.id} className="group hover:bg-muted/10 transition-colors border-border/30">
-                        <TableCell className="py-5 pl-8 text-xs font-medium text-muted-foreground tabular-nums">{s.date}</TableCell>
-                        <TableCell className="py-5">
-                            <p className="font-bold text-sm tracking-tight">{s.clientName}</p>
+                      <TableRow key={s.id} className="hover:bg-muted/20 border-border/20">
+                        <TableCell className="py-3 pl-4 text-xs text-muted-foreground tabular-nums">{s.date}</TableCell>
+                        <TableCell className="py-3">
+                            <p className="font-medium text-sm">{s.clientName}</p>
                         </TableCell>
-                        <TableCell className="py-5">
-                            <Badge variant="outline" className="text-[10px] font-bold border-border/40 hover:bg-muted/50">{s.product}</Badge>
+                        <TableCell className="py-3">
+                            <Badge variant="outline" className="rounded-md text-[10px] border-border/40">{s.product}</Badge>
                         </TableCell>
-                        {isAdmin && <TableCell className="py-5"><ProfileTag role="closer" personId={s.closerId} personName={s.closer} /></TableCell>}
-                        {isAdmin && <TableCell className="py-5"><ProfileTag role="setter" personId={s.setterId} personName={s.setter} /></TableCell>}
+                        {isAdmin && <TableCell className="py-3"><ProfileTag role="closer" personId={s.closerId} personName={s.closer} /></TableCell>}
+                        {isAdmin && <TableCell className="py-3"><ProfileTag role="setter" personId={s.setterId} personName={s.setter} /></TableCell>}
                         {!isAdmin && (
-                          <TableCell className="py-5">
+                          <TableCell className="py-3">
                             {isCloser
                               ? <ProfileTag role="setter" personId={s.setterId} personName={s.setter} />
                               : <ProfileTag role="closer" personId={s.closerId} personName={s.closer} />}
                           </TableCell>
                         )}
-                        <TableCell className="py-5 text-right font-medium text-sm tabular-nums">{fmt(s.amount)}</TableCell>
-                        <TableCell className="py-5 text-right font-black text-primary tabular-nums">
+                        <TableCell className="py-3 text-right text-sm tabular-nums">{fmt(s.amount)}</TableCell>
+                        <TableCell className="py-3 text-right font-semibold text-primary tabular-nums text-sm">
                           {fmt(isCloser ? s.closerCommission : isSetter ? s.setterCommission : s.closerCommission)}
                         </TableCell>
-                        <TableCell className="py-5 pr-8">
-                          <div className="flex items-center justify-end gap-2">
+                        <TableCell className="py-3 pr-4">
+                          <div className="flex items-center gap-1.5">
                             <SaleStatusBadge refunded={s.refunded} impaye={s.impaye} />
                             {s.paymentType === "pif" && (
-                              <Badge variant="outline" className="text-[9px] font-black text-primary bg-primary/5 border-primary/20 h-5 px-1.5 uppercase">PIF</Badge>
+                              <Badge variant="outline" className="rounded-md text-[10px] text-primary bg-primary/5 border-primary/20">PIF</Badge>
                             )}
                           </div>
                         </TableCell>
@@ -680,8 +664,8 @@ const AnalyticsPage = () => {
                 </Table>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
       </div>
     </AppLayout>

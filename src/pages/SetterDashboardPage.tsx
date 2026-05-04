@@ -1,632 +1,372 @@
-import { useMemo, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { useMemo } from "react";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/i18n";
-import { useProfiles } from "@/hooks/useProfiles";
-import { useSetterCallRecords, useSetterDashboardMetrics, useSetterIntegrationMappings, useSetterSyncHealth, useSyncSetterDashboard } from "@/hooks/useSetterDashboard";
-import { computeSetterDateRange, formatTalkTime } from "@/lib/setterDashboard";
-import { supabase } from "@/lib/supabase";
-import { useQuery } from "@tanstack/react-query";
+import {
+  useSetterPerformance,
+  useSetterDailyActivity,
+  useSyncSetterDashboard,
+  type SetterPerformanceRow,
+} from "@/hooks/useSetterDashboard";
 import AppLayout from "@/components/AppLayout";
-import StatCard from "@/components/StatCard";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { cn, parseSyncResult, isMigrationMissing } from "@/lib/utils";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { RefreshCw, AlertTriangle } from "lucide-react";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { format, subDays, parseISO } from "date-fns";
 
-import {
-  Activity,
-  ArrowDownLeft,
-  ArrowUpRight,
-  Calendar,
-  PhoneCall,
-  PhoneIncoming,
-  PhoneMissed,
-  RefreshCw,
-  Timer,
-  Trophy,
-  Users,
-  AlertTriangle,
-  Search
-} from "lucide-react";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+// ── Date helpers ──────────────────────────────────────────────────────────────
+type DatePreset = "today" | "7d" | "30d" | "90d" | "custom";
+const PRESET_KEYS: DatePreset[] = ["today", "7d", "30d", "90d", "custom"];
 
-type DatePreset = "thisMonth" | "lastMonth" | "last3m" | "last6m" | "thisYear" | "allTime" | "custom";
-type SyncMutationResult = { results?: Array<{ errors?: string[]; rows_written?: number; records_seen?: number }> };
+function computeRange(preset: DatePreset, customFrom: string, customTo: string) {
+  const today = format(new Date(), "yyyy-MM-dd");
+  if (preset === "today")  return { from: today, to: today };
+  if (preset === "7d")     return { from: format(subDays(new Date(), 6),  "yyyy-MM-dd"), to: today };
+  if (preset === "30d")    return { from: format(subDays(new Date(), 29), "yyyy-MM-dd"), to: today };
+  if (preset === "90d")    return { from: format(subDays(new Date(), 89), "yyyy-MM-dd"), to: today };
+  if (preset === "custom" && customFrom && customTo) return { from: customFrom, to: customTo };
+  return { from: format(subDays(new Date(), 6), "yyyy-MM-dd"), to: today };
+}
 
-const CHART_COLORS = {
-  primary: "hsl(var(--primary))",
-  border: "rgba(128,128,128,0.12)",
-  accent: "#f59e0b",
-  success: "#10b981",
-  warning: "#f97316",
-  danger: "#ef4444",
-};
+// ── Formatters ────────────────────────────────────────────────────────────────
+function fmtEur(n: number) {
+  if (n >= 1000) return `${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}K€`;
+  return `${n.toLocaleString("fr-FR")} €`;
+}
 
-const ChartCard = ({
-  title,
-  icon: Icon,
-  action,
-  children,
-}: {
-  title: string;
-  icon?: React.ElementType;
-  action?: React.ReactNode;
-  children: React.ReactNode;
+function fmtDuration(s: number) {
+  return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
+}
+
+function shortDate(iso: string) {
+  try { return format(parseISO(iso), "EEE d"); } catch { return iso; }
+}
+
+// ── Colour-coded badges ───────────────────────────────────────────────────────
+function cancelBadge(pct: number) {
+  if (pct <= 3) return "bg-emerald-500/10 text-emerald-700 border-emerald-500/20";
+  if (pct <= 5) return "bg-amber-500/10 text-amber-700 border-amber-500/20";
+  return "bg-rose-500/10 text-rose-700 border-rose-500/20";
+}
+
+function showBadge(pct: number) {
+  if (pct >= 80) return "bg-emerald-500/10 text-emerald-700 border-emerald-500/20";
+  if (pct >= 70) return "bg-amber-500/10 text-amber-700 border-amber-500/20";
+  return "bg-rose-500/10 text-rose-700 border-rose-500/20";
+}
+
+const AVATAR_COLORS = [
+  "bg-primary/10 text-primary",
+  "bg-emerald-500/10 text-emerald-700",
+  "bg-amber-500/10 text-amber-700",
+  "bg-rose-500/10 text-rose-700",
+];
+
+// ── Compact KPI tile ──────────────────────────────────────────────────────────
+const Tile = ({ label, value, sub, valueClass = "" }: {
+  label: string; value: string; sub?: string; valueClass?: string;
 }) => (
-  <Card className="border-none shadow-sm bg-background/50 backdrop-blur-sm overflow-hidden rounded-3xl">
-    <div className="p-6 pb-0 flex items-center justify-between gap-3">
-      <div className="flex items-center gap-2.5">
-        {Icon && (
-          <div className="p-1.5 rounded-md bg-primary/10 text-primary">
-            <Icon className="h-3.5 w-3.5" />
-          </div>
-        )}
-        <h3 className="font-semibold text-sm text-foreground/70">{title}</h3>
-      </div>
-      {action}
-    </div>
-    <CardContent className="p-6">{children}</CardContent>
-  </Card>
-);
-
-const EmptyChartState = ({ title, body }: { title: string; body: string }) => (
-  <div className="flex h-[320px] items-center justify-center rounded-[1.75rem] border border-dashed border-border/60 bg-muted/10 px-6 text-center">
-    <div className="space-y-2">
-      <p className="text-sm font-bold text-foreground">{title}</p>
-      <p className="max-w-sm text-sm text-muted-foreground">{body}</p>
-    </div>
+  <div className="bg-muted/50 rounded-lg p-3 space-y-1">
+    <p className="text-[11px] text-muted-foreground">{label}</p>
+    <p className={cn("text-xl font-semibold tabular-nums leading-none", valueClass)}>{value}</p>
+    {sub && <p className="text-[11px] text-muted-foreground/60">{sub}</p>}
   </div>
 );
 
-const SyncRunList = ({
-  title,
-  runs,
-}: {
-  title: string;
-  runs: Array<{
-    id: string;
-    source: string;
-    status: string;
-    recordsSeen: number;
-    rowsWritten: number;
-    startedAt: string;
-  }>;
-}) => (
-  <ChartCard
-    title={title}
-    icon={Activity}
-    action={<Badge variant="outline" className="rounded-full px-3 py-1">{runs.length}</Badge>}
-  >
-    <div className="space-y-3">
-      {runs.length === 0 ? (
-        <div className="rounded-[1.75rem] border border-dashed border-border/60 bg-muted/10 px-5 py-8 text-center text-sm text-muted-foreground">
-          No sync runs recorded yet.
-        </div>
-      ) : (
-        runs.map((run) => (
-          <div
-            key={run.id}
-            className="flex flex-col gap-3 rounded-[1.75rem] border border-border/40 bg-background/70 p-4 md:flex-row md:items-center md:justify-between"
-          >
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <p className="text-xs font-medium text-muted-foreground">{run.source}</p>
-                <Badge variant="outline" className="rounded-full capitalize text-xs">{run.status}</Badge>
-              </div>
-              <p className="text-sm font-semibold">{new Date(run.startedAt).toLocaleString()}</p>
-            </div>
-            <div className="grid grid-cols-2 gap-3 text-right text-sm">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">Seen</p>
-                <p className="mt-1 font-semibold tabular-nums">{run.recordsSeen}</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">Written</p>
-                <p className="mt-1 font-semibold tabular-nums">{run.rowsWritten}</p>
-              </div>
-            </div>
-          </div>
-        ))
-      )}
-    </div>
-  </ChartCard>
-);
-
+// ── Main ──────────────────────────────────────────────────────────────────────
 const SetterDashboardPage = () => {
   const { user } = useAuth();
-  const { t } = useLanguage();
-  const { data: profiles = [] } = useProfiles();
-  const syncAircall = useSyncSetterDashboard();
-  const syncIclosed = useSyncSetterDashboard();
-
-  const isAdmin = user?.role === "admin";
-  const isSetter = user?.role === "setter";
-  const isAllowed = isAdmin || isSetter;
-
-  const [datePreset, setDatePreset] = useState<DatePreset>("thisMonth");
-  const [customStart, setCustomStart] = useState("");
-  const [customEnd, setCustomEnd] = useState("");
-  const [selectedSetterId, setSelectedSetterId] = useState<string>("all");
-
-  const { data: syncRuns = [] } = useSetterSyncHealth(isAdmin);
-  const { data: setterMappings = [] } = useSetterIntegrationMappings();
-  const [testResults, setTestResults] = useState<{ aircall?: { ok: boolean }; iclosed?: { ok: boolean } } | null>(null);
-
-  // Admins: validate global API credentials against each service.
-  // Setters: derive "live" status from whether their own IDs are configured.
-  useQuery({
-    queryKey: ["global_connection_test", isAdmin],
-    queryFn: async () => {
-      if (isAdmin) {
-        try {
-          const { data } = await supabase.functions.invoke("sync-setter-dashboard", {
-            body: { validate_only: true },
-          });
-          setTestResults(data.results);
-          return data.results;
-        } catch {
-          return null;
-        }
-      } else {
-        const myMapping = setterMappings.find((m) => m.profileId === user?.id);
-        const results = {
-          aircall: { ok: !!myMapping?.aircallUserId },
-          iclosed: { ok: !!myMapping?.iclosedUserId },
-        };
-        setTestResults(results);
-        return results;
-      }
-    },
-    enabled: isAdmin ? true : setterMappings.length > 0,
-    staleTime: 1000 * 60 * 5,
-  });
-  const setters = profiles.filter((profile) => profile.role === "setter");
-  const scopedSetterId = isAdmin ? (selectedSetterId === "all" ? undefined : selectedSetterId) : user?.id;
-
-  const { start, end } = useMemo(
-    () => computeSetterDateRange(datePreset, customStart, customEnd),
-    [datePreset, customStart, customEnd],
-  );
-
-  const {
-    data: metrics,
-    isLoading,
-    isError,
-    error,
-  } = useSetterDashboardMetrics({
-    profileId: scopedSetterId,
-    startDate: start,
-    endDate: end,
-    enabled: isAllowed,
-  });
-
-  const { data: callRecords = [] } = useSetterCallRecords(scopedSetterId, start, end);
-  const [callSearch, setCallSearch] = useState("");
-  const [callLimit, setCallLimit] = useState(25);
   const navigate = useNavigate();
+  const { t } = useLanguage();
+  const [params, setParams] = useSearchParams();
+
+  const preset     = (params.get("range") as DatePreset) || "7d";
+  const customFrom = params.get("from") ?? "";
+  const customTo   = params.get("to")   ?? "";
+  const { from, to } = computeRange(preset, customFrom, customTo);
+
+  // All hooks called unconditionally before any early return (React rules of hooks)
+  const syncMutation = useSyncSetterDashboard();
+  const { data: perfRows = [], isLoading, isError, error } = useSetterPerformance(from, to);
+  const chartProfileId = user?.role === "setter" ? user.id : undefined;
+  const { data: dailyPoints = [] } = useSetterDailyActivity(from, to, chartProfileId);
+
+  // isAllowed check — placed after all hooks per React rules of hooks
+  const isAllowed = user?.role === "admin" || user?.role === "setter";
+
+  const setPreset = (p: DatePreset) => {
+    const n = new URLSearchParams(params);
+    n.set("range", p);
+    if (p !== "custom") { n.delete("from"); n.delete("to"); }
+    setParams(n);
+  };
+
+  const perfError = error instanceof Error ? error.message : "";
+  const migrationMissing = isMigrationMissing(perfError);
+
+  const visibleRows: SetterPerformanceRow[] =
+    user?.role === "setter" ? perfRows.filter(r => r.profileId === user.id) : perfRows;
+
+  const team = useMemo(() => {
+    const s = visibleRows.reduce(
+      (a, r) => ({
+        dialed: a.dialed + r.dialed,
+        pickup: a.pickup + r.pickup,
+        validated: a.validated + r.validated,
+        shows: a.shows + r.shows,
+        noShows: a.noShows + r.noShows,
+        closed: a.closed + r.closed,
+        setterCancellations: a.setterCancellations + r.setterCancellations,
+        totalEncaisse: a.totalEncaisse + r.totalEncaisse,
+        wDuration: a.wDuration + r.avgDurationSeconds * r.pickup,
+      }),
+      { dialed: 0, pickup: 0, validated: 0, shows: 0, noShows: 0, closed: 0, setterCancellations: 0, totalEncaisse: 0, wDuration: 0 },
+    );
+    return {
+      ...s,
+      pickupPct:  s.dialed > 0    ? (s.pickup / s.dialed) * 100 : 0,
+      showPct:    s.validated > 0 ? (s.shows / s.validated) * 100 : 0,
+      closePct:   s.shows > 0     ? (s.closed / s.shows) * 100 : 0,
+      cancelPct:  s.pickup > 0    ? (s.setterCancellations / s.pickup) * 100 : 0,
+      eurPerVal:  s.validated > 0 ? s.totalEncaisse / s.validated : 0,
+      avgDur:     s.pickup > 0    ? Math.round(s.wDuration / s.pickup) : 0,
+    };
+  }, [visibleRows]);
+
+  const chartData = useMemo(() => {
+    const map = new Map<string, { dialed: number; pickup: number; validated: number }>();
+    for (const p of dailyPoints) {
+      const cur = map.get(p.date) ?? { dialed: 0, pickup: 0, validated: 0 };
+      cur.dialed += p.dialed; cur.pickup += p.pickup; cur.validated += p.validated;
+      map.set(p.date, cur);
+    }
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, v]) => ({ date: shortDate(date), ...v }));
+  }, [dailyPoints]);
 
   if (!isAllowed) return <Navigate to="/dashboard" replace />;
 
-  const summary = metrics?.summary;
-  const points = metrics?.points ?? [];
-  const hasData = points.some((point) =>
-    point.callsMade ||
-    point.callsAnswered ||
-    point.talkTimeSeconds ||
-    point.leadsValidated ||
-    point.leadsCanceled ||
-    point.showUps ||
-    point.closes,
-  );
-
-  const presetButtons: Array<{ key: DatePreset; label: string }> = [
-    { key: "thisMonth", label: t("analytics.preset.thisMonth") },
-    { key: "lastMonth", label: t("analytics.preset.lastMonth") },
-    { key: "last3m", label: t("analytics.preset.last3m") },
-    { key: "last6m", label: t("analytics.preset.last6m") },
-    { key: "thisYear", label: t("analytics.preset.thisYear") },
-    { key: "allTime", label: t("analytics.preset.allTime") },
-    { key: "custom", label: t("analytics.preset.custom") },
-  ];
-
-  const syncErrorMessage = error instanceof Error ? error.message : t("setterDashboard.loadErrorBody");
-  const looksLikeMissingTable = /setter_(call|funnel)_metrics_daily|schema cache/i.test(syncErrorMessage);
-
-  const myMapping = isSetter ? setterMappings.find((m) => m.profileId === user?.id) : null;
-  const needsOnboarding = isSetter && (!myMapping || (!myMapping.aircallUserId && !myMapping.iclosedUserId));
-
   return (
     <AppLayout>
-      <div className="space-y-10 animate-in fade-in duration-500">
+      <div className="space-y-6">
 
-        {needsOnboarding && (
-          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-500">
-            <div className="flex items-start gap-4">
-              <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-black text-sm text-amber-600">No integrations configured yet</p>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  Connect your Aircall and iClosed accounts so your calls and meeting outcomes sync automatically.
-                </p>
-              </div>
-            </div>
-            <Button
-              size="sm"
-              className="shrink-0 rounded-xl h-10 px-5 font-black uppercase tracking-widest text-[10px] shadow-lg shadow-amber-500/20 bg-amber-500 hover:bg-amber-600 text-white"
-              onClick={() => navigate("/settings?tab=apikeys")}
-            >
-              Set Up Now
-            </Button>
+        {/* ── Setup warning ── */}
+        {isError && migrationMissing && (
+          <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
+            <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+            <p className="text-muted-foreground">
+              Supabase migrations not yet applied.
+              Run <code className="font-mono text-xs bg-muted px-1 rounded">20260502_iclosed_event_records.sql</code> and{" "}
+              <code className="font-mono text-xs bg-muted px-1 rounded">20260502_setter_performance_rpc.sql</code>,
+              then redeploy <code className="font-mono text-xs bg-muted px-1 rounded">sync-setter-dashboard</code>.
+            </p>
           </div>
         )}
 
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-5">
+        {/* ── Header ── */}
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-2xl font-bold tracking-tight">{t("nav.setterDashboard")}</h1>
-              {testResults?.aircall?.ok && testResults?.iclosed?.ok && (
-                <Badge className="bg-emerald-500/10 text-emerald-600 border-none h-5 px-2 text-[10px] font-medium">
-                  <Activity className="h-2.5 w-2.5 mr-1 animate-pulse" /> Live
-                </Badge>
-              )}
-            </div>
-            <div className="flex items-center gap-3 mt-1">
-              <p className="text-sm text-muted-foreground">
-                {isAdmin ? t("setterDashboard.subtitle") : `${user?.name} · ${t("setterDashboard.subtitle")}`}
-              </p>
-              {syncRuns[0] && (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground/50">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                  {new Date(syncRuns[0].startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </div>
-              )}
-            </div>
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{t("setter.teamOverview.subtitle").split("·")[0].trim()}</p>
+            <h1 className="text-xl font-semibold">{t("setter.teamOverview.title")}</h1>
           </div>
 
-          <div className="flex items-center gap-2 flex-nowrap">
-            {isAdmin && (
-              <Select value={selectedSetterId} onValueChange={setSelectedSetterId}>
-                <SelectTrigger className="h-9 min-w-[180px] rounded-lg border-border/60 bg-background text-sm">
-                  <SelectValue placeholder={t("setterDashboard.chooseSetter")} />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl">
-                  <SelectItem value="all">{t("setterDashboard.allSetters")}</SelectItem>
-                  {setters.map((setter) => (
-                    <SelectItem key={setter.id} value={setter.id}>{setter.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-
-            <div className="flex items-center gap-2 flex-nowrap">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={syncAircall.isPending || syncIclosed.isPending}
-                className="h-9 px-3.5 rounded-lg text-sm border-border/60 whitespace-nowrap"
-                onClick={() =>
-                  syncAircall.mutate(
-                    { source: "aircall", profileId: scopedSetterId },
-                    {
-                      onSuccess: (data) => {
-                        const r = (data as SyncMutationResult)?.results?.[0];
-                        if (r?.errors?.length) toast.error(`Aircall: ${r.errors[0]}`);
-                        else if (r?.rows_written > 0) toast.success(`Aircall synced — ${r.rows_written} rows written`);
-                        else if (r?.records_seen > 0) toast.success("Aircall sync complete — all calls are up to date.");
-                        else toast.warning("Aircall sync found 0 calls.");
-                      },
-                      onError: (syncError) => toast.error(syncError.message),
-                    },
-                  )
-                }
-              >
-                <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", syncAircall.isPending && "animate-spin")} />
-                {syncAircall.isPending ? t("settings.syncing") : "Sync Aircall"}
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={syncAircall.isPending || syncIclosed.isPending}
-                className="h-9 px-3.5 rounded-lg text-sm border-border/60 whitespace-nowrap"
-                onClick={() =>
-                  syncIclosed.mutate(
-                    { source: "iclosed", profileId: scopedSetterId },
-                    {
-                      onSuccess: (data) => {
-                        const r = (data as SyncMutationResult)?.results?.[0];
-                        if (r?.errors?.length) toast.error(`iClosed: ${r.errors[0]}`);
-                        else if (r?.rows_written > 0) toast.success(`iClosed synced — ${r.rows_written} rows written`);
-                        else toast.success("iClosed sync complete — all events are up to date.");
-                      },
-                      onError: (syncError) => toast.error(syncError.message),
-                    },
-                  )
-                }
-              >
-                <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", syncIclosed.isPending && "animate-spin")} />
-                {syncIclosed.isPending ? t("settings.syncing") : "Sync iClosed"}
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          {presetButtons.map(({ key, label }) => (
+          <div className="flex items-center gap-2 flex-wrap">
             <button
-              key={key}
-              onClick={() => setDatePreset(key)}
-              className={cn(
-                "rounded-lg px-3.5 py-1.5 text-xs font-medium transition-all",
-                datePreset === key
-                  ? "bg-primary text-white shadow-sm"
-                  : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground",
-              )}
+              disabled={syncMutation.isPending}
+              onClick={() => syncMutation.mutate({ source: "all" }, {
+                onSuccess: (data) => {
+                  const { message, hasErrors } = parseSyncResult(data);
+                  if (hasErrors) toast.warning(message); else toast.success(message);
+                },
+                onError: (e) => toast.error(e.message),
+              })}
+              className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-background px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
             >
-              {label}
+              <RefreshCw className={cn("h-3.5 w-3.5", syncMutation.isPending && "animate-spin")} />
+              {syncMutation.isPending ? t("settings.syncing") : t("setter.syncAll")}
             </button>
-          ))}
-          <span className="ml-auto text-xs text-muted-foreground/50 hidden md:block">{start} → {end}</span>
+
+            {/* Date presets */}
+            <div className="flex gap-1 bg-muted/50 p-1 rounded-lg">
+              {PRESET_KEYS.map(key => (
+                <button
+                  key={key}
+                  onClick={() => setPreset(key)}
+                  className={cn(
+                    "px-3 py-1 text-xs rounded-md transition-all",
+                    preset === key
+                      ? "bg-background text-foreground shadow-sm font-medium"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {t(`setter.preset.${key}`)}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {datePreset === "custom" && (
-          <div className="flex flex-wrap gap-5 items-end bg-muted/10 px-5 py-4 rounded-xl border border-border/40 animate-in slide-in-from-top-2 duration-200">
-            <div className="space-y-1.5">
-              <p className="text-xs font-medium text-muted-foreground">{t("analytics.filter.from")}</p>
-              <Input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="h-9 w-40 rounded-lg text-sm" />
-            </div>
-            <div className="space-y-1.5">
-              <p className="text-xs font-medium text-muted-foreground">{t("analytics.filter.to")}</p>
-              <Input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="h-9 w-40 rounded-lg text-sm" />
-            </div>
+        {/* Custom date range */}
+        {preset === "custom" && (
+          <div className="flex items-center gap-3 flex-wrap">
+            <Input type="date" value={customFrom} className="h-8 w-36 text-sm rounded-lg"
+              onChange={e => { const n = new URLSearchParams(params); n.set("range","custom"); n.set("from",e.target.value); setParams(n); }} />
+            <span className="text-xs text-muted-foreground">→</span>
+            <Input type="date" value={customTo} className="h-8 w-36 text-sm rounded-lg"
+              onChange={e => { const n = new URLSearchParams(params); n.set("range","custom"); n.set("to",e.target.value); setParams(n); }} />
           </div>
         )}
 
-        {isError && (
-          <Alert className={cn(
-            "rounded-3xl border-none shadow-sm",
-            looksLikeMissingTable ? "bg-amber-500/5 text-amber-700" : "bg-destructive/5 text-destructive",
-          )}>
-            <AlertTriangle className="h-4 w-4" />
-            <AlertTitle className="font-semibold">
-              {looksLikeMissingTable ? "Setter Ops data source not set up yet" : t("setterDashboard.loadErrorTitle")}
-            </AlertTitle>
-            <AlertDescription className="pt-1">
-              {looksLikeMissingTable
-                ? "The page is styled and ready, but the new setter tables have not been applied in Supabase yet. Run the latest migration to start loading data here."
-                : syncErrorMessage}
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {isLoading || !summary ? (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <Skeleton key={index} className="h-32 rounded-3xl" />
-            ))}
+        {/* ── KPI row ── */}
+        {isLoading ? (
+          <div className="grid grid-cols-4 gap-3 sm:grid-cols-8">
+            {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-lg" />)}
           </div>
         ) : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard
-              title={t("setterDashboard.callsMade")}
-              value={String(summary.callsMade)}
-              subtitle={`${summary.callsAnswered} ${t("setterDashboard.callsAnswered").toLowerCase()}`}
-              accent="blue"
-              icon={<PhoneCall className="h-5 w-5" />}
-            />
-            <StatCard
-              title={t("setterDashboard.talkTime")}
-              value={formatTalkTime(summary.talkTimeSeconds)}
-              subtitle={`${summary.talkTimeSeconds.toLocaleString()} s`}
-              accent="green"
-              icon={<Timer className="h-5 w-5" />}
-            />
-            <StatCard
-              title={t("setterDashboard.showRate")}
-              value={`${summary.showRate.toFixed(1)}%`}
-              subtitle={`${summary.showUps} ${t("setterDashboard.showUps")}`}
-              trend="up"
-              accent="orange"
-              icon={<Calendar className="h-5 w-5" />}
-            />
-            <StatCard
-              title={t("setterDashboard.closeRate")}
-              value={`${summary.closeRate.toFixed(1)}%`}
-              subtitle={`${summary.closes} ${t("setterDashboard.closes")}`}
-              trend="up"
-              accent="red"
-              icon={<Trophy className="h-5 w-5" />}
-            />
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-8">
+            <Tile label={t("setter.kpi.dialed")}       value={team.dialed.toLocaleString("fr-FR")} sub={`${team.pickupPct.toFixed(0)}% décroché`} />
+            <Tile label={t("setter.kpi.pickup")}       value={team.pickup.toLocaleString("fr-FR")} sub={`${team.validated > 0 ? ((team.validated/Math.max(team.pickup,1))*100).toFixed(0) : 0}% → validé`} />
+            <Tile label={t("setter.kpi.validated")}    value={String(team.validated)} sub={`${team.shows} shows · ${team.noShows} NS`} />
+            <Tile label={t("setter.kpi.showRate")}     value={`${team.showPct.toFixed(0)}%`} valueClass={team.showPct >= 70 ? "text-emerald-600" : "text-amber-600"} />
+            <Tile label={t("setter.leaderboard.colClosed")}  value={String(team.closed)} sub={`${team.closePct.toFixed(0)}% close rate`} />
+            <Tile label={t("setter.kpi.encaisse")}     value={fmtEur(team.totalEncaisse)} />
+            <Tile label={t("setter.kpi.eurPerValidated")} value={`${Math.round(team.eurPerVal).toLocaleString("fr-FR")} €`} sub={t("setter.kpi.benchmarkSub")} />
+            <Tile label={t("setter.kpi.cancelRate")}   value={`${team.cancelPct.toFixed(1)}%`} valueClass={team.cancelPct > 5 ? "text-rose-600" : team.cancelPct > 3 ? "text-amber-600" : ""} sub={`${team.setterCancellations} / ${team.pickup}`} />
           </div>
         )}
 
-        <div className="grid gap-6 xl:grid-cols-[1.35fr_1fr]">
-          <ChartCard
-            title={t("setterDashboard.chartPerformance")}
-            icon={PhoneIncoming}
-            action={<Badge variant="outline" className="rounded-full px-3 py-1">{points.length} days</Badge>}
-          >
-            {!hasData ? (
-              <EmptyChartState
-                title="No setter activity yet"
-                body="Once Aircall and your funnel source start syncing, daily call volume, show-ups, and closes will appear here."
-              />
-            ) : (
-              <ResponsiveContainer width="100%" height={320}>
-                <AreaChart data={points}>
-                  <defs>
-                    <linearGradient id="setterOpsCalls" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={CHART_COLORS.primary} stopOpacity={0.24} />
-                      <stop offset="95%" stopColor={CHART_COLORS.primary} stopOpacity={0.02} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.border} vertical={false} />
-                  <XAxis dataKey="date" tickLine={false} axisLine={false} fontSize={11} />
-                  <YAxis tickLine={false} axisLine={false} fontSize={11} />
-                  <Tooltip />
-                  <Area type="monotone" dataKey="callsMade" stroke={CHART_COLORS.primary} fill="url(#setterOpsCalls)" strokeWidth={3} />
-                  <Area type="monotone" dataKey="showUps" stroke={CHART_COLORS.accent} fillOpacity={0} strokeWidth={2} />
-                  <Area type="monotone" dataKey="closes" stroke={CHART_COLORS.danger} fillOpacity={0} strokeWidth={2} />
-                </AreaChart>
-              </ResponsiveContainer>
-            )}
-          </ChartCard>
-
-          <ChartCard title={t("setterDashboard.chartFunnel")} icon={Users}>
-            {!hasData ? (
-              <EmptyChartState
-                title="Waiting for funnel data"
-                body="Validated leads, cancellations, show-ups, and closes will stack here once your owner mappings and integrations are live."
-              />
-            ) : (
-              <ResponsiveContainer width="100%" height={320}>
-                <BarChart
-                  data={[
-                    { name: t("setterDashboard.leadsValidated"), value: summary?.leadsValidated ?? 0, fill: CHART_COLORS.primary },
-                    { name: t("setterDashboard.leadsCanceled"), value: summary?.leadsCanceled ?? 0, fill: CHART_COLORS.warning },
-                    { name: t("setterDashboard.showUps"), value: summary?.showUps ?? 0, fill: CHART_COLORS.accent },
-                    { name: t("setterDashboard.closes"), value: summary?.closes ?? 0, fill: CHART_COLORS.success },
-                  ]}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.border} vertical={false} />
-                  <XAxis dataKey="name" tickLine={false} axisLine={false} fontSize={11} />
-                  <YAxis tickLine={false} axisLine={false} fontSize={11} />
-                  <Tooltip />
-                  <Bar dataKey="value" radius={[10, 10, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </ChartCard>
+        {/* ── Daily activity chart ── */}
+        <div className="rounded-lg border border-border/40 bg-background p-4">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-medium">{t("setter.chart.dailyActivity")}</p>
+            <div className="flex gap-3">
+              {[
+                { color: "hsl(var(--primary))", label: t("setter.chart.dialed") },
+                { color: "#10b981", label: t("setter.chart.pickup") },
+                { color: "#f59e0b", label: t("setter.chart.validated") },
+              ].map(s => (
+                <span key={s.label} className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <span className="w-2 h-2 rounded-sm" style={{ background: s.color }} />
+                  {s.label}
+                </span>
+              ))}
+            </div>
+          </div>
+          {chartData.length === 0 ? (
+            <div className="h-40 flex items-center justify-center text-sm text-muted-foreground border border-dashed rounded-lg">
+              {t("setter.noData")}
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={chartData} barCategoryGap="25%" barGap={2}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.1)" vertical={false} />
+                <XAxis dataKey="date" tickLine={false} axisLine={false} fontSize={11} />
+                <YAxis tickLine={false} axisLine={false} fontSize={11} />
+                <Tooltip
+                  contentStyle={{ borderRadius: 8, border: "1px solid hsl(var(--border))", fontSize: 12, background: "hsl(var(--background))" }}
+                  cursor={{ fill: "rgba(0,0,0,0.03)" }}
+                />
+                <Bar dataKey="dialed"    name={t("setter.chart.dialed")}    fill="hsl(var(--primary))" radius={[3,3,0,0]} />
+                <Bar dataKey="pickup"    name={t("setter.chart.pickup")}    fill="#10b981"             radius={[3,3,0,0]} />
+                <Bar dataKey="validated" name={t("setter.chart.validated")} fill="#f59e0b"             radius={[3,3,0,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
 
-        {isAdmin && (
-          <SyncRunList
-            title={t("setterDashboard.healthTitle")}
-            runs={syncRuns.slice(0, 6).map((run) => ({
-              id: run.id,
-              source: run.source,
-              status: run.status,
-              recordsSeen: run.recordsSeen,
-              rowsWritten: run.rowsWritten,
-              startedAt: run.startedAt,
-            }))}
-          />
-        )}
-
-        {/* ── Call Log ── */}
-        <Card className="border-none shadow-sm bg-background/50 backdrop-blur-sm overflow-hidden rounded-2xl">
-          <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/40">
-            <div className="flex items-center gap-2.5">
-              <div className="p-1.5 rounded-md bg-primary/10 text-primary"><PhoneCall className="h-3.5 w-3.5" /></div>
-              <div>
-                <h3 className="font-semibold text-sm">Call Log</h3>
-                <p className="text-xs text-muted-foreground">{callRecords.length} calls synced</p>
-              </div>
-            </div>
-            <div className="relative w-full sm:w-56">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                placeholder="Search contact or phone..."
-                value={callSearch}
-                onChange={(e) => { setCallSearch(e.target.value); setCallLimit(25); }}
-                className="h-9 pl-9 rounded-lg text-sm border-border/50"
-              />
-            </div>
+        {/* ── Leaderboard ── */}
+        <div className="rounded-lg border border-border/40 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 bg-muted/30">
+            <p className="text-sm font-medium">{t("setter.leaderboard.title")}</p>
+            <span className="text-[11px] text-muted-foreground">{t("setter.leaderboard.sortedBy")}</span>
           </div>
 
-          {callRecords.length === 0 ? (
-            <div className="p-12 text-center text-muted-foreground text-sm">No calls synced yet — click Sync Aircall to import.</div>
-          ) : (() => {
-            const filtered = callSearch
-              ? callRecords.filter((c) =>
-                  (c.contactName ?? "").toLowerCase().includes(callSearch.toLowerCase()) ||
-                  (c.contactPhone ?? "").includes(callSearch)
-                )
-              : callRecords;
-            const visible = filtered.slice(0, callLimit);
+          {isError && !migrationMissing && (
+            <p className="p-4 text-sm text-muted-foreground">{t("setter.loadError")}</p>
+          )}
 
-            return (
-              <>
-                <div className="hidden md:grid grid-cols-[2.5rem_1fr_7rem_5rem_8rem_2rem] gap-4 px-5 py-2.5 text-xs font-medium text-muted-foreground border-b border-border/20">
-                  <span />
-                  <span>Contact</span>
-                  <span>Status</span>
-                  <span>Talk time</span>
-                  <span className="text-right">Date & Time</span>
-                  <span />
-                </div>
-
-                <div className="divide-y divide-border/20">
-                  {visible.map((call) => {
-                    const isAnswered = call.status === "answered" || call.status === "done";
-                    const isMissed = call.status === "missed" || call.status === "voicemail";
-                    const mins = Math.floor(call.talkTimeSeconds / 60);
-                    const secs = call.talkTimeSeconds % 60;
-
-                    return (
-                      <button
-                        key={call.id}
-                        className="w-full text-left grid grid-cols-[2.5rem_1fr] md:grid-cols-[2.5rem_1fr_7rem_5rem_8rem_2rem] gap-4 items-center px-5 py-3.5 hover:bg-muted/20 transition-colors group"
-                        onClick={() => navigate(`/setter-dashboard/calls/${call.id}`, { state: { call } })}
-                      >
-                        <div className={cn("flex h-8 w-8 items-center justify-center rounded-xl shrink-0",
-                          isAnswered ? "bg-emerald-500/10 text-emerald-500" : isMissed ? "bg-rose-500/10 text-rose-500" : "bg-muted/40 text-muted-foreground"
-                        )}>
-                          {isMissed ? <PhoneMissed className="h-3.5 w-3.5" /> : call.direction === "outbound" ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownLeft className="h-3.5 w-3.5" />}
+          {isLoading ? (
+            <div className="p-4 space-y-2">
+              {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 rounded" />)}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="border-b border-border/40 text-[11px] text-muted-foreground">
+                    <th className="text-left py-2 px-4 font-medium">{t("setter.leaderboard.colSetter")}</th>
+                    <th className="text-center py-2 px-2 font-medium">{t("setter.leaderboard.colDialed")}</th>
+                    <th className="text-center py-2 px-2 font-medium">{t("setter.leaderboard.colPickup")}</th>
+                    <th className="text-center py-2 px-2 font-medium">{t("setter.leaderboard.colValid")}</th>
+                    <th className="text-center py-2 px-2 font-medium">{t("setter.leaderboard.colCancel")}</th>
+                    <th className="text-center py-2 px-2 font-medium">{t("setter.leaderboard.colShow")}</th>
+                    <th className="text-center py-2 px-2 font-medium">{t("setter.leaderboard.colClosed")}</th>
+                    <th className="text-right py-2 px-2 font-medium">{t("setter.leaderboard.colEncaisse")}</th>
+                    <th className="text-right py-2 px-4 font-medium">{t("setter.leaderboard.colEurValid")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleRows.map((row, idx) => (
+                    <tr
+                      key={row.profileId}
+                      className="border-b border-border/20 hover:bg-muted/30 cursor-pointer transition-colors"
+                      onClick={() => navigate(`/setter-dashboard/setter/${row.profileId}?range=${preset}${preset==="custom"?`&from=${from}&to=${to}`:""}`)}
+                    >
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2">
+                          <span className={cn("h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-medium shrink-0", AVATAR_COLORS[idx % AVATAR_COLORS.length])}>
+                            {row.fullName.charAt(0).toUpperCase()}
+                          </span>
+                          <span className="font-medium">{row.fullName}</span>
                         </div>
-                        <div className="min-w-0 text-left">
-                          <p className="font-semibold text-sm truncate">
-                            {call.contactName || <span className="text-muted-foreground font-normal">{call.contactPhone || "Unknown caller"}</span>}
-                          </p>
-                          {call.contactName && (
-                            <p className="text-xs text-muted-foreground truncate">{call.contactPhone || "No phone recorded"}</p>
-                          )}
-                        </div>
-                        <span className={cn("hidden md:inline-flex w-fit rounded-full px-2 py-0.5 text-[10px] font-medium capitalize",
-                          isAnswered ? "bg-emerald-500/10 text-emerald-600" : isMissed ? "bg-rose-500/10 text-rose-600" : "bg-muted/50 text-muted-foreground"
-                        )}>
-                          {call.status ?? "—"}
+                      </td>
+                      <td className="py-3 px-2 text-center tabular-nums">{row.dialed}</td>
+                      <td className="py-3 px-2 text-center tabular-nums">
+                        {row.pickup} <span className="text-[10px] text-muted-foreground">({row.pickupRatePct.toFixed(0)}%)</span>
+                      </td>
+                      <td className="py-3 px-2 text-center tabular-nums">{row.validated}</td>
+                      <td className="py-3 px-2 text-center">
+                        <span className={cn("inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium", cancelBadge(row.cancelRatePct))}>
+                          {row.cancelRatePct.toFixed(1)}%
                         </span>
-                        <p className="hidden md:block text-xs text-muted-foreground tabular-nums">
-                          {call.talkTimeSeconds > 0 ? `${mins}m ${secs}s` : "—"}
-                        </p>
-                        <div className="hidden md:block text-right">
-                          <p className="text-xs text-muted-foreground">{call.startedAt ? new Date(call.startedAt).toLocaleDateString() : "—"}</p>
-                          <p className="text-xs text-muted-foreground/50">{call.startedAt ? new Date(call.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}</p>
-                        </div>
-                        <ArrowUpRight className="hidden md:block h-3.5 w-3.5 text-muted-foreground/30 group-hover:text-muted-foreground transition-colors" />
-                      </button>
-                    );
-                  })}
-                </div>
+                      </td>
+                      <td className="py-3 px-2 text-center">
+                        <span className={cn("inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium", showBadge(row.showRatePct))}>
+                          {row.showRatePct.toFixed(0)}%
+                        </span>
+                      </td>
+                      <td className="py-3 px-2 text-center tabular-nums font-medium">{row.closed}</td>
+                      <td className="py-3 px-2 text-right tabular-nums">{row.totalEncaisse.toLocaleString("fr-FR")} €</td>
+                      <td className="py-3 px-4 text-right tabular-nums font-semibold text-primary">
+                        {Math.round(row.eurPerValidated).toLocaleString("fr-FR")} €
+                      </td>
+                    </tr>
+                  ))}
 
-                {filtered.length > callLimit && (
-                  <div className="p-4 text-center border-t border-border/20">
-                    <Button variant="ghost" size="sm" className="rounded-lg text-xs gap-2 font-medium" onClick={() => setCallLimit((l) => l + 25)}>
-                      Show 25 more <span className="text-muted-foreground">({filtered.length - callLimit} remaining)</span>
-                    </Button>
-                  </div>
-                )}
-              </>
-            );
-          })()}
-        </Card>
+                  {/* Total row */}
+                  {visibleRows.length > 0 && (
+                    <tr className="bg-muted/20 border-t border-border/40 text-sm font-medium">
+                      <td className="py-2.5 px-4 text-muted-foreground text-[11px] uppercase tracking-wide">{t("setter.leaderboard.totalRow")}</td>
+                      <td className="py-2.5 px-2 text-center tabular-nums">{team.dialed.toLocaleString("fr-FR")}</td>
+                      <td className="py-2.5 px-2 text-center tabular-nums">{team.pickup.toLocaleString("fr-FR")} <span className="text-[10px] text-muted-foreground">({team.pickupPct.toFixed(0)}%)</span></td>
+                      <td className="py-2.5 px-2 text-center tabular-nums">{team.validated}</td>
+                      <td className="py-2.5 px-2 text-center tabular-nums text-muted-foreground">{team.cancelPct.toFixed(1)}%</td>
+                      <td className="py-2.5 px-2 text-center tabular-nums text-muted-foreground">{team.showPct.toFixed(0)}%</td>
+                      <td className="py-2.5 px-2 text-center tabular-nums">{team.closed}</td>
+                      <td className="py-2.5 px-2 text-right tabular-nums">{team.totalEncaisse.toLocaleString("fr-FR")} €</td>
+                      <td className="py-2.5 px-4 text-right tabular-nums text-primary">{Math.round(team.eurPerVal).toLocaleString("fr-FR")} €</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="px-4 py-2 text-[11px] text-muted-foreground/50">{t("setter.leaderboard.footnote")}</p>
+        </div>
+
       </div>
     </AppLayout>
   );

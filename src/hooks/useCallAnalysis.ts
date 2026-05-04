@@ -155,44 +155,96 @@ export const useCloserFramework = (closerId: string | null) =>
     enabled: !!closerId,
   });
 
-export const useCloserProfile = (closerId: string | null) =>
+export type FrameworkHistoryEntry = {
+  id: string;
+  closerId: string;
+  framework: string;
+  generatedFromCalls: string[];
+  callsCount: number;
+  createdAt: string;
+};
+
+export const useCloserFrameworkHistory = (closerId: string | null) =>
   useQuery({
-    queryKey: ["closer_profile", closerId],
-    queryFn: async (): Promise<CloserProfile | null> => {
-      if (!closerId) return null;
-      const { data, error } = await supabase
-        .from("closer_profiles")
-        .select("*")
+    queryKey: ["closer_framework_history", closerId],
+    queryFn: async (): Promise<FrameworkHistoryEntry[]> => {
+      if (!closerId) return [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
+        .from("closer_framework_history")
+        .select("id, closer_id, framework, generated_from_calls, calls_count, created_at")
         .eq("closer_id", closerId)
-        .maybeSingle();
-      if (error) throw new Error(error.message);
-      return data ? mapCloserProfile(data as CloserProfileRow) : null;
+        .order("created_at", { ascending: false })
+        .limit(10);
+      if (error) {
+        // Table may not exist yet — return empty rather than crashing
+        if (error.message.includes("does not exist")) return [];
+        throw new Error(error.message);
+      }
+      return (data ?? []).map((r: Record<string, unknown>) => ({
+        id: String(r.id),
+        closerId: String(r.closer_id),
+        framework: String(r.framework),
+        generatedFromCalls: Array.isArray(r.generated_from_calls) ? r.generated_from_calls as string[] : [],
+        callsCount: Number(r.calls_count ?? 0),
+        createdAt: String(r.created_at),
+      }));
     },
     enabled: !!closerId,
+    staleTime: 0,
   });
 
+
 // ─── Mutations ────────────────────────────────────────────────────────────────
+
+export type SyncFathomResult = {
+  ok: boolean;
+  imported: number;
+  total_seen: number;
+  transcripts_fetched: number;
+  remaining_pending: number;
+  errors: string[];
+  error?: string;
+};
+
+async function invokeSyncFathom(closerId?: string): Promise<SyncFathomResult> {
+  const body = closerId ? { closer_id: closerId } : undefined;
+  const { data, error } = await supabase.functions.invoke("sync-fathom", { body });
+  if (error) {
+    const ctx = error as { context?: { json?: () => Promise<{ error?: string }> } };
+    const parsed = await ctx.context?.json?.().catch(() => null);
+    throw new Error((parsed as { error?: string })?.error ?? error.message);
+  }
+  const result = data as SyncFathomResult;
+  if (!result.ok) throw new Error(result.error ?? "Sync failed");
+  return result;
+}
 
 export const useSyncFathom = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (closerId?: string) => {
-      const body = closerId ? { closer_id: closerId } : undefined;
-      const { data, error } = await supabase.functions.invoke("sync-fathom", { body });
-      if (error) {
-        const ctx = error as { context?: { json?: () => Promise<{ error?: string }> } };
-        const body = await ctx.context?.json?.().catch(() => null);
-        throw new Error((body as { error?: string })?.error ?? error.message);
-      }
-      const result = data as {
-        ok: boolean;
-        imported: number;
-        total_seen: number;
-        errors: string[];
-        error?: string;
+    mutationFn: async (closerId?: string): Promise<SyncFathomResult & { rounds: number }> => {
+      const MAX_ROUNDS = 10;
+      let rounds = 0;
+      let totalImported = 0;
+      let totalTranscripts = 0;
+      let lastResult: SyncFathomResult | null = null;
+
+      do {
+        lastResult = await invokeSyncFathom(closerId);
+        totalImported   += lastResult.imported;
+        totalTranscripts += lastResult.transcripts_fetched;
+        rounds++;
+        // Invalidate between rounds so the UI reflects progress in real time.
+        qc.invalidateQueries({ queryKey: ["call_analyses"] });
+      } while (lastResult.remaining_pending > 0 && rounds < MAX_ROUNDS);
+
+      return {
+        ...lastResult,
+        imported: totalImported,
+        transcripts_fetched: totalTranscripts,
+        rounds,
       };
-      if (!result.ok) throw new Error(result.error ?? "Sync failed");
-      return result;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["call_analyses"] }),
   });
@@ -243,28 +295,6 @@ export const useGenerateFramework = () => {
   });
 };
 
-export const useRefreshCloserProfile = () => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (closerId: string) => {
-      const { data, error } = await supabase.functions.invoke("refresh-closer-profile", {
-        body: { closer_id: closerId },
-      });
-      if (error) {
-        const ctx = error as { context?: { json?: () => Promise<{ error?: string }> } };
-        const body = await ctx.context?.json?.().catch(() => null);
-        throw new Error((body as { error?: string })?.error ?? error.message);
-      }
-      const result = data as { ok: boolean; error?: string };
-      if (!result.ok) throw new Error(result.error ?? "Closer profile refresh failed");
-      return result;
-    },
-    onSuccess: (_data, closerId) => {
-      qc.invalidateQueries({ queryKey: ["closer_profile", closerId] });
-      qc.invalidateQueries({ queryKey: ["call_analyses", closerId] });
-    },
-  });
-};
 
 export const useBulkAnalyze = () => {
   const qc = useQueryClient();

@@ -19,7 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertCircle,
   Calendar,
- CheckCircle2,
+  CheckCircle2,
   Clock3,
   Eye,
   Loader2,
@@ -74,20 +74,20 @@ const ScorePill = ({ score }: { score: number }) => {
     "bg-rose-500/10 text-rose-500";
 
   return (
-    <span className={cn("inline-flex min-w-[4.75rem] items-center justify-center rounded-full px-3 py-1 text-xs font-black tabular-nums", tone)}>
+    <span className={cn("inline-flex min-w-[4.5rem] items-center justify-center rounded-md px-2.5 py-0.5 text-xs font-medium tabular-nums", tone)}>
       {score}/100
     </span>
   );
 };
 
 const LoadingState = () => (
-  <div className="space-y-6">
-    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+  <div className="space-y-4">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {Array.from({ length: 4 }).map((_, index) => (
-        <Skeleton key={index} className="h-32 rounded-3xl" />
+        <Skeleton key={index} className="h-20 rounded-lg" />
       ))}
     </div>
-    <Skeleton className="h-[520px] rounded-3xl" />
+    <Skeleton className="h-96 rounded-lg" />
   </div>
 );
 
@@ -183,25 +183,29 @@ const CallsPage = () => {
   ].filter(Boolean).length;
 
   const handleSync = () => {
-    syncFathom.mutate(undefined, {
+    const syncCloserId = isAdmin ? (closerFilter !== "all" ? closerFilter : undefined) : user?.id;
+    syncFathom.mutate(syncCloserId, {
       onSuccess: (res) => {
-        if (res.imported > 0) {
-          toast.success(`${res.imported} ${t("calls.syncImported")}`, {
-            description: res.total_seen ? `Fetched ${res.total_seen} meeting(s) from Fathom.` : undefined,
-          });
-          return;
-        }
         if ((res.errors?.length ?? 0) > 0) {
           toast.error(t("calls.syncError"), {
             description: res.errors.slice(0, 3).join("\n"),
           });
           return;
         }
-        toast.info(t("calls.syncUpToDate"), {
-          description: res.total_seen != null
-            ? `Fetched ${res.total_seen} meeting(s) from Fathom — none were new.`
-            : "No meetings were returned by Fathom for this API key.",
-        });
+        const parts: string[] = [];
+        if (res.imported > 0)           parts.push(`${res.imported} new call(s) imported`);
+        if (res.transcripts_fetched > 0) parts.push(`${res.transcripts_fetched} transcript(s) fetched`);
+        if (res.rounds > 1)              parts.push(`completed in ${res.rounds} passes`);
+
+        if (parts.length > 0) {
+          toast.success(t("calls.syncImported"), { description: parts.join(" · ") });
+        } else {
+          toast.info(t("calls.syncUpToDate"), {
+            description: res.total_seen != null
+              ? `Checked ${res.total_seen} meeting(s) — all up to date.`
+              : "No meetings were returned by Fathom for this API key.",
+          });
+        }
       },
       onError: (error) => toast.error(`${t("calls.syncError")}: ${error.message}`),
     });
@@ -237,25 +241,20 @@ const CallsPage = () => {
 
   return (
     <AppLayout>
-      <div className="space-y-10 animate-in fade-in duration-500">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 shadow-inner">
-              <Phone className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black tracking-tight">{t("calls.title")}</h1>
-              <p className="text-sm text-muted-foreground font-medium">{t("calls.subtitle")}</p>
-            </div>
+      <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{t("calls.subtitle")}</p>
+            <h1 className="text-xl font-semibold">{t("calls.title")}</h1>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+          <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
             {isAdmin && (
               <Select value={closerFilter} onValueChange={setCloserFilter}>
-                <SelectTrigger className="h-10 w-44 rounded-xl border-border/60 text-sm">
+                <SelectTrigger className="h-9 w-40 rounded-lg border-border/60 text-sm">
                   <SelectValue placeholder="All closers" />
                 </SelectTrigger>
-                <SelectContent className="rounded-2xl">
+                <SelectContent className="rounded-lg">
                   <SelectItem value="all">All Closers</SelectItem>
                   {closers.map(c => (
                     <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
@@ -267,8 +266,9 @@ const CallsPage = () => {
               <Button
                 variant="outline"
                 size="sm"
-                disabled={syncFathom.isPending}
-                className="rounded-xl h-10 px-4 font-bold border-border/60 hover:bg-primary/5 transition-all active:scale-95"
+                disabled={syncFathom.isPending || (isAdmin && closerFilter === "all")}
+                title={isAdmin && closerFilter === "all" ? "Select a specific closer to sync their calls" : undefined}
+                className="rounded-lg h-9 px-3 border-border/60 text-xs text-muted-foreground hover:text-foreground"
                 onClick={handleSync}
               >
                 <RefreshCw className={cn("h-4 w-4 mr-2", syncFathom.isPending && "animate-spin")} />
@@ -278,11 +278,12 @@ const CallsPage = () => {
             {(isCloser || isAdmin) && stats.ready > 0 && (
               <Button
                 size="sm"
-                disabled={bulkAnalyze.isPending}
-                className="rounded-xl h-10 px-4 font-bold gap-2 shadow-lg shadow-primary/20 transition-all active:scale-95"
+                disabled={bulkAnalyze.isPending || (isAdmin && closerFilter === "all")}
+                title={isAdmin && closerFilter === "all" ? "Select a specific closer to analyze their calls" : undefined}
+                className="rounded-lg h-9 px-3 text-xs font-medium gap-2"
                 onClick={() =>
                   bulkAnalyze.mutate(
-                    isAdmin && closerFilter !== "all" ? closerFilter : undefined,
+                    isAdmin ? (closerFilter !== "all" ? closerFilter : undefined) : user?.id,
                     {
                       onSuccess: (res) => {
                         if (res.remaining > 0) {
@@ -319,71 +320,63 @@ const CallsPage = () => {
         </div>
 
         {isCloser && (
-          <Card className="border-none shadow-sm rounded-3xl overflow-hidden">
-            <CardContent className="p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div className="rounded-xl border border-border/40 overflow-hidden bg-background">
+            <div className="p-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-foreground">The assistant now lives in its own dedicated workspace.</p>
-                <p className="text-sm text-muted-foreground mt-1">
+                <p className="text-sm font-medium">The assistant now lives in its own dedicated workspace.</p>
+                <p className="text-sm text-muted-foreground mt-0.5">
                   Use Calls to review recordings and jump into the standalone assistant when you want coaching.
                 </p>
               </div>
-              <Button className="rounded-2xl h-10 px-4 font-bold" onClick={() => handleOpenAssistant()}>
+              <Button className="rounded-lg h-9 px-4 text-xs font-medium shrink-0" onClick={() => handleOpenAssistant()}>
                 <MessageSquare className="h-4 w-4 mr-2" />
                 Go to Sales Assistant
               </Button>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         )}
 
         {isLoading ? (
           <LoadingState />
         ) : (
           <>
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <StatCard
                 title={t("calls.totalCalls")}
                 value={String(stats.total)}
                 subtitle="All synced recordings"
                 accent="blue"
-                icon={<Phone className="h-5 w-5" />}
+                icon={<Phone className="h-4 w-4" />}
               />
               <StatCard
                 title={t("calls.readyToAnalyze")}
                 value={String(stats.ready)}
                 subtitle="Transcript available"
                 accent="orange"
-                icon={<Sparkles className="h-5 w-5" />}
+                icon={<Sparkles className="h-4 w-4" />}
               />
               <StatCard
                 title={t("calls.analyzed")}
                 value={String(stats.analyzed)}
                 subtitle="AI review completed"
                 accent="green"
-                icon={<CheckCircle2 className="h-5 w-5" />}
+                icon={<CheckCircle2 className="h-4 w-4" />}
               />
               <StatCard
                 title={t("calls.avgScore")}
                 value={stats.avgScore !== null ? `${stats.avgScore}/100` : "—"}
                 subtitle="Average analyzed score"
                 accent="blue"
-                icon={<TrendingUp className="h-5 w-5" />}
+                icon={<TrendingUp className="h-4 w-4" />}
               />
             </div>
 
-            <Card className="border-none shadow-sm rounded-3xl overflow-hidden">
-              <div className="p-6 border-b border-border/40 space-y-5">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                  <div>
-                    <h3 className="font-semibold text-sm uppercase tracking-widest text-muted-foreground">
-                      {t("calls.tableTitle")}
-                    </h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Filter recordings by status, score, transcript availability, and keyword.
-                    </p>
-                  </div>
-
+            <div className="rounded-xl border border-border/40 overflow-hidden bg-background">
+              <div className="px-4 py-3 border-b border-border/40 bg-muted/30 space-y-3">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                  <p className="text-sm font-medium">{t("calls.tableTitle")}</p>
                   <div className="relative w-full lg:max-w-sm">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
                     <Input
                       value={query}
                       onChange={(event) => {
@@ -391,12 +384,12 @@ const CallsPage = () => {
                         setVisible(12);
                       }}
                       placeholder="Search title, date, summary..."
-                      className="h-11 rounded-2xl border-border/60 pl-10"
+                      className="h-9 rounded-lg border-border/50 pl-9 text-sm bg-background"
                     />
                   </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5">
                   {quickFilters.map((item) => (
                     <button
                       key={item.id}
@@ -406,23 +399,23 @@ const CallsPage = () => {
                         setVisible(12);
                       }}
                       className={cn(
-                        "rounded-full px-4 py-2 text-xs font-black uppercase tracking-[0.16em] transition-all border",
+                        "rounded-lg px-3 py-1.5 text-xs font-medium transition-all border",
                         quickFilter === item.id
-                          ? "bg-primary text-white border-primary shadow-lg shadow-primary/15"
-                          : "bg-background text-muted-foreground border-border/60 hover:bg-primary/5 hover:text-foreground",
+                          ? "bg-primary text-white border-primary"
+                          : "bg-background text-muted-foreground border-border/50 hover:bg-muted/40 hover:text-foreground",
                       )}
                     >
-                      {item.label} <span className="ml-1 opacity-70">{item.count}</span>
+                      {item.label} <span className="ml-1 opacity-60">{item.count}</span>
                     </button>
                   ))}
                 </div>
 
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
                   <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
-                    <SelectTrigger className="h-11 rounded-2xl border-border/60">
+                    <SelectTrigger className="h-9 rounded-lg border-border/50 text-sm bg-background">
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
-                    <SelectContent className="rounded-2xl">
+                    <SelectContent className="rounded-lg">
                       <SelectItem value="all">Any status</SelectItem>
                       <SelectItem value="pending">Pending</SelectItem>
                       <SelectItem value="synced">Synced</SelectItem>
@@ -433,10 +426,10 @@ const CallsPage = () => {
                   </Select>
 
                   <Select value={scoreFilter} onValueChange={(value) => setScoreFilter(value as ScoreFilter)}>
-                    <SelectTrigger className="h-11 rounded-2xl border-border/60">
+                    <SelectTrigger className="h-9 rounded-lg border-border/50 text-sm bg-background">
                       <SelectValue placeholder="Score" />
                     </SelectTrigger>
-                    <SelectContent className="rounded-2xl">
+                    <SelectContent className="rounded-lg">
                       <SelectItem value="all">Any score</SelectItem>
                       <SelectItem value="high">High 80-100</SelectItem>
                       <SelectItem value="mid">Mid 60-79</SelectItem>
@@ -446,10 +439,10 @@ const CallsPage = () => {
                   </Select>
 
                   <Select value={transcriptFilter} onValueChange={(value) => setTranscriptFilter(value as TranscriptFilter)}>
-                    <SelectTrigger className="h-11 rounded-2xl border-border/60">
+                    <SelectTrigger className="h-9 rounded-lg border-border/50 text-sm bg-background">
                       <SelectValue placeholder="Transcript" />
                     </SelectTrigger>
-                    <SelectContent className="rounded-2xl">
+                    <SelectContent className="rounded-lg">
                       <SelectItem value="all">Any transcript state</SelectItem>
                       <SelectItem value="withTranscript">With transcript</SelectItem>
                       <SelectItem value="withoutTranscript">Without transcript</SelectItem>
@@ -457,10 +450,10 @@ const CallsPage = () => {
                   </Select>
 
                   <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortFilter)}>
-                    <SelectTrigger className="h-11 rounded-2xl border-border/60">
+                    <SelectTrigger className="h-9 rounded-lg border-border/50 text-sm bg-background">
                       <SelectValue placeholder="Sort by" />
                     </SelectTrigger>
-                    <SelectContent className="rounded-2xl">
+                    <SelectContent className="rounded-lg">
                       <SelectItem value="newest">Newest first</SelectItem>
                       <SelectItem value="oldest">Oldest first</SelectItem>
                       <SelectItem value="scoreHigh">Highest score</SelectItem>
@@ -469,15 +462,15 @@ const CallsPage = () => {
                   </Select>
                 </div>
 
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl bg-muted/20 px-4 py-3">
-                  <p className="text-sm text-muted-foreground">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-lg bg-muted/20 px-3 py-2">
+                  <p className="text-xs text-muted-foreground">
                     {filteredCalls.length} recording(s) found
-                    {activeFilterCount > 0 ? ` • ${activeFilterCount} active filter(s)` : ""}
+                    {activeFilterCount > 0 ? ` · ${activeFilterCount} active filter(s)` : ""}
                   </p>
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="rounded-xl h-9 px-4 font-bold"
+                    className="rounded-lg h-7 px-3 text-xs"
                     disabled={activeFilterCount === 0}
                     onClick={() => {
                       setQuickFilter("all");
@@ -495,21 +488,16 @@ const CallsPage = () => {
                 </div>
               </div>
 
-              <CardContent className="p-6">
+              <div className="p-4">
                 {filteredCalls.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-                      <Phone className="h-7 w-7 text-primary/50" />
-                    </div>
-                    <div>
-                      <p className="font-bold text-muted-foreground">{t("calls.noCalls")}</p>
-                      <p className="text-sm text-muted-foreground/60 mt-1">
-                        Try adjusting the filters or sync more Fathom recordings.
-                      </p>
-                    </div>
+                  <div className="text-center py-16">
+                    <p className="text-sm font-medium text-muted-foreground">{t("calls.noCalls")}</p>
+                    <p className="text-xs text-muted-foreground/60 mt-1">
+                      Try adjusting the filters or sync more Fathom recordings.
+                    </p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-2">
                     {filteredCalls.slice(0, visible).map((call) => {
                       const status = statusConfig[call.status];
                       const canAnalyze = call.status === "synced" || call.status === "error";
@@ -519,64 +507,64 @@ const CallsPage = () => {
                       return (
                         <div
                           key={call.id}
-                          className="rounded-3xl border border-border/50 bg-background p-5 transition-all hover:shadow-sm hover:border-border cursor-pointer"
+                          className="rounded-lg border border-border/40 bg-background p-4 transition-all hover:border-border/70 hover:bg-muted/10 cursor-pointer"
                           onClick={() => setSelectedCall(call)}
                         >
-                          <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                          <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-2 mb-3">
-                                <Badge variant="outline" className={cn("gap-1.5 font-semibold text-[11px]", status.className)}>
+                              <div className="flex flex-wrap items-center gap-2 mb-2">
+                                <Badge variant="outline" className={cn("rounded-md gap-1.5 text-xs", status.className)}>
                                   {status.icon}
                                   {status.label}
                                 </Badge>
                                 {call.score !== null ? <ScorePill score={call.score} /> : null}
                                 {isAdmin && (
-                                  <Badge variant="outline" className="text-[11px] font-semibold text-muted-foreground border-border/60 bg-muted/20">
+                                  <Badge variant="outline" className="rounded-md text-xs text-muted-foreground border-border/50 bg-muted/20">
                                     {closerNameMap.get(call.closerId) ?? "Unknown"}
                                   </Badge>
                                 )}
                                 {call.status === "pending" && (
-                                  <Badge variant="outline" className="text-[11px] font-semibold text-muted-foreground border-muted/60">
+                                  <Badge variant="outline" className="rounded-md text-xs text-muted-foreground border-muted/60">
                                     <VideoOff className="h-3 w-3 mr-1" />
                                     No transcript
                                   </Badge>
                                 )}
                               </div>
 
-                              <h4 className="text-base font-bold tracking-tight truncate">
+                              <h4 className="text-sm font-medium truncate">
                                 {call.callTitle ?? t("calls.untitledCall")}
                               </h4>
 
-                              <div className="flex flex-wrap items-center gap-4 mt-2 text-xs text-muted-foreground">
+                              <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-muted-foreground">
                                 <span className="inline-flex items-center gap-1.5">
-                                  <Calendar className="h-3.5 w-3.5" />
+                                  <Calendar className="h-3 w-3" />
                                   {call.callDate ?? "No date"}
                                 </span>
                                 <span className="inline-flex items-center gap-1.5">
-                                  <Clock3 className="h-3.5 w-3.5" />
+                                  <Clock3 className="h-3 w-3" />
                                   {duration}
                                 </span>
                               </div>
 
-                              <p className="mt-4 text-sm text-muted-foreground leading-relaxed line-clamp-2">
+                              <p className="mt-2.5 text-xs text-muted-foreground leading-relaxed line-clamp-2">
                                 {call.feedback?.summary ?? (call.status !== "pending"
                                   ? "Transcript is available for detailed review and AI analysis."
                                   : "This recording synced without transcript content yet.")}
                               </p>
                             </div>
 
-                            <div className="flex items-center gap-2 lg:pl-4 flex-wrap justify-end">
+                            <div className="flex items-center gap-2 lg:pl-3 flex-wrap justify-end">
                               {isCloser && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="rounded-xl h-10 px-4 font-bold"
+                                  className="rounded-lg h-8 px-3 text-xs"
                                   onClick={(event) => {
                                     event.stopPropagation();
                                     handleOpenAssistant(call);
                                   }}
                                 >
-                                  <MessageSquare className="h-4 w-4 mr-2" />
+                                  <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
                                   Coach
                                 </Button>
                               )}
@@ -584,14 +572,14 @@ const CallsPage = () => {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="rounded-xl h-10 px-4 font-bold"
+                                  className="rounded-lg h-8 px-3 text-xs border-border/60"
                                   disabled={!!analyzingCallId}
                                   onClick={(event) => handleAnalyze(event, call.id)}
                                 >
                                   {isAnalyzingThisCall ? (
-                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
                                   ) : (
-                                    <Sparkles className="h-4 w-4 mr-2" />
+                                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />
                                   )}
                                   {isAnalyzingThisCall ? t("calls.analyzing") : t("calls.analyzeButton")}
                                 </Button>
@@ -599,13 +587,13 @@ const CallsPage = () => {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-10 w-10 rounded-xl"
+                                className="h-8 w-8 rounded-lg"
                                 onClick={(event) => {
                                   event.stopPropagation();
                                   setSelectedCall(call);
                                 }}
                               >
-                                <Eye className="h-4 w-4" />
+                                <Eye className="h-3.5 w-3.5" />
                               </Button>
                             </div>
                           </div>
@@ -617,7 +605,7 @@ const CallsPage = () => {
                       <div className="flex justify-center pt-2">
                         <Button
                           variant="outline"
-                          className="rounded-xl h-10 px-5 font-bold"
+                          className="rounded-lg h-9 px-4 text-xs border-border/60 text-muted-foreground hover:text-foreground"
                           onClick={() => setVisible((count) => count + 12)}
                         >
                           {t("calls.showMore")} ({filteredCalls.length - visible} {t("calls.remaining")})
@@ -626,8 +614,8 @@ const CallsPage = () => {
                     )}
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </>
         )}
       </div>

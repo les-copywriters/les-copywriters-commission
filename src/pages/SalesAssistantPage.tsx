@@ -46,10 +46,10 @@ const SalesAssistantPage = () => {
     : (user?.name ?? null);
 
   // Include done + synced (has transcript in DB) + error (failed analysis but has transcript).
-  // "pending" calls have no transcript yet so Max can't use them as context.
-  // Note: list query omits transcript column for performance; status is the reliable proxy.
+  // Only fully analyzed calls give Max structured context (score, feedback, patterns).
+  // Synced-only calls have a transcript but no AI analysis, which produces weaker coaching.
   const focusableCalls = useMemo(
-    () => calls.filter((call) => call.status === "done" || call.status === "synced" || call.status === "error"),
+    () => calls.filter((call) => call.status === "done"),
     [calls],
   );
 

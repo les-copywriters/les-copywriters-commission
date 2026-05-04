@@ -165,7 +165,7 @@ Deno.serve(async (req) => {
       .map((c) => c.fathom_meeting_id)
       .filter(Boolean) as string[];
 
-    // Upsert framework (one per closer)
+    // Upsert latest framework (one per closer — used by analyze-call as benchmark)
     const { error: upsertError } = await supabase
       .from("closer_frameworks")
       .upsert({
@@ -176,6 +176,21 @@ Deno.serve(async (req) => {
       }, { onConflict: "closer_id" });
 
     if (upsertError) return json({ error: upsertError.message }, 500);
+
+    // Insert into history — preserves every generated version
+    const { error: historyError } = await supabase
+      .from("closer_framework_history")
+      .insert({
+        closer_id: body.closer_id,
+        framework,
+        generated_from_calls: usedMeetingIds,
+        calls_count: withTranscripts.length,
+      });
+
+    if (historyError) {
+      // Non-fatal — history table may not exist yet, don't block the response
+      console.warn("[generate-framework] history insert failed:", historyError.message);
+    }
 
     console.log(`[generate-framework] done — framework saved for closer ${body.closer_id}`);
     return json({ ok: true, framework, calls_used: withTranscripts.length });

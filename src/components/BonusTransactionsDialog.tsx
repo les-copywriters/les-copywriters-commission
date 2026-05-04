@@ -14,35 +14,16 @@ import { Calendar, Eye, Gift, Layers, ListChecks, Wallet } from "lucide-react";
 export type BonusDrilldownKind = "validatedCount" | "pifBonus" | "volumeBonus" | "total";
 
 type Props = {
-  month: string | null;
-  kind: BonusDrilldownKind | null;
-  sales: Sale[];
-  tiers: BonusTier[];
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  month: string | null; kind: BonusDrilldownKind | null;
+  sales: Sale[]; tiers: BonusTier[];
+  open: boolean; onOpenChange: (open: boolean) => void;
 };
 
 const kindMeta: Record<BonusDrilldownKind, { label: string; icon: typeof Gift; description: string }> = {
-  validatedCount: {
-    label: "Validated Sales",
-    icon: ListChecks,
-    description: "All validated transactions in this cycle.",
-  },
-  pifBonus: {
-    label: "PIF Bonus",
-    icon: Gift,
-    description: "Only validated PIF transactions contribute to this bonus.",
-  },
-  volumeBonus: {
-    label: "Volume Bonus",
-    icon: Layers,
-    description: "Validated transactions used to reach the monthly volume tier.",
-  },
-  total: {
-    label: "Total Bonus",
-    icon: Wallet,
-    description: "Combined view of the validated transactions behind the full monthly reward.",
-  },
+  validatedCount: { label: "Validated Sales",  icon: ListChecks, description: "All validated transactions in this cycle." },
+  pifBonus:       { label: "PIF Bonus",         icon: Gift,       description: "Only validated PIF transactions contribute to this bonus." },
+  volumeBonus:    { label: "Volume Bonus",       icon: Layers,     description: "Validated transactions used to reach the monthly volume tier." },
+  total:          { label: "Total Bonus",        icon: Wallet,     description: "Combined view of the validated transactions behind the full monthly reward." },
 };
 
 const BonusTransactionsDialog = ({ month, kind, sales, tiers, open, onOpenChange }: Props) => {
@@ -52,185 +33,136 @@ const BonusTransactionsDialog = ({ month, kind, sales, tiers, open, onOpenChange
 
   const detail = useMemo(() => {
     if (!month || !kind) return null;
-
-    const monthSales = sales
-      .filter((sale) => sale.date.slice(0, 7) === month)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    const validatedSales = monthSales.filter((sale) => !sale.refunded && !sale.impaye);
-    const pifSales = validatedSales.filter((sale) => sale.paymentType === "pif");
-    const monthlyBonus = calculateMonthBonus(monthSales, tiers);
-
-    const includedIds = new Set(
-      (kind === "pifBonus" ? pifSales : validatedSales).map((sale) => sale.id),
-    );
-
-    return {
-      monthSales,
-      validatedSales,
-      pifSales,
-      includedIds,
-      monthlyBonus,
-    };
+    const monthSales    = sales.filter(s => s.date.slice(0,7) === month).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const validatedSales = monthSales.filter(s => !s.refunded && !s.impaye);
+    const pifSales       = validatedSales.filter(s => s.paymentType === "pif");
+    const monthlyBonus   = calculateMonthBonus(monthSales, tiers);
+    const includedIds    = new Set((kind === "pifBonus" ? pifSales : validatedSales).map(s => s.id));
+    return { monthSales, validatedSales, pifSales, includedIds, monthlyBonus };
   }, [kind, month, sales, tiers]);
 
-  const meta = kind ? kindMeta[kind] : null;
+  const meta       = kind ? kindMeta[kind] : null;
   const monthLabel = month ? formatMonth(month, locale) : "";
 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-4xl p-0 overflow-hidden border-none shadow-premium rounded-[2.5rem] bg-background">
-          <DialogHeader className="p-8 pb-5 border-b border-border/40">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="h-11 w-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
-                    {meta && <meta.icon className="h-5 w-5" />}
-                  </div>
-                  <div>
-                    <DialogTitle className="text-2xl font-black tracking-tight">
-                      {meta?.label ?? "Bonus Detail"}
-                    </DialogTitle>
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
-                      {monthLabel}
-                    </p>
-                  </div>
-                </div>
-                <p className="text-sm text-muted-foreground max-w-2xl">
-                  {meta?.description}
-                </p>
-              </div>
+        <DialogContent className="max-w-4xl p-0 overflow-hidden rounded-xl border border-border/40 bg-background">
 
+          {/* Header */}
+          <DialogHeader className="px-4 py-3 border-b border-border/40 bg-muted/30">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2.5">
+                {meta && <meta.icon className="h-4 w-4 text-muted-foreground" />}
+                <div>
+                  <DialogTitle className="text-base font-semibold">{meta?.label ?? "Bonus Detail"}</DialogTitle>
+                  <p className="text-[11px] text-muted-foreground">{monthLabel}</p>
+                </div>
+              </div>
               {detail && (
-                <div className="flex flex-wrap gap-2">
-                  <Badge className="rounded-full px-3 py-1 bg-primary/5 text-primary border-primary/20 font-black uppercase tracking-widest text-[9px]">
-                    <Calendar className="h-3 w-3 mr-1" />
-                    {detail.validatedSales.length} validated
+                <div className="flex gap-2">
+                  <Badge className="rounded-md px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary border-primary/20">
+                    <Calendar className="h-3 w-3 mr-1" />{detail.validatedSales.length} validated
                   </Badge>
-                  <Badge className="rounded-full px-3 py-1 bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-black uppercase tracking-widest text-[9px]">
-                    {detail.pifSales.length} pif
+                  <Badge className="rounded-md px-2 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                    {detail.pifSales.length} PIF
                   </Badge>
                 </div>
               )}
             </div>
+            {meta && <p className="text-[11px] text-muted-foreground mt-1">{meta.description}</p>}
           </DialogHeader>
 
           {detail && (
-            <div className="p-8 pt-6 space-y-6 max-h-[78vh] overflow-y-auto custom-scrollbar">
-              <div className="grid gap-4 md:grid-cols-4">
-                <div className="rounded-[1.75rem] border border-border/40 bg-muted/10 p-5">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Validated Count</p>
-                  <p className="mt-2 text-2xl font-black tabular-nums">{detail.monthlyBonus.validatedCount}</p>
-                </div>
-                <div className="rounded-[1.75rem] border border-border/40 bg-muted/10 p-5">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">PIF Bonus</p>
-                  <p className="mt-2 text-2xl font-black tabular-nums text-emerald-500">{fmt(detail.monthlyBonus.pifBonus)}</p>
-                </div>
-                <div className="rounded-[1.75rem] border border-border/40 bg-muted/10 p-5">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Volume Bonus</p>
-                  <p className="mt-2 text-2xl font-black tabular-nums text-emerald-500">{fmt(detail.monthlyBonus.volumeBonus)}</p>
-                </div>
-                <div className="rounded-[1.75rem] border border-primary/20 bg-primary/5 p-5">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-primary/60">Total Bonus</p>
-                  <p className="mt-2 text-2xl font-black tabular-nums text-primary">{fmt(detail.monthlyBonus.total)}</p>
-                </div>
+            <div className="p-4 space-y-4 max-h-[78vh] overflow-y-auto">
+
+              {/* Summary tiles */}
+              <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+                {[
+                  { label: "Validated",     value: String(detail.monthlyBonus.validatedCount), color: "" },
+                  { label: "PIF Bonus",     value: fmt(detail.monthlyBonus.pifBonus),           color: "text-emerald-600" },
+                  { label: "Volume Bonus",  value: fmt(detail.monthlyBonus.volumeBonus),         color: "text-emerald-600" },
+                  { label: "Total Bonus",   value: fmt(detail.monthlyBonus.total),               color: "text-primary", highlight: true },
+                ].map((item) => (
+                  <div key={item.label} className={`rounded-lg border p-3 ${item.highlight ? "border-primary/20 bg-primary/5" : "border-border/40 bg-muted/30"}`}>
+                    <p className="text-[11px] text-muted-foreground">{item.label}</p>
+                    <p className={`text-lg font-semibold tabular-nums mt-0.5 ${item.color}`}>{item.value}</p>
+                  </div>
+                ))}
               </div>
 
-              <div className="rounded-[2rem] border border-border/40 bg-background overflow-hidden">
-                <div className="p-5 border-b border-border/40 flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-black uppercase tracking-widest text-muted-foreground">
-                      Monthly Transactions
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {kind === "pifBonus"
-                        ? "This month view marks which transactions are counted for the PIF bonus."
-                        : "This month view marks which transactions are counted for the selected bonus slice."}
-                    </p>
-                  </div>
-                  <Badge variant="outline" className="rounded-full px-3 py-1 font-black text-[10px]">
-                    {detail.monthSales.length} transaction{detail.monthSales.length === 1 ? "" : "s"}
-                  </Badge>
+              {/* Transactions table */}
+              <div className="rounded-lg border border-border/40 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 bg-muted/30 border-b border-border/40">
+                  <p className="text-sm font-medium">Monthly Transactions</p>
+                  <span className="text-[11px] text-muted-foreground">{detail.monthSales.length} transaction{detail.monthSales.length !== 1 ? "s" : ""}</span>
                 </div>
 
                 {detail.monthSales.length === 0 ? (
-                  <div className="p-10 text-center text-muted-foreground">
-                    No transactions found for this month.
-                  </div>
+                  <p className="p-8 text-center text-sm text-muted-foreground">No transactions found for this month.</p>
                 ) : (
-                  <Table>
-                    <TableHeader className="bg-muted/20">
-                      <TableRow className="border-none">
-                        <TableHead className="pl-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Date</TableHead>
-                        <TableHead className="py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Client</TableHead>
-                        <TableHead className="py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Product</TableHead>
-                        <TableHead className="py-4 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground">HT Amount</TableHead>
-                        <TableHead className="py-4 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground">Closer Comm</TableHead>
-                        <TableHead className="py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Bonus</TableHead>
-                        <TableHead className="py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Status</TableHead>
-                        <TableHead className="pr-6 py-4 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground">Action</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {detail.monthSales.map((sale) => {
-                        const included = detail.includedIds.has(sale.id);
-                        return (
-                        <TableRow key={sale.id} className="group border-border/30 hover:bg-muted/10 transition-colors">
-                          <TableCell className="pl-6 py-5 text-xs font-black text-muted-foreground/60 tabular-nums">{sale.date}</TableCell>
-                          <TableCell className="py-5">
-                            <div className="flex flex-col">
-                              <span className="font-black text-sm">{sale.clientName}</span>
-                              {sale.clientEmail && (
-                                <span className="text-[10px] text-muted-foreground/50 font-bold truncate max-w-[220px]">
-                                  {sale.clientEmail}
-                                </span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="py-5 text-sm font-bold text-muted-foreground">{sale.product}</TableCell>
-                          <TableCell className="py-5 text-right font-black tabular-nums">{fmt(sale.amount)}</TableCell>
-                          <TableCell className="py-5 text-right font-black tabular-nums text-primary">{fmt(sale.closerCommission)}</TableCell>
-                          <TableCell className="py-5">
-                            <Badge
-                              className={included
-                                ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-black uppercase tracking-widest text-[8px]"
-                                : "bg-muted text-muted-foreground border-border/60 font-black uppercase tracking-widest text-[8px]"}
-                            >
-                              {included ? "Included" : "Excluded"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="py-5">
-                            <div className="flex items-center gap-2">
-                              <SaleStatusBadge refunded={sale.refunded} impaye={sale.impaye} />
-                              {sale.paymentType === "pif" && (
-                                <Badge className="text-[8px] font-black text-emerald-600 bg-emerald-500/10 border-emerald-500/20 h-5 px-1.5 rounded-sm uppercase tracking-widest">
-                                  PIF
-                                </Badge>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="pr-6 py-5 text-right">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-10 w-10 rounded-2xl hover:bg-primary/10 hover:text-primary"
-                              onClick={() => setSelectedSale(sale)}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader className="bg-muted/30">
+                        <TableRow className="border-none">
+                          <TableHead className="pl-4 py-2.5 text-[11px] font-medium text-muted-foreground">Date</TableHead>
+                          <TableHead className="py-2.5 text-[11px] font-medium text-muted-foreground">Client</TableHead>
+                          <TableHead className="py-2.5 text-[11px] font-medium text-muted-foreground">Product</TableHead>
+                          <TableHead className="py-2.5 text-right text-[11px] font-medium text-muted-foreground">HT Amount</TableHead>
+                          <TableHead className="py-2.5 text-right text-[11px] font-medium text-muted-foreground">Closer Comm</TableHead>
+                          <TableHead className="py-2.5 text-[11px] font-medium text-muted-foreground">Bonus</TableHead>
+                          <TableHead className="py-2.5 text-[11px] font-medium text-muted-foreground">Status</TableHead>
+                          <TableHead className="pr-4 py-2.5 text-right text-[11px] font-medium text-muted-foreground">View</TableHead>
                         </TableRow>
-                      )})}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {detail.monthSales.map((sale) => {
+                          const included = detail.includedIds.has(sale.id);
+                          return (
+                            <TableRow key={sale.id} className="border-border/20 hover:bg-muted/20 transition-colors">
+                              <TableCell className="pl-4 py-3 text-xs text-muted-foreground tabular-nums">{sale.date}</TableCell>
+                              <TableCell className="py-3">
+                                <p className="font-medium text-sm">{sale.clientName}</p>
+                                {sale.clientEmail && <p className="text-[11px] text-muted-foreground truncate max-w-[200px]">{sale.clientEmail}</p>}
+                              </TableCell>
+                              <TableCell className="py-3 text-sm text-muted-foreground">{sale.product}</TableCell>
+                              <TableCell className="py-3 text-right tabular-nums text-sm">{fmt(sale.amount)}</TableCell>
+                              <TableCell className="py-3 text-right tabular-nums font-medium text-primary text-sm">{fmt(sale.closerCommission)}</TableCell>
+                              <TableCell className="py-3">
+                                <Badge className={included
+                                  ? "rounded-md px-2 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                                  : "rounded-md px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground border-border/40"}>
+                                  {included ? "Included" : "Excluded"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="py-3">
+                                <div className="flex items-center gap-1.5">
+                                  <SaleStatusBadge refunded={sale.refunded} impaye={sale.impaye} />
+                                  {sale.paymentType === "pif" && (
+                                    <Badge className="rounded-md px-1.5 py-0.5 text-[9px] font-medium text-emerald-600 bg-emerald-500/10 border-emerald-500/20 uppercase">PIF</Badge>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="pr-4 py-3 text-right">
+                                <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg hover:bg-primary/10 hover:text-primary" onClick={() => setSelectedSale(sale)}>
+                                  <Eye className="h-3.5 w-3.5" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
                 )}
               </div>
 
-              <div className="rounded-[1.75rem] border border-border/40 bg-muted/5 p-5">
-                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Calculation Note</p>
-                <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-                  Bonus drill-downs use validated sales only, meaning transactions marked as refunded or unpaid are excluded.
-                  {kind === "pifBonus" ? " The PIF slice further filters to `paymentType = pif`." : ""}
+              {/* Note */}
+              <div className="rounded-lg border border-border/40 bg-muted/20 px-3 py-2.5">
+                <p className="text-[11px] text-muted-foreground font-medium mb-1">Calculation Note</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Bonus drill-downs use validated sales only — refunded or unpaid transactions are excluded.
+                  {kind === "pifBonus" ? " PIF slice further filters to paymentType = pif." : ""}
                 </p>
               </div>
             </div>
@@ -238,11 +170,7 @@ const BonusTransactionsDialog = ({ month, kind, sales, tiers, open, onOpenChange
         </DialogContent>
       </Dialog>
 
-      <SaleDetailsDialog
-        sale={selectedSale}
-        open={!!selectedSale}
-        onOpenChange={(nextOpen) => !nextOpen && setSelectedSale(null)}
-      />
+      <SaleDetailsDialog sale={selectedSale} open={!!selectedSale} onOpenChange={(o) => !o && setSelectedSale(null)} />
     </>
   );
 };

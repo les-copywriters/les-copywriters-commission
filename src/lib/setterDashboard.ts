@@ -26,9 +26,9 @@ export function computeSetterDateRange(preset: SetterDatePreset, customStart: st
     case "lastYear":
       return { start: `${y - 1}-01-01`, end: `${y - 1}-12-31` };
     case "allTime":
-      return { start: "2000-01-01", end: today };
+      return { start: "2023-01-01", end: today };
     case "custom":
-      return { start: customStart || "2000-01-01", end: customEnd || today };
+      return { start: customStart || "2023-01-01", end: customEnd || today };
   }
 }
 

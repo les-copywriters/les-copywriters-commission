@@ -40,14 +40,15 @@ function json(body: unknown, status = 200) {
   });
 }
 
-async function fetchJotformPage(offset: number, apiKey: string, formId: string): Promise<Record<string, unknown>[]> {
+async function fetchJotformPage(offset: number, apiKey: string, formId: string, since?: string): Promise<Record<string, unknown>[]> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), JOTFORM_FETCH_TIMEOUT_MS);
 
   try {
+    const sinceParam = since ? `&filter[created_at:gt]=${since}` : "";
     const url =
       `https://api.jotform.com/form/${formId}/submissions` +
-      `?apiKey=${apiKey}&limit=${JOTFORM_PAGE_SIZE}&offset=${offset}&orderby=created_at,DESC`;
+      `?apiKey=${apiKey}&limit=${JOTFORM_PAGE_SIZE}&offset=${offset}&orderby=created_at,DESC${sinceParam}`;
 
     const res = await fetch(url, { signal: controller.signal });
     const text = await res.text();
@@ -102,8 +103,10 @@ function parseAliasMap(raw: string | undefined): Record<string, string> {
   }
 }
 
-const CLOSER_ALIASES = parseAliasMap(Deno.env.get("JOTFORM_CLOSER_ALIASES"));
-const SETTER_ALIASES = parseAliasMap(Deno.env.get("JOTFORM_SETTER_ALIASES"));
+// Aliases are now loaded from global_settings at runtime (see handler below).
+// Env vars serve as fallback for local development only.
+const CLOSER_ALIASES_FALLBACK = parseAliasMap(Deno.env.get("JOTFORM_CLOSER_ALIASES"));
+const SETTER_ALIASES_FALLBACK = parseAliasMap(Deno.env.get("JOTFORM_SETTER_ALIASES"));
 
 function resolveAlias(name: string, aliases: Record<string, string>) {
   const normalized = norm(name);
@@ -134,9 +137,14 @@ function findProfile(name: string, role: string, profiles: Profile[]): Profile |
 
 function findProfileAnyRole(name: string, profiles: Profile[]): Profile | undefined {
   const n = norm(name);
+  const first = n.split(/\s+/)[0];
+  // Prefer closer/admin profiles to avoid assigning setter UUIDs as closer_id
+  const closerExact = profiles.find(p => (p.role === "closer" || p.role === "admin") && norm(p.name) === n);
+  if (closerExact) return closerExact;
   const exact = profiles.find(p => norm(p.name) === n);
   if (exact) return exact;
-  const first = n.split(/\s+/)[0];
+  const closerFirst = profiles.find(p => (p.role === "closer" || p.role === "admin") && norm(p.name).split(/\s+/)[0] === first);
+  if (closerFirst) return closerFirst;
   return profiles.find(p => norm(p.name).split(/\s+/)[0] === first);
 }
 
@@ -269,6 +277,26 @@ Deno.serve(async (req) => {
     const closerRate = parseFloat(global.closer_commission_rate ?? "") || CLOSER_RATE;
     const setterRate = parseFloat(global.setter_commission_rate ?? "") || SETTER_RATE;
 
+    // Aliases: DB takes precedence over env vars — admin can update these from the UI
+    // without redeploying the edge function.
+    const CLOSER_ALIASES = parseAliasMap(global.jotform_closer_aliases ?? undefined) || CLOSER_ALIASES_FALLBACK;
+    const SETTER_ALIASES = parseAliasMap(global.jotform_setter_aliases ?? undefined) || SETTER_ALIASES_FALLBACK;
+
+    // Legacy names: silently skip submissions from former team members.
+    // Admin can update this list from Settings without a redeploy.
+    const legacyRaw = global.jotform_legacy_names ?? "";
+    let legacyNames = LEGACY_NAMES; // hardcoded fallback
+    if (legacyRaw) {
+      try {
+        const parsed = JSON.parse(legacyRaw);
+        if (Array.isArray(parsed)) {
+          legacyNames = new Set([...LEGACY_NAMES, ...parsed.map((n: string) => n.toLowerCase())]);
+        }
+      } catch {
+        console.warn("[sync-jotform] invalid jotform_legacy_names JSON — using hardcoded defaults");
+      }
+    }
+
     if (!finalApiKey || !finalFormId) {
       console.error("[sync-jotform] missing credentials (check Global Settings)");
       await finishRun(supabase, runId, "error", 0, 0, ["JOTFORM_API_KEY and JOTFORM_FORM_ID are not set in database or environment"]);
@@ -306,12 +334,37 @@ Deno.serve(async (req) => {
 
     console.log("[sync-jotform] existing complete:", existingIds.size, "| null-setter to retry:", nullSetterIds.size);
 
+    // Incremental sync: only fetch submissions created after the last successful run.
+    // Falls back to full sync if no previous run exists.
+    let since: string | undefined;
+    try {
+      const { data: lastRun } = await supabase
+        .from("integration_sync_runs")
+        .select("finished_at")
+        .eq("source", "jotform")
+        .eq("status", "success")
+        .order("finished_at", { ascending: false })
+        .limit(1)
+        .single();
+      if (lastRun?.finished_at) {
+        // Go back 1 extra day as a safety buffer for timezone differences
+        const d = new Date(lastRun.finished_at);
+        d.setDate(d.getDate() - 1);
+        since = d.toISOString().split("T")[0];
+        console.log(`[sync-jotform] incremental sync since ${since}`);
+      } else {
+        console.log("[sync-jotform] no previous run — full sync");
+      }
+    } catch {
+      console.log("[sync-jotform] could not read last run — full sync");
+    }
+
     // Paginate JotForm
     const allSubs: Record<string, unknown>[] = [];
     let offset = 0;
     let pageCount = 0;
     while (true) {
-      const page = await fetchJotformPage(offset, finalApiKey, finalFormId);
+      const page = await fetchJotformPage(offset, finalApiKey, finalFormId, since);
       allSubs.push(...page);
       if (page.length < JOTFORM_PAGE_SIZE) break;
       offset += JOTFORM_PAGE_SIZE;
@@ -381,7 +434,7 @@ Deno.serve(async (req) => {
       // 1. Resolve Closer
       const closerProfile = findProfileAnyRole(closerName, profiles);
       if (!closerProfile) {
-        if (LEGACY_NAMES.has(norm(closerName))) {
+        if (legacyNames.has(norm(closerName))) {
           nonActive++; // Treat as non-active/skipped quietly
           continue;
         }
@@ -406,7 +459,7 @@ Deno.serve(async (req) => {
       }
 
       if (!noSetter && !setterProfile) {
-        if (LEGACY_NAMES.has(norm(setterName))) {
+        if (legacyNames.has(norm(setterName))) {
           // Ignore quietly
         } else {
           console.warn(`[sync-jotform] setter not matched: "${setterName}"`);

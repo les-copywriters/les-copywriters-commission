@@ -142,6 +142,22 @@ Deno.serve(async (req) => {
       return respond({ ok: false, error: "No Fathom API key saved. Go to Settings → API Keys." }, 400);
     }
 
+    // Create audit log entry for this sync run
+    const viaCron = req.headers.get("x-cron-secret") !== null;
+    let runId: string | null = null;
+    try {
+      const { data: runRow } = await supabase
+        .from("integration_sync_runs")
+        .insert({
+          source: "fathom",
+          mode: viaCron ? "scheduled" : "manual",
+          status: "running",
+          triggered_by: caller.id,
+        })
+        .select("id").single();
+      runId = runRow?.id ? String(runRow.id) : null;
+    } catch { /* non-fatal — continue even if logging fails */ }
+
     // Load existing IDs so we skip already-imported meetings
     const { data: existing } = await supabase
       .from("call_analyses")
@@ -277,9 +293,10 @@ Deno.serve(async (req) => {
       .order("call_date", { ascending: false })
       .limit(200);
 
+    let processedInPhase2 = 0;
     for (const call of pendingCalls ?? []) {
       if (Date.now() - phaseStart > TIME_BUDGET_MS) {
-        console.log("[sync-fathom] time budget reached — remaining transcripts will be fetched on next sync");
+        console.log("[sync-fathom] time budget reached — remaining transcripts will be fetched on next invocation");
         break;
       }
 
@@ -293,14 +310,39 @@ Deno.serve(async (req) => {
         transcriptsFetched++;
       }
 
+      processedInPhase2++;
       await sleep(300); // stay under Fathom rate limits
     }
 
-    console.log(`[sync-fathom] phase 2 done — transcripts fetched: ${transcriptsFetched}`);
-    return respond({ ok: true, imported, transcripts_fetched: transcriptsFetched, total_seen: totalSeen, errors });
+    // Count how many pending transcripts are still left so the caller knows
+    // whether to invoke again.
+    const { count: remainingPending } = await supabase
+      .from("call_analyses")
+      .select("id", { count: "exact", head: true })
+      .eq("closer_id", closerId)
+      .eq("status", "pending")
+      .not("fathom_meeting_id", "is", null);
+
+    console.log(`[sync-fathom] phase 2 done — transcripts fetched: ${transcriptsFetched}, remaining pending: ${remainingPending ?? 0}`);
+
+    // Finish audit log entry
+    if (runId) {
+      try {
+        await supabase.from("integration_sync_runs").update({
+          status: errors.length > 0 ? "partial" : "success",
+          records_seen: totalSeen,
+          rows_written: imported + transcriptsFetched,
+          errors: errors.length > 0 ? errors.slice(0, 5) : null,
+          finished_at: new Date().toISOString(),
+        }).eq("id", runId);
+      } catch { /* non-fatal */ }
+    }
+
+    return respond({ ok: true, imported, transcripts_fetched: transcriptsFetched, total_seen: totalSeen, remaining_pending: remainingPending ?? 0, errors });
 
   } catch (err) {
     console.error("[sync-fathom] error:", err);
     return respond({ ok: false, error: err instanceof Error ? err.message : String(err) }, 500);
   }
+  // runId is block-scoped above — error path handled inline
 });

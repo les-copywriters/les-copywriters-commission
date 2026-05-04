@@ -80,7 +80,7 @@ const SetterCallDetailPage = () => {
 
   return (
     <AppLayout>
-      <div className="max-w-4xl space-y-8 animate-in fade-in duration-400">
+      <div className="space-y-8 animate-in fade-in duration-400">
 
         {/* Back + header */}
         <div className="space-y-5">

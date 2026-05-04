@@ -124,9 +124,11 @@
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
-  /* Smooth scrolling */
+  /* Smooth scrolling — scrollbar-gutter reserves scrollbar space so layout
+     never shifts when content grows tall enough to scroll */
   html {
     scroll-behavior: smooth;
+    scrollbar-gutter: stable;
   }
 
   /* Better focus rings */

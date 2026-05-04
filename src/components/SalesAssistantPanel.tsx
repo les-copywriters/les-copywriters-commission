@@ -1,9 +1,10 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import CallDetailsDialog from "@/components/CallDetailsDialog";
 import { useAssistantMessages, useAssistantThreads, useDeleteAssistantThread, useSalesAssistant, useUpdateAssistantThread } from "@/hooks/useSalesAssistant";
 import { AssistantMessage, CallAnalysis } from "@/types";
-import { cn } from "@/lib/utils";
+import { cn, ls } from "@/lib/utils";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -35,6 +36,8 @@ import {
   Loader2,
   MoreVertical,
   Pencil,
+  PanelLeftClose,
+  PanelLeftOpen,
   Pin,
   PinOff,
   Plus,
@@ -254,6 +257,15 @@ const SalesAssistantPanel = ({
   const deleteThread = useDeleteAssistantThread(closerId);
   const updateThread = useUpdateAssistantThread(closerId);
 
+  const [panelCollapsed, setPanelCollapsed] = useState(
+    () => ls.get("assistant.sidebar.collapsed", "false") === "true"
+  );
+  const togglePanel = () => setPanelCollapsed(c => {
+    const next = !c;
+    ls.set("assistant.sidebar.collapsed", String(next));
+    return next;
+  });
+
   const [draft, setDraft] = useState("");
   const [optimisticPrompt, setOptimisticPrompt] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
@@ -456,27 +468,41 @@ const SalesAssistantPanel = ({
         ) : (
           <div className="flex min-h-0 flex-1 flex-row">
             {/* ── Sidebar ─────────────────────────────────────────────────── */}
-            <div className="hidden w-64 flex-col bg-[#0A0D14] lg:flex">
+            <div className={cn(
+              "hidden flex-col bg-[#0A0D14] lg:flex transition-[width] duration-300 overflow-hidden shrink-0",
+              panelCollapsed ? "w-14" : "w-64"
+            )}>
 
-              {/* Branding */}
-              <div className="px-5 pt-5 pb-4 border-b border-white/[0.06]">
-                <div className="flex items-center gap-3">
+              {/* Branding + collapse toggle */}
+              <div className={cn("border-b border-white/[0.06]", panelCollapsed ? "px-2 py-3" : "px-5 pt-5 pb-4")}>
+                <div className={cn("flex items-center", panelCollapsed ? "flex-col gap-2" : "gap-3")}>
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary shadow-lg shadow-primary/30">
-                    <Bot className="h-4.5 w-4.5 text-white" />
+                    <Bot className="h-4 w-4 text-white" />
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-black text-white leading-none">Max</p>
-                    <p className="text-[10px] font-medium text-white/40 mt-1">Your Sales Coach</p>
-                  </div>
+                  {!panelCollapsed && (
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-black text-white leading-none">Max</p>
+                      <p className="text-[10px] font-medium text-white/40 mt-1">Your Sales Coach</p>
+                    </div>
+                  )}
+                  <button
+                    onClick={togglePanel}
+                    title={panelCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-white/30 hover:text-white/70 hover:bg-white/[0.07] transition-colors"
+                  >
+                    {panelCollapsed
+                      ? <PanelLeftOpen className="h-3.5 w-3.5" />
+                      : <PanelLeftClose className="h-3.5 w-3.5" />}
+                  </button>
                 </div>
 
-                {closerName && (
+                {!panelCollapsed && closerName && (
                   <p className="mt-3 text-[10px] font-bold text-primary/70 uppercase tracking-widest truncate">
                     Coaching {closerName}
                   </p>
                 )}
 
-                {isAdmin && onSelectCloser && (
+                {!panelCollapsed && isAdmin && onSelectCloser && (
                   <Select
                     value={selectedCloserId || "none"}
                     onValueChange={(value) => onSelectCloser(value === "none" ? "" : value)}
@@ -495,260 +521,270 @@ const SalesAssistantPanel = ({
               </div>
 
               {/* New chat */}
-              <div className="px-3 pt-4 pb-2">
-                <button
-                  onClick={() => onSelectThread(null)}
-                  className="flex w-full items-center gap-2.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-primary/25 transition-all hover:bg-primary/90 active:scale-[0.98]"
-                >
-                  <Plus className="h-4 w-4" />
-                  New Chat
-                </button>
-              </div>
-
-              {/* Call focus — searchable popover */}
-              <div className="px-3 pb-3">
-                <p className="px-1 mb-1.5 text-[9px] font-black uppercase tracking-widest text-white/25 select-none">
-                  Focus a Call
-                </p>
-                <Popover open={callPickerOpen} onOpenChange={setCallPickerOpen}>
-                  <PopoverTrigger asChild>
-                    <button
-                      disabled={calls.length === 0}
-                      className="flex w-full items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-left text-xs font-medium text-white/50 hover:bg-white/[0.07] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      <span className="truncate">
-                        {selectedCall
-                          ? (selectedCall.callTitle || "Untitled call")
-                          : calls.length === 0
-                          ? "No calls yet — sync Fathom first"
-                          : "Choose a call to focus..."}
-                      </span>
-                      <Calendar className="h-3.5 w-3.5 shrink-0 opacity-50" />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    side="bottom"
-                    align="start"
-                    className="w-[420px] p-0 rounded-2xl shadow-2xl border-border/60"
-                    sideOffset={6}
-                    avoidCollisions
-                  >
-                    <Command
-                      className={cn(
-                        // kill the browser focus ring on the input wrapper
-                        "[&_[cmdk-input-wrapper]]:focus-within:outline-none",
-                        "[&_[cmdk-input-wrapper]]:focus-within:ring-0",
-                        "[&_[cmdk-input-wrapper]]:focus-within:border-border/40",
-                      )}
-                    >
-                      <CommandInput
-                        placeholder="Search by title, date, or client..."
-                        className="h-11 text-sm focus:ring-0 focus:outline-none"
-                      />
-                      <CommandList className="max-h-[420px] overflow-y-auto">
-                        <CommandEmpty className="py-8 text-center text-sm text-muted-foreground">
-                          No calls match your search.
-                        </CommandEmpty>
-                        {selectedCall && (
-                          <CommandGroup heading="Active">
-                            <CommandItem
-                              onSelect={() => { onClearSelectedCall(); setCallPickerOpen(false); }}
-                              className="flex items-center gap-2 text-muted-foreground text-xs py-2"
-                            >
-                              <span className="text-rose-500 font-bold">× Clear focused call</span>
-                            </CommandItem>
-                          </CommandGroup>
-                        )}
-                        <CommandGroup heading={`${calls.length} call${calls.length === 1 ? "" : "s"} available`}>
-                          {(() => {
-                            // Count occurrences of each title+date combination so duplicates
-                            // get numbered: "Call Title (1 of 3)", "Call Title (2 of 3)"
-                            const keyCount = new Map<string, number>();
-                            const keyIndex = new Map<string, number>();
-                            for (const c of calls) {
-                              const k = `${c.callTitle ?? ""}|${c.callDate ?? ""}`;
-                              keyCount.set(k, (keyCount.get(k) ?? 0) + 1);
-                            }
-                            return calls.map((call) => {
-                            const isActive = selectedCall?.id === call.id;
-                            const score = call.score;
-                            const dupKey = `${call.callTitle ?? ""}|${call.callDate ?? ""}`;
-                            const total = keyCount.get(dupKey) ?? 1;
-                            keyIndex.set(dupKey, (keyIndex.get(dupKey) ?? 0) + 1);
-                            const idx = keyIndex.get(dupKey)!;
-                            const dupLabel = total > 1 ? ` (${idx} of ${total})` : "";
-                            // Prefix with ID so each item is unique even if titles match.
-                            const itemValue = `${call.id} ${call.callTitle ?? ""} ${call.callDate ?? ""}`;
-                            return (
-                              <CommandItem
-                                key={call.id}
-                                value={itemValue}
-                                onSelect={() => { onOpenCall(call); setCallPickerOpen(false); }}
-                                className={cn(
-                                  "flex flex-col items-start gap-1 py-3 px-4 rounded-none cursor-pointer border-b border-border/40 last:border-b-0",
-                                  // force off the default Radix selected background at all specificity levels
-                                  "[&[data-selected=true]]:!bg-transparent [&[data-selected=true]]:!text-foreground",
-                                  // active call gets a left accent line instead of a background
-                                  isActive ? "border-l-2 border-l-primary pl-3.5" : "hover:bg-muted/30"
-                                )}
-                              >
-                                <div className="flex items-start justify-between w-full gap-3">
-                                  <p className="text-sm font-semibold leading-snug text-foreground">
-                                    {call.callTitle || "Untitled call"}
-                                    {dupLabel && (
-                                      <span className="ml-1 text-[11px] font-normal text-muted-foreground">{dupLabel}</span>
-                                    )}
-                                  </p>
-                                  {score !== null && (
-                                    <span className={cn(
-                                      "text-[10px] font-black tabular-nums shrink-0 mt-0.5 px-2 py-0.5 rounded-lg",
-                                      score >= 80 ? "bg-emerald-500/10 text-emerald-600" :
-                                      score >= 60 ? "bg-amber-500/10 text-amber-600" :
-                                                    "bg-rose-500/10 text-rose-600"
-                                    )}>
-                                      {score}/100
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                                  {call.callStartedAt
-                                    ? <span>{new Date(call.callStartedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
-                                    : call.callDate && <span>{call.callDate}</span>
-                                  }
-                                  {call.durationSeconds && (
-                                    <><span className="opacity-40">·</span><span>{Math.round(call.durationSeconds / 60)} min</span></>
-                                  )}
-                                  <span className="opacity-40">·</span>
-                                  <span className={call.status === "done" ? "text-emerald-500 font-semibold" : "text-muted-foreground/60"}>
-                                    {call.status === "done" ? "✓ Analyzed" : "Ready"}
-                                  </span>
-                                </div>
-                              </CommandItem>
-                            );
-                          });
-                          })()}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-
-                {selectedCall && (
+              <div className={cn("pt-4 pb-2", panelCollapsed ? "px-2" : "px-3")}>
+                {panelCollapsed ? (
                   <button
-                    onClick={onClearSelectedCall}
-                    className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-lg py-1 text-[11px] font-medium text-white/30 hover:text-white/60 transition-colors"
+                    onClick={() => onSelectThread(null)}
+                    title="New Chat"
+                    className="flex h-9 w-full items-center justify-center rounded-xl bg-primary shadow-lg shadow-primary/25 transition-all hover:bg-primary/90 active:scale-[0.98]"
                   >
-                    Clear focused call ×
+                    <Plus className="h-4 w-4 text-white" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => onSelectThread(null)}
+                    className="flex w-full items-center gap-2.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-primary/25 transition-all hover:bg-primary/90 active:scale-[0.98]"
+                  >
+                    <Plus className="h-4 w-4" />
+                    New Chat
                   </button>
                 )}
               </div>
 
-              {/* Thread list */}
-              <ScrollArea className="flex-1">
-                <div className="px-2 pb-2 space-y-0.5">
-                  {loadingThreads ? (
-                    <div className="space-y-1.5 px-2 py-3">
-                      {[1,2,3].map(i => <Skeleton key={i} className="h-9 w-full rounded-xl bg-white/5" />)}
-                    </div>
-                  ) : threads.length === 0 ? (
-                    <p className="py-10 text-center text-xs text-white/25 italic">No conversations yet</p>
-                  ) : (
-                    groupedThreads.map(([group, items]) => (
-                      <div key={group}>
-                        <p className="px-3 pb-1 pt-3 text-[9px] font-black uppercase tracking-widest text-white/20 select-none">{group}</p>
-                        {items.map((t) => (
-                          <div
-                            key={t.id}
-                            className={cn(
-                              "group relative flex w-full items-center gap-1 rounded-xl px-3 py-2.5 text-left transition-all duration-150",
-                              selectedThreadId === t.id
-                                ? "bg-white/10 text-white"
-                                : "text-white/45 hover:bg-white/[0.05] hover:text-white/75",
-                            )}
-                          >
-                            <button
-                              onClick={() => onSelectThread(t.id)}
-                              className="flex-1 text-left min-w-0"
-                            >
-                              <div className="flex items-center gap-1.5">
-                                {t.isPinned && <Pin className="h-2.5 w-2.5 text-primary/70 shrink-0" />}
-                                <p className="truncate text-xs font-semibold leading-tight">
-                                  {t.title || "New Chat"}
-                                </p>
-                              </div>
-                              {t.lastMessageAt && (
-                                <p className="mt-0.5 text-[9px] opacity-40">
-                                  {formatTime(t.lastMessageAt)}
-                                </p>
-                              )}
-                            </button>
+              {/* Call focus — searchable popover (hidden when collapsed) */}
+              {!panelCollapsed && (
+                <div className="px-3 pb-3">
+                  <p className="px-1 mb-1.5 text-[9px] font-black uppercase tracking-widest text-white/25 select-none">
+                    Focus a Call
+                  </p>
+                  <Popover open={callPickerOpen} onOpenChange={setCallPickerOpen}>
+                    <PopoverTrigger asChild>
+                      <button
+                        disabled={calls.length === 0}
+                        className="flex w-full items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-left text-xs font-medium text-white/50 hover:bg-white/[0.07] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <span className="truncate">
+                          {selectedCall
+                            ? (selectedCall.callTitle || "Untitled call")
+                            : calls.length === 0
+                            ? "No analyzed calls yet"
+                            : "Choose a call to focus..."}
+                        </span>
+                        <Calendar className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      side="bottom"
+                      align="start"
+                      className="w-[420px] p-0 rounded-2xl shadow-2xl border-border/60"
+                      sideOffset={6}
+                      avoidCollisions
+                    >
+                      <Command
+                        className={cn(
+                          "[&_[cmdk-input-wrapper]]:focus-within:outline-none",
+                          "[&_[cmdk-input-wrapper]]:focus-within:ring-0",
+                          "[&_[cmdk-input-wrapper]]:focus-within:border-border/40",
+                        )}
+                      >
+                        <CommandInput
+                          placeholder="Search by title, date, or client..."
+                          className="h-11 text-sm focus:ring-0 focus:outline-none"
+                        />
+                        <CommandList className="max-h-[420px] overflow-y-auto">
+                          <CommandEmpty className="py-8 text-center text-sm text-muted-foreground">
+                            No calls match your search.
+                          </CommandEmpty>
+                          {selectedCall && (
+                            <CommandGroup heading="Active">
+                              <CommandItem
+                                onSelect={() => { onClearSelectedCall(); setCallPickerOpen(false); }}
+                                className="flex items-center gap-2 text-muted-foreground text-xs py-2"
+                              >
+                                <span className="text-rose-500 font-bold">× Clear focused call</span>
+                              </CommandItem>
+                            </CommandGroup>
+                          )}
+                          <CommandGroup heading={`${calls.length} analyzed call${calls.length === 1 ? "" : "s"} available`}>
+                            {(() => {
+                              const keyCount = new Map<string, number>();
+                              const keyIndex = new Map<string, number>();
+                              for (const c of calls) {
+                                const k = `${c.callTitle ?? ""}|${c.callDate ?? ""}`;
+                                keyCount.set(k, (keyCount.get(k) ?? 0) + 1);
+                              }
+                              return calls.map((call) => {
+                                const isActive = selectedCall?.id === call.id;
+                                const score = call.score;
+                                const dupKey = `${call.callTitle ?? ""}|${call.callDate ?? ""}`;
+                                const total = keyCount.get(dupKey) ?? 1;
+                                keyIndex.set(dupKey, (keyIndex.get(dupKey) ?? 0) + 1);
+                                const idx = keyIndex.get(dupKey)!;
+                                const dupLabel = total > 1 ? ` (${idx} of ${total})` : "";
+                                const itemValue = `${call.id} ${call.callTitle ?? ""} ${call.callDate ?? ""}`;
+                                return (
+                                  <CommandItem
+                                    key={call.id}
+                                    value={itemValue}
+                                    onSelect={() => { onOpenCall(call); setCallPickerOpen(false); }}
+                                    className={cn(
+                                      "flex flex-col items-start gap-1 py-3 px-4 rounded-none cursor-pointer border-b border-border/40 last:border-b-0",
+                                      "[&[data-selected=true]]:!bg-transparent [&[data-selected=true]]:!text-foreground",
+                                      isActive ? "border-l-2 border-l-primary pl-3.5" : "hover:bg-muted/30"
+                                    )}
+                                  >
+                                    <div className="flex items-start justify-between w-full gap-3">
+                                      <p className="text-sm font-semibold leading-snug text-foreground">
+                                        {call.callTitle || "Untitled call"}
+                                        {dupLabel && (
+                                          <span className="ml-1 text-[11px] font-normal text-muted-foreground">{dupLabel}</span>
+                                        )}
+                                      </p>
+                                      {score !== null && (
+                                        <span className={cn(
+                                          "text-[10px] font-black tabular-nums shrink-0 mt-0.5 px-2 py-0.5 rounded-lg",
+                                          score >= 80 ? "bg-emerald-500/10 text-emerald-600" :
+                                          score >= 60 ? "bg-amber-500/10 text-amber-600" :
+                                                        "bg-rose-500/10 text-rose-600"
+                                        )}>
+                                          {score}/100
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                                      {call.callStartedAt
+                                        ? <span>{new Date(call.callStartedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                                        : call.callDate && <span>{call.callDate}</span>
+                                      }
+                                      {call.durationSeconds && (
+                                        <><span className="opacity-40">·</span><span>{Math.round(call.durationSeconds / 60)} min</span></>
+                                      )}
+                                      <span className="opacity-40">·</span>
+                                      <span className={call.status === "done" ? "text-emerald-500 font-semibold" : "text-muted-foreground/60"}>
+                                        {call.status === "done" ? "✓ Analyzed" : "Ready"}
+                                      </span>
+                                    </div>
+                                  </CommandItem>
+                                );
+                              });
+                            })()}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
 
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className={cn(
-                                    "h-6 w-6 rounded-lg opacity-0 transition-opacity group-hover:opacity-100 text-white/50 hover:text-white hover:bg-white/10",
-                                    selectedThreadId === t.id && "opacity-100"
-                                  )}
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <MoreVertical className="h-3 w-3" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-48 rounded-xl">
-                                <DropdownMenuItem onClick={(e) => handleTogglePin(t.id, t.isPinned, e)} className="gap-2 text-xs font-bold">
-                                  {t.isPinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
-                                  {t.isPinned ? "Unpin" : "Pin Chat"}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={(e) => handleRenameThread(t.id, t.title, e)} className="gap-2 text-xs font-bold">
-                                  <Pencil className="h-3.5 w-3.5" />
-                                  Rename
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={(e) => handleToggleArchive(t.id, t.isArchived, e)} className="gap-2 text-xs font-bold">
-                                  {t.isArchived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
-                                  {t.isArchived ? "Restore" : "Archive"}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={(e) => handleDeleteThread(t.id, e)}
-                                  className="gap-2 text-xs font-bold text-red-500 focus:bg-red-50 focus:text-red-600"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        ))}
-                      </div>
-                    ))
+                  {selectedCall && (
+                    <button
+                      onClick={onClearSelectedCall}
+                      className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-lg py-1 text-[11px] font-medium text-white/30 hover:text-white/60 transition-colors"
+                    >
+                      Clear focused call ×
+                    </button>
                   )}
                 </div>
-              </ScrollArea>
+              )}
 
-              {/* Footer: archive + share */}
-              <div className="border-t border-white/[0.06] px-3 py-2 space-y-0.5">
-                <button
-                  onClick={() => setShowArchived(!showArchived)}
-                  className={cn(
-                    "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-colors",
-                    showArchived ? "text-primary/80" : "text-white/30 hover:text-white/60"
-                  )}
-                >
-                  {showArchived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
-                  {showArchived ? "Back to Active" : "Archived Chats"}
-                </button>
-                {selectedThreadId && (
+              {/* Thread list (hidden when collapsed) */}
+              {!panelCollapsed && (
+                <ScrollArea className="flex-1">
+                  <div className="px-2 pb-2 space-y-0.5">
+                    {loadingThreads ? (
+                      <div className="space-y-1.5 px-2 py-3">
+                        {[1,2,3].map(i => <Skeleton key={i} className="h-9 w-full rounded-xl bg-white/5" />)}
+                      </div>
+                    ) : threads.length === 0 ? (
+                      <p className="py-10 text-center text-xs text-white/25 italic">No conversations yet</p>
+                    ) : (
+                      groupedThreads.map(([group, items]) => (
+                        <div key={group}>
+                          <p className="px-3 pb-1 pt-3 text-[9px] font-black uppercase tracking-widest text-white/20 select-none">{group}</p>
+                          {items.map((t) => (
+                            <div
+                              key={t.id}
+                              className={cn(
+                                "group relative flex w-full items-center gap-1 rounded-xl px-3 py-2.5 text-left transition-all duration-150",
+                                selectedThreadId === t.id
+                                  ? "bg-white/10 text-white"
+                                  : "text-white/45 hover:bg-white/[0.05] hover:text-white/75",
+                              )}
+                            >
+                              <button
+                                onClick={() => onSelectThread(t.id)}
+                                className="flex-1 text-left min-w-0"
+                              >
+                                <div className="flex items-center gap-1.5">
+                                  {t.isPinned && <Pin className="h-2.5 w-2.5 text-primary/70 shrink-0" />}
+                                  <p className="truncate text-xs font-semibold leading-tight">
+                                    {t.title || "New Chat"}
+                                  </p>
+                                </div>
+                                {t.lastMessageAt && (
+                                  <p className="mt-0.5 text-[9px] opacity-40">
+                                    {formatTime(t.lastMessageAt)}
+                                  </p>
+                                )}
+                              </button>
+
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className={cn(
+                                      "h-6 w-6 rounded-lg opacity-0 transition-opacity group-hover:opacity-100 text-white/50 hover:text-white hover:bg-white/10",
+                                      selectedThreadId === t.id && "opacity-100"
+                                    )}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <MoreVertical className="h-3 w-3" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-48 rounded-xl">
+                                  <DropdownMenuItem onClick={(e) => handleTogglePin(t.id, t.isPinned, e)} className="gap-2 text-xs font-bold">
+                                    {t.isPinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+                                    {t.isPinned ? "Unpin" : "Pin Chat"}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={(e) => handleRenameThread(t.id, t.title, e)} className="gap-2 text-xs font-bold">
+                                    <Pencil className="h-3.5 w-3.5" />
+                                    Rename
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={(e) => handleToggleArchive(t.id, t.isArchived, e)} className="gap-2 text-xs font-bold">
+                                    {t.isArchived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
+                                    {t.isArchived ? "Restore" : "Archive"}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={(e) => handleDeleteThread(t.id, e)}
+                                    className="gap-2 text-xs font-bold text-red-500 focus:bg-red-50 focus:text-red-600"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          ))}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </ScrollArea>
+              )}
+
+              {/* Footer: archive + share (hidden when collapsed) */}
+              {!panelCollapsed && (
+                <div className="border-t border-white/[0.06] px-3 py-2 space-y-0.5">
                   <button
-                    onClick={handleShare}
-                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-white/30 hover:text-white/60 transition-colors"
+                    onClick={() => setShowArchived(!showArchived)}
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-colors",
+                      showArchived ? "text-primary/80" : "text-white/30 hover:text-white/60"
+                    )}
                   >
-                    <Share2 className="h-3.5 w-3.5" />
-                    Share Conversation
+                    {showArchived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
+                    {showArchived ? "Back to Active" : "Archived Chats"}
                   </button>
-                )}
-              </div>
+                  {selectedThreadId && (
+                    <button
+                      onClick={handleShare}
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-white/30 hover:text-white/60 transition-colors"
+                    >
+                      <Share2 className="h-3.5 w-3.5" />
+                      Share Conversation
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex min-h-0 flex-1 flex-col">
@@ -761,6 +797,20 @@ const SalesAssistantPanel = ({
                       </div>
                     ) : combinedMessages.length === 0 ? (
                     <div className="flex h-full min-h-[320px] flex-col items-center justify-center px-6 py-10 text-center md:px-8 md:py-12">
+                      {calls.length === 0 && (
+                        <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-left max-w-lg">
+                          <span className="mt-0.5 text-amber-500 text-base shrink-0">⚠</span>
+                          <div>
+                            <p className="text-sm font-semibold text-foreground">No analyzed calls yet</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              Max gives much better coaching when your calls have been AI-analyzed.{" "}
+                              <Link to="/calls" className="text-primary underline underline-offset-2 hover:text-primary/80 font-medium">
+                                Go to Calls → Analyze All
+                              </Link>
+                            </p>
+                          </div>
+                        </div>
+                      )}
                       <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
                         <Bot className="h-7 w-7" />
                       </div>

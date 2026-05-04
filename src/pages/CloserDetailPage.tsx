@@ -1,21 +1,25 @@
 import { useMemo, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, Navigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/context/AuthContext";
 import ProfileTag from "@/components/ProfileTag";
 import { useSales } from "@/hooks/useSales";
 import { useBonusTiers } from "@/hooks/useBonusTiers";
+import { useCloserFramework } from "@/hooks/useCallAnalysis";
 import { useLanguage } from "@/i18n";
 import { formatCurrency } from "@/lib/formatCurrency";
 import { monthlyBonusBreakdown, formatMonth } from "@/lib/bonusCalculation";
 import AppLayout from "@/components/AppLayout";
 import SaleStatusBadge from "@/components/SaleStatusBadge";
 import StatCard from "@/components/StatCard";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { FrameworkDisplay, FrameworkSkeleton } from "@/components/FrameworkDisplay";
+import { supabase } from "@/lib/supabase";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { ArrowLeft, TrendingUp, DollarSign, ShoppingCart, AlertTriangle, Gift, Layers, Eye, LayoutDashboard, Calendar, Wallet, Trophy, Target } from "lucide-react";
+import { ArrowLeft, TrendingUp, DollarSign, ShoppingCart, AlertTriangle, Gift, Layers, Eye, LayoutDashboard, Calendar, Wallet, Trophy, Target, BookOpen } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { cn } from "@/lib/utils";
 import SaleDetailsDialog from "@/components/SaleDetailsDialog";
@@ -30,21 +34,26 @@ const CHART_COLORS = {
 };
 
 const ContentCard = ({ title, icon: Icon, children, className, headerAction }: { title: string; icon?: React.ElementType; children: React.ReactNode; className?: string; headerAction?: React.ReactNode }) => (
-  <Card className={cn("border-none shadow-premium rounded-[2.5rem] bg-background overflow-hidden", className)}>
-    <CardHeader className="p-8 border-b border-border/40 flex flex-row items-center justify-between">
-      <div className="flex items-center gap-3">
-        {Icon && <div className="p-2 rounded-lg bg-primary/10 text-primary"><Icon className="h-4 w-4" /></div>}
-        <CardTitle className="font-black text-sm uppercase tracking-widest text-muted-foreground">{title}</CardTitle>
+  <div className={cn("rounded-xl border border-border/40 overflow-hidden bg-background", className)}>
+    <div className="flex items-center justify-between px-4 py-3 bg-muted/30 border-b border-border/40">
+      <div className="flex items-center gap-2">
+        {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
+        <p className="text-sm font-medium">{title}</p>
       </div>
       {headerAction}
-    </CardHeader>
-    <CardContent className="p-8">{children}</CardContent>
-  </Card>
+    </div>
+    <div className="p-4">{children}</div>
+  </div>
 );
 
 const CloserDetailPage = () => {
   const { name } = useParams<{ name: string }>();
+  const { user } = useAuth();
   const { t, locale } = useLanguage();
+
+  const decodedName = decodeURIComponent(name || "");
+
+  // All hooks must be called unconditionally before any early return (React rules of hooks)
   const {
     data: allSales = [],
     isLoading,
@@ -59,7 +68,23 @@ const CloserDetailPage = () => {
     refetch: refetchTiers,
   } = useBonusTiers();
 
-  const decodedName = decodeURIComponent(name || "");
+  const { data: profileId } = useQuery({
+    queryKey: ["profile_id_by_name", decodedName],
+    queryFn: async () => {
+      if (user?.role === "closer") return user.id;
+      const { data } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("name", decodedName)
+        .single();
+      return (data as { id: string } | null)?.id ?? null;
+    },
+    enabled: !!decodedName,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const { data: framework, isLoading: loadingFramework } = useCloserFramework(profileId ?? null);
+
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [bonusDialog, setBonusDialog] = useState<{ month: string; kind: BonusDrilldownKind } | null>(null);
 
@@ -102,6 +127,11 @@ const CloserDetailPage = () => {
     [sales, tiers]
   );
 
+  // Redirect after all hooks — closer can only view their own page
+  if (user?.role === "closer" && decodedName && decodedName !== user.name) {
+    return <Navigate to={`/team/closer/${encodeURIComponent(user.name ?? "")}`} replace />;
+  }
+
   const currentMonthKey   = new Date().toISOString().slice(0, 7);
   const currentMonthBonus = bonusHistory.find(b => b.month === currentMonthKey) ?? null;
   const isCurrentMonth    = currentMonthBonus?.month === currentMonthKey;
@@ -115,54 +145,38 @@ const CloserDetailPage = () => {
 
   return (
     <AppLayout>
-      <div className="space-y-10 animate-in fade-in duration-700">
-        
+      <div className="space-y-6 animate-in fade-in duration-700">
+
         {/* Header */}
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-          <div className="flex items-center gap-6">
-            <Button variant="ghost" size="icon" asChild className="h-14 w-14 rounded-[1.25rem] bg-muted/20 hover:bg-muted/40 transition-all border border-border/40">
-              <Link to="/team"><ArrowLeft className="h-6 w-6" /></Link>
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" asChild className="h-9 w-9 rounded-lg bg-muted/20 hover:bg-muted/40 border border-border/40">
+              <Link to={user?.role === "closer" ? "/dashboard" : "/team"}><ArrowLeft className="h-4 w-4" /></Link>
             </Button>
-            <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-3xl font-black tracking-tight">{decodedName}</h1>
-                <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 font-black uppercase tracking-widest text-[9px] px-3 py-1 rounded-full">
-                  {t("role.closer")}
-                </Badge>
-              </div>
-              <p className="text-muted-foreground font-medium uppercase tracking-widest text-[10px] mt-1.5 flex items-center gap-2">
-                <Target className="h-3 w-3" /> Professional Performance Intelligence
-              </p>
+            <div className="space-y-1">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{t("role.closer")}</p>
+              <h1 className="text-xl font-semibold">{decodedName}</h1>
             </div>
           </div>
-          
-          <div className="flex items-center gap-3 w-full lg:w-auto">
-             <div className="flex -space-x-3">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="h-10 w-10 rounded-full border-4 border-background bg-muted flex items-center justify-center text-[10px] font-black">
-                    {decodedName[i]?.toUpperCase()}
-                  </div>
-                ))}
-             </div>
-             <Badge className="h-12 px-8 rounded-2xl bg-primary text-white font-black uppercase tracking-widest shadow-xl shadow-primary/20 text-xs">
-                {sales.length} Total Transactions
-             </Badge>
-          </div>
+
+          <Badge variant="outline" className="rounded-md px-3 py-1.5 text-xs font-medium border-border/60">
+            {sales.length} Total Transactions
+          </Badge>
         </div>
 
         {loadError && (
-          <Alert variant="destructive" className="rounded-[2.5rem] border-none shadow-2xl bg-rose-500/10 p-8">
-            <AlertTriangle className="h-6 w-6 text-rose-500" />
-            <AlertTitle className="font-black uppercase tracking-widest text-rose-500 text-lg">System Data Interrupt</AlertTitle>
-            <AlertDescription className="space-y-6 pt-4">
-              <p className="font-medium opacity-90 leading-relaxed max-w-2xl">{loadErrorMessage}</p>
+          <Alert variant="destructive" className="rounded-lg border-destructive/20 bg-destructive/5">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle className="font-medium">Error loading data</AlertTitle>
+            <AlertDescription className="flex flex-col gap-3 pt-1">
+              <p className="text-sm">{loadErrorMessage}</p>
               <Button
                 size="sm"
                 variant="outline"
-                className="h-11 rounded-xl border-rose-500/20 text-rose-500 font-black uppercase tracking-widest text-[10px] px-8 hover:bg-rose-500 hover:text-white transition-all"
+                className="rounded-lg h-8 w-fit border-destructive/20 text-destructive text-xs"
                 onClick={() => { refetchSales(); refetchTiers(); }}
               >
-                Reconnect to Database
+                Retry
               </Button>
             </AlertDescription>
           </Alert>
@@ -170,86 +184,83 @@ const CloserDetailPage = () => {
 
         {/* KPIs */}
         {isLoading ? (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-[2rem]" />)}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-lg" />)}
           </div>
         ) : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard title={t("detail.totalComm")} value={fmt(totalComm)} accent="blue" icon={<Wallet className="h-5 w-5" />} trend="up" />
-            <StatCard title={t("detail.totalSales")} value={String(sales.length)} subtitle={fmt(totalSales)} accent="green" icon={<ShoppingCart className="h-5 w-5" />} />
-            <StatCard title={t("detail.avgComm")} value={fmt(avgCommission)} accent="blue" icon={<TrendingUp className="h-5 w-5" />} trend="up" />
-            <StatCard title={t("detail.refundsUnpaid")} value={`${refundedSales.length} / ${unpaidSales.length}`} subtitle={t("detail.refundsUnpaidSub")} trend="down" accent="red" icon={<AlertTriangle className="h-5 w-5" />} />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard title={t("detail.totalComm")} value={fmt(totalComm)} accent="blue" icon={<Wallet className="h-4 w-4" />} trend="up" />
+            <StatCard title={t("detail.totalSales")} value={String(sales.length)} subtitle={fmt(totalSales)} accent="green" icon={<ShoppingCart className="h-4 w-4" />} />
+            <StatCard title={t("detail.avgComm")} value={fmt(avgCommission)} accent="blue" icon={<TrendingUp className="h-4 w-4" />} trend="up" />
+            <StatCard title={t("detail.refundsUnpaid")} value={`${refundedSales.length} / ${unpaidSales.length}`} subtitle={t("detail.refundsUnpaidSub")} trend="down" accent="red" icon={<AlertTriangle className="h-4 w-4" />} />
           </div>
         )}
 
         {/* Bonus & Charts */}
-        <div className="grid gap-8 lg:grid-cols-2">
+        <div className="grid gap-6 lg:grid-cols-2">
           {/* Current month bonus */}
-          <ContentCard title={t("bonus.currentMonth")} icon={Trophy} className="bg-gradient-to-br from-background via-background to-primary/5">
+          <ContentCard title={t("bonus.currentMonth")} icon={Trophy}>
              {!currentMonthBonus || currentMonthBonus.total === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 text-center space-y-6 grayscale opacity-40">
-                   <div className="h-20 w-20 rounded-[1.5rem] bg-muted/40 flex items-center justify-center text-muted-foreground/30">
-                      <Gift className="h-10 w-10" />
-                   </div>
-                   <p className="text-sm text-muted-foreground font-black uppercase tracking-widest">{t("bonus.noBonus")}</p>
+                <div className="text-center py-12">
+                   <p className="text-sm text-muted-foreground">{t("bonus.noBonus")}</p>
                 </div>
               ) : (
-                <div className="space-y-8">
+                <div className="space-y-4">
                   {isCurrentMonth && (
-                    <div className="bg-primary/5 border border-primary/10 p-6 rounded-[1.5rem] flex items-center justify-between shadow-inner">
-                       <div className="flex items-center gap-3">
-                          <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-                          <p className="text-[10px] font-black uppercase tracking-widest text-primary">{formatMonth(currentMonthBonus.month, locale)}</p>
+                    <div className="bg-primary/5 border border-primary/10 px-3 py-2.5 rounded-lg flex items-center justify-between">
+                       <div className="flex items-center gap-2">
+                          <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                          <p className="text-xs font-medium text-primary">{formatMonth(currentMonthBonus.month, locale)}</p>
                        </div>
-                       <Badge className="bg-primary text-white font-black uppercase tracking-widest text-[8px] px-3 py-0.5 rounded-full">Active Period</Badge>
+                       <Badge className="rounded-md text-[10px] font-medium">Active Period</Badge>
                     </div>
                   )}
-                  <div className="space-y-6">
-                    <div className="flex justify-between items-center group">
-                      <span className="text-xs font-black uppercase tracking-widest text-muted-foreground/60">{t("bonus.validatedCount")}</span>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-muted-foreground">{t("bonus.validatedCount")}</span>
                       <Button
                         variant="ghost"
-                        className="h-auto p-0 font-black text-lg text-foreground tabular-nums hover:bg-transparent hover:text-primary"
+                        className="h-auto p-0 font-semibold text-sm text-foreground tabular-nums hover:bg-transparent hover:text-primary"
                         onClick={() => openBonusDialog(currentMonthBonus.month, "validatedCount")}
                       >
                         {currentMonthBonus.validatedCount}
                       </Button>
                     </div>
-                    <div className="flex justify-between items-center group">
-                      <span className="text-xs font-black uppercase tracking-widest text-muted-foreground/60">
-                         {t("bonus.pifBonus")} 
-                         <span className="text-[9px] font-bold text-primary/40 ml-2">({currentMonthBonus.pifCount} × €50)</span>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-muted-foreground">
+                         {t("bonus.pifBonus")}
+                         <span className="text-[10px] text-muted-foreground/60 ml-1">({currentMonthBonus.pifCount} × €50)</span>
                       </span>
                       <Button
                         variant="ghost"
-                        className={cn("h-auto p-0 font-black text-lg tabular-nums hover:bg-transparent hover:text-primary", currentMonthBonus.pifBonus > 0 ? "text-emerald-500" : "text-muted-foreground/30")}
+                        className={cn("h-auto p-0 font-semibold text-sm tabular-nums hover:bg-transparent hover:text-primary", currentMonthBonus.pifBonus > 0 ? "text-emerald-500" : "text-muted-foreground/40")}
                         onClick={() => openBonusDialog(currentMonthBonus.month, "pifBonus")}
                       >
                         {fmt(currentMonthBonus.pifBonus)}
                       </Button>
                     </div>
-                    <div className="flex justify-between items-center group">
-                      <span className="text-xs font-black uppercase tracking-widest text-muted-foreground/60">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-muted-foreground">
                         {t("bonus.volumeBonus")}
                         {currentMonthBonus.volumeTier && (
-                          <Badge variant="outline" className="ml-3 text-[8px] font-black border-emerald-500/20 text-emerald-500 uppercase px-2 py-0">
+                          <Badge variant="outline" className="ml-2 rounded-md text-[10px] border-emerald-500/20 text-emerald-500">
                             {currentMonthBonus.volumeTier.minSales}+ Sales
                           </Badge>
                         )}
                       </span>
                       <Button
                         variant="ghost"
-                        className={cn("h-auto p-0 font-black text-lg tabular-nums hover:bg-transparent hover:text-primary", currentMonthBonus.volumeBonus > 0 ? "text-emerald-500" : "text-muted-foreground/30")}
+                        className={cn("h-auto p-0 font-semibold text-sm tabular-nums hover:bg-transparent hover:text-primary", currentMonthBonus.volumeBonus > 0 ? "text-emerald-500" : "text-muted-foreground/40")}
                         onClick={() => openBonusDialog(currentMonthBonus.month, "volumeBonus")}
                       >
                         {fmt(currentMonthBonus.volumeBonus)}
                       </Button>
                     </div>
-                    <div className="pt-8 border-t border-border/40 flex flex-col items-center gap-2 text-center">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40">{t("bonus.total")} Estimated Reward</span>
+                    <div className="pt-3 border-t border-border/40 flex flex-col items-center gap-1 text-center">
+                      <span className="text-[11px] text-muted-foreground">{t("bonus.total")}</span>
                       <Button
                         variant="ghost"
-                        className="h-auto p-0 text-5xl font-black text-emerald-500 tabular-nums tracking-tighter drop-shadow-sm hover:bg-transparent hover:text-primary"
+                        className="h-auto p-0 text-3xl font-bold text-emerald-500 tabular-nums hover:bg-transparent hover:text-primary"
                         onClick={() => openBonusDialog(currentMonthBonus.month, "total")}
                       >
                         {fmt(currentMonthBonus.total)}
@@ -263,49 +274,46 @@ const CloserDetailPage = () => {
           {/* Bonus history table */}
           <ContentCard title={t("bonus.history")} icon={Calendar}>
             {bonusHistory.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 grayscale opacity-40 text-center space-y-6">
-                   <div className="h-20 w-20 rounded-[1.5rem] bg-muted/40 flex items-center justify-center">
-                      <LayoutDashboard className="h-10 w-10 text-muted-foreground/30" />
-                   </div>
-                   <p className="text-sm text-muted-foreground font-black uppercase tracking-widest">{t("common.noData")}</p>
+                <div className="text-center py-12">
+                   <p className="text-sm text-muted-foreground">{t("common.noData")}</p>
                 </div>
               ) : (
-                <div className="overflow-hidden rounded-[2rem] border border-border/40 bg-muted/5">
+                <div className="overflow-hidden rounded-lg border border-border/40">
                   <Table>
                     <TableHeader className="bg-muted/30">
                       <TableRow className="border-none">
-                        <TableHead className="py-5 pl-8 text-[9px] font-black uppercase tracking-widest text-muted-foreground">{t("bonus.month")}</TableHead>
-                        <TableHead className="py-5 text-right text-[9px] font-black uppercase tracking-widest text-muted-foreground">PIF</TableHead>
-                        <TableHead className="py-5 text-right text-[9px] font-black uppercase tracking-widest text-muted-foreground">Volume</TableHead>
-                        <TableHead className="py-5 pr-8 text-right text-[9px] font-black uppercase tracking-widest text-muted-foreground">Total</TableHead>
+                        <TableHead className="py-2.5 pl-4 text-[11px] font-medium text-muted-foreground">{t("bonus.month")}</TableHead>
+                        <TableHead className="py-2.5 text-right text-[11px] font-medium text-muted-foreground">PIF</TableHead>
+                        <TableHead className="py-2.5 text-right text-[11px] font-medium text-muted-foreground">Volume</TableHead>
+                        <TableHead className="py-2.5 pr-4 text-right text-[11px] font-medium text-muted-foreground">Total</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {bonusHistory.map(row => (
-                        <TableRow key={row.month} className="hover:bg-muted/10 transition-all group border-border/30">
-                          <TableCell className="py-6 pl-8 font-black text-sm tracking-tight">{formatMonth(row.month, locale)}</TableCell>
-                          <TableCell className="py-6 text-right">
+                        <TableRow key={row.month} className="hover:bg-muted/20 border-border/20">
+                          <TableCell className="py-3 pl-4 text-sm">{formatMonth(row.month, locale)}</TableCell>
+                          <TableCell className="py-3 text-right">
                             <Button
                               variant="ghost"
-                              className="h-auto p-0 text-muted-foreground font-bold tabular-nums text-xs hover:bg-transparent hover:text-primary"
+                              className="h-auto p-0 text-muted-foreground text-xs hover:bg-transparent hover:text-primary"
                               onClick={() => openBonusDialog(row.month, "pifBonus")}
                             >
                               {fmt(row.pifBonus)}
                             </Button>
                           </TableCell>
-                          <TableCell className="py-6 text-right">
+                          <TableCell className="py-3 text-right">
                             <Button
                               variant="ghost"
-                              className="h-auto p-0 text-muted-foreground font-bold tabular-nums text-xs hover:bg-transparent hover:text-primary"
+                              className="h-auto p-0 text-muted-foreground text-xs hover:bg-transparent hover:text-primary"
                               onClick={() => openBonusDialog(row.month, "volumeBonus")}
                             >
                               {fmt(row.volumeBonus)}
                             </Button>
                           </TableCell>
-                          <TableCell className="py-6 pr-8 text-right">
+                          <TableCell className="py-3 pr-4 text-right">
                             <Button
                               variant="ghost"
-                              className={cn("h-auto p-0 font-black tabular-nums text-sm transition-transform group-hover:scale-110 hover:bg-transparent hover:text-primary", row.total > 0 ? "text-emerald-500" : "text-muted-foreground/30")}
+                              className={cn("h-auto p-0 text-sm font-medium tabular-nums hover:bg-transparent hover:text-primary", row.total > 0 ? "text-emerald-500" : "text-muted-foreground/40")}
                               onClick={() => openBonusDialog(row.month, "total")}
                             >
                               {fmt(row.total)}
@@ -321,43 +329,38 @@ const CloserDetailPage = () => {
         </div>
 
         {/* Analytics & Sales */}
-        <div className="grid gap-8 lg:grid-cols-5">
+        <div className="grid gap-6 lg:grid-cols-5">
            <ContentCard title={t("detail.commByProduct")} icon={Layers} className="lg:col-span-2">
               {productData.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 grayscale opacity-40 text-center space-y-6">
-                   <div className="h-20 w-20 rounded-[1.5rem] bg-muted/40 flex items-center justify-center">
-                      <Layers className="h-10 w-10 text-muted-foreground/30" />
-                   </div>
-                   <p className="text-sm text-muted-foreground font-black uppercase tracking-widest">No mapping data</p>
+                <div className="text-center py-12">
+                   <p className="text-sm text-muted-foreground">No mapping data</p>
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height={340}>
-                  <BarChart data={productData} margin={{ top: 20, right: 10, left: 10, bottom: 40 }}>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={productData} margin={{ top: 10, right: 10, left: 10, bottom: 40 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.border} vertical={false} />
-                    <XAxis 
-                       dataKey="name" 
-                       fontSize={10} 
-                       style={{ fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }} 
-                       axisLine={false} 
-                       tickLine={false} 
-                       angle={-30} 
-                       textAnchor="end" 
-                       height={60} 
+                    <XAxis
+                       dataKey="name"
+                       fontSize={10}
+                       axisLine={false}
+                       tickLine={false}
+                       angle={-30}
+                       textAnchor="end"
+                       height={60}
                        dy={10}
                     />
-                    <YAxis 
-                       fontSize={10} 
-                       style={{ fontWeight: 800 }} 
-                       axisLine={false} 
-                       tickLine={false} 
-                       tickFormatter={(v) => `€${v}`} 
+                    <YAxis
+                       fontSize={10}
+                       axisLine={false}
+                       tickLine={false}
+                       tickFormatter={(v) => `€${v}`}
                     />
-                    <Tooltip 
-                      contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)', fontWeight: '900', background: 'hsl(var(--card))', color: 'hsl(var(--card-foreground))', padding: '16px' }}
+                    <Tooltip
+                      contentStyle={{ borderRadius: 8, border: "1px solid hsl(var(--border))", fontSize: 12, background: "hsl(var(--background))" }}
                       cursor={{ fill: 'rgba(0,0,0,0.03)' }}
-                      formatter={(v: number) => [fmt(v), "Product Revenue"]} 
+                      formatter={(v: number) => [fmt(v), "Product Revenue"]}
                     />
-                    <Bar dataKey="commission" fill={CHART_COLORS.primary} radius={[8, 8, 0, 0]} barSize={32} />
+                    <Bar dataKey="commission" fill={CHART_COLORS.primary} radius={[6, 6, 0, 0]} barSize={28} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -365,48 +368,45 @@ const CloserDetailPage = () => {
 
            <ContentCard title={t("detail.salesHistory")} icon={Eye} className="lg:col-span-3">
               {isLoading ? (
-                <div className="space-y-6 py-4">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-2xl" />)}</div>
+                <div className="space-y-3 py-2">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-lg" />)}</div>
               ) : sales.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 grayscale opacity-40 text-center space-y-6">
-                   <div className="h-20 w-20 rounded-[1.5rem] bg-muted/40 flex items-center justify-center">
-                      <ShoppingCart className="h-10 w-10 text-muted-foreground/30" />
-                   </div>
-                   <p className="text-sm text-muted-foreground font-black uppercase tracking-widest">{t("dashboard.noData")}</p>
+                <div className="text-center py-12">
+                   <p className="text-sm text-muted-foreground">{t("dashboard.noData")}</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto -mx-8 sm:mx-0">
+                <div className="overflow-x-auto -mx-4 sm:mx-0">
                   <Table>
                     <TableHeader className="bg-muted/30">
                       <TableRow className="border-none">
-                        <TableHead className="py-5 pl-8 text-[9px] font-black uppercase tracking-widest text-muted-foreground">{t("table.date")}</TableHead>
-                        <TableHead className="py-5 text-[9px] font-black uppercase tracking-widest text-muted-foreground">{t("table.client")}</TableHead>
-                        <TableHead className="py-5 text-[9px] font-black uppercase tracking-widest text-muted-foreground">{t("table.status")}</TableHead>
-                        <TableHead className="py-5 text-right text-[9px] font-black uppercase tracking-widest text-muted-foreground">Commission</TableHead>
-                        <TableHead className="py-5 pr-8 text-right text-[9px] font-black uppercase tracking-widest text-muted-foreground">Actions</TableHead>
+                        <TableHead className="py-2.5 pl-4 text-[11px] font-medium text-muted-foreground">{t("table.date")}</TableHead>
+                        <TableHead className="py-2.5 text-[11px] font-medium text-muted-foreground">{t("table.client")}</TableHead>
+                        <TableHead className="py-2.5 text-[11px] font-medium text-muted-foreground">{t("table.status")}</TableHead>
+                        <TableHead className="py-2.5 text-right text-[11px] font-medium text-muted-foreground">Commission</TableHead>
+                        <TableHead className="py-2.5 pr-4 text-right text-[11px] font-medium text-muted-foreground">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {sales.map(sale => (
-                        <TableRow key={sale.id} className="group hover:bg-muted/10 transition-all border-border/30">
-                          <TableCell className="py-6 pl-8 text-xs font-black text-muted-foreground/60 tabular-nums italic">{sale.date}</TableCell>
-                          <TableCell className="py-6">
-                            <p className="font-black text-sm tracking-tight leading-none mb-1.5">{sale.clientName}</p>
-                            <Badge variant="outline" className="text-[8px] font-black border-primary/20 text-primary uppercase h-4 px-1.5 rounded-sm">
+                        <TableRow key={sale.id} className="hover:bg-muted/20 border-border/20">
+                          <TableCell className="py-3 pl-4 text-xs text-muted-foreground tabular-nums">{sale.date}</TableCell>
+                          <TableCell className="py-3">
+                            <p className="font-medium text-sm leading-none mb-1">{sale.clientName}</p>
+                            <Badge variant="outline" className="rounded-md text-[10px] border-primary/20 text-primary">
                                {sale.product}
                             </Badge>
                           </TableCell>
-                          <TableCell className="py-6">
-                             <div className="flex items-center gap-2">
+                          <TableCell className="py-3">
+                             <div className="flex items-center gap-1.5">
                                <SaleStatusBadge refunded={sale.refunded} impaye={sale.impaye} />
                                {sale.paymentType === "pif" && (
-                                  <div className="h-5 px-2 bg-emerald-500/10 text-emerald-600 rounded text-[8px] font-black uppercase tracking-widest flex items-center border border-emerald-500/20 shadow-sm">PIF</div>
+                                  <div className="h-4 px-1.5 bg-emerald-500/10 text-emerald-600 rounded-md text-[10px] font-medium flex items-center border border-emerald-500/20">PIF</div>
                                )}
                              </div>
                           </TableCell>
-                          <TableCell className="py-6 text-right font-black text-primary tabular-nums text-base">{fmt(sale.closerCommission)}</TableCell>
-                          <TableCell className="py-6 pr-8 text-right">
-                            <Button variant="ghost" size="sm" onClick={() => setSelectedSale(sale)} className="h-10 w-10 p-0 rounded-2xl hover:bg-primary/10 hover:text-primary transition-all active:scale-90">
-                              <Eye className="h-4 w-4" />
+                          <TableCell className="py-3 text-right font-semibold text-primary tabular-nums text-sm">{fmt(sale.closerCommission)}</TableCell>
+                          <TableCell className="py-3 pr-4 text-right">
+                            <Button variant="ghost" size="sm" onClick={() => setSelectedSale(sale)} className="h-8 w-8 p-0 rounded-lg hover:bg-primary/10 hover:text-primary transition-all">
+                              <Eye className="h-3.5 w-3.5" />
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -418,6 +418,34 @@ const CloserDetailPage = () => {
            </ContentCard>
         </div>
       </div>
+
+      {/* My Sales Framework */}
+      <ContentCard
+        title="My Sales Framework"
+        icon={BookOpen}
+        headerAction={
+          framework ? (
+            <Badge variant="outline" className="rounded-md text-[10px] border-emerald-500/20 text-emerald-600 bg-emerald-500/5">
+              Generated from {framework.generatedFromCalls.length} call{framework.generatedFromCalls.length !== 1 ? "s" : ""}
+            </Badge>
+          ) : null
+        }
+      >
+        {loadingFramework ? (
+          <FrameworkSkeleton />
+        ) : framework ? (
+          <FrameworkDisplay markdown={framework.framework} />
+        ) : (
+          <div className="text-center py-10">
+            <BookOpen className="mx-auto h-8 w-8 text-muted-foreground/30 mb-3" />
+            <p className="text-sm text-muted-foreground">No framework generated yet</p>
+            <p className="text-xs text-muted-foreground/60 mt-1">
+              Your admin can generate a personalised sales framework from your analyzed calls in the AI Coaching section.
+            </p>
+          </div>
+        )}
+      </ContentCard>
+
       <BonusTransactionsDialog
         month={bonusDialog?.month ?? null}
         kind={bonusDialog?.kind ?? null}

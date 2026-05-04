@@ -134,7 +134,7 @@ const CallDetailsDialog = ({ call, open, onOpenChange }: Props) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border-none shadow-2xl p-0">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-x-hidden overflow-y-auto rounded-3xl border-none shadow-2xl p-0">
 
         {/* Header */}
         <div className="p-8 border-b border-border/40 bg-background/80">
@@ -338,8 +338,8 @@ const CallDetailsDialog = ({ call, open, onOpenChange }: Props) => {
                 {t("calls.transcript")}
               </button>
               {showTranscript && (
-                <div className="rounded-2xl bg-muted/20 border border-border/30 p-5">
-                  <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap font-mono">
+                <div className="rounded-2xl bg-muted/20 border border-border/30 p-5 overflow-x-hidden">
+                  <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap break-words font-mono">
                     {effectiveCall!.transcript}
                   </p>
                 </div>
