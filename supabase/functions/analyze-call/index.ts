@@ -272,13 +272,14 @@ Deno.serve(async (req) => {
   const geminiKey = Deno.env.get("GEMINI_API_KEY");
   if (!geminiKey) return json({ error: "GEMINI_API_KEY secret not set" }, 500);
 
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !anonKey || !serviceKey) {
+    return json({ ok: false, error: "Missing Supabase environment variables." }, 500);
+  }
+
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!supabaseUrl || !anonKey || !serviceKey) {
-      return json({ ok: false, error: "Missing Supabase environment variables." }, 500);
-    }
 
     const callerClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
@@ -408,7 +409,7 @@ Deno.serve(async (req) => {
   } catch (err) {
     console.error("[analyze-call] uncaught:", err);
     try {
-      const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+      const supabase = createClient(supabaseUrl, serviceKey);
       await supabase
         .from("call_analyses")
         .update({ status: "error", error_message: String(err), updated_at: new Date().toISOString() })

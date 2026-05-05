@@ -9,7 +9,8 @@
  */
 import { CORS, json } from "../_shared/setterDashboard.ts";
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+if (!SUPABASE_URL) throw new Error("Missing required env var: SUPABASE_URL");;
 
 async function invokeCronFunction(name: string, cronSecret: string, body: Record<string, unknown> = {}) {
   const response = await fetch(`${SUPABASE_URL}/functions/v1/${name}`, {
@@ -91,10 +92,12 @@ Deno.serve(async (req) => {
   // After each run, check if any source has failed 3+ consecutive times and
   // fire an email alert to all admins via the notify function.
   try {
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!serviceKey) throw new Error("SUPABASE_SERVICE_ROLE_KEY not set");
     const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
     const sb = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      SUPABASE_URL,
+      serviceKey,
       { auth: { autoRefreshToken: false, persistSession: false } },
     );
 

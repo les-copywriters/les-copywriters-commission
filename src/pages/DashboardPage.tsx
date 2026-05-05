@@ -112,8 +112,7 @@ const DashboardPage = () => {
         closerCommMap.set(s.closer, (closerCommMap.get(s.closer) ?? 0) + s.closerCommission);
         const myComm = isCloser ? s.closerCommission : isSetter ? s.setterCommission : s.closerCommission + s.setterCommission;
         productMap.set(s.product, (productMap.get(s.product) ?? 0) + myComm);
-        const d = new Date(s.date);
-        const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+        const k = s.date.slice(0, 7);
         monthlyMap.set(k, (monthlyMap.get(k) ?? 0) + myComm);
       }
     }

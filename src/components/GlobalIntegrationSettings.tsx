@@ -95,7 +95,6 @@ const GlobalIntegrationSettings = () => {
       setMatchRows(rows);
 
       const { data: existingMappings } = await supabaseClient
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .from("setter_integration_mappings")
         .select("profile_id, aircall_api_id, aircall_api_token, pipedrive_owner_id, pipedrive_email, iclosed_api_key, iclosed_api_base_url, notes");
 
@@ -119,8 +118,7 @@ const GlobalIntegrationSettings = () => {
           iclosed_email:   row.iclosedUser?.email ?? (existing?.iclosed_email as string | null) ?? null,
           updated_at: new Date().toISOString(),
         };
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error } = await (supabaseClient as any).from("setter_integration_mappings").upsert(payload, { onConflict: "profile_id" });
+        const { error } = await supabaseClient.from("setter_integration_mappings").upsert(payload, { onConflict: "profile_id" });
         if (error) { updatedRows[i] = { ...row, error: error.message }; }
         else        { updatedRows[i] = { ...row, saved: true }; saved++; }
       }

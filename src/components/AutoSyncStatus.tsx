@@ -62,8 +62,7 @@ export default function AutoSyncStatus() {
   const { data: runs = [] } = useQuery<SyncRun[]>({
     queryKey: ["auto_sync_runs"],
     queryFn: async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data } = await (supabase as any)
+      const { data } = await supabase
         .from("integration_sync_runs")
         .select("id, source, mode, status, records_seen, rows_written, errors, started_at, finished_at, triggered_by")
         .order("started_at", { ascending: false })

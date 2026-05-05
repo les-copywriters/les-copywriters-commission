@@ -13,7 +13,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { CORS, json } from "../_shared/setterDashboard.ts";
 
 const TIME_BUDGET_MS = 110_000; // 110 s — well within Supabase's 150 s limit
-const SUPABASE_URL   = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_URL   = Deno.env.get("SUPABASE_URL");
+if (!SUPABASE_URL) throw new Error("Missing required env var: SUPABASE_URL");
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
@@ -23,17 +24,19 @@ Deno.serve(async (req) => {
   if (!authHeader) return json({ ok: false, error: "Missing Authorization header" }, 401);
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const anonKey    = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const anonKey    = Deno.env.get("SUPABASE_ANON_KEY");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!anonKey || !serviceKey) {
+      return json({ ok: false, error: "Missing required Supabase environment variables" }, 500);
+    }
 
-    const callerClient = createClient(supabaseUrl, anonKey, {
+    const callerClient = createClient(SUPABASE_URL, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
     const { data: { user }, error: authError } = await callerClient.auth.getUser();
     if (authError || !user) return json({ ok: false, error: "Unauthorized" }, 401);
 
-    const adminClient = createClient(supabaseUrl, serviceKey, {
+    const adminClient = createClient(SUPABASE_URL, serviceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 

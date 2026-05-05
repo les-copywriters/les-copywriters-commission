@@ -177,22 +177,25 @@ const AnalyticsPage = () => {
     const pifRate    = validatedCount > 0 ? (pifCount / validatedCount) * 100 : 0;
     const avgComm    = validatedCount > 0 ? totalComm / validatedCount : 0;
 
-    // Last 6 months trend
+    // Last 6 months trend — compute keys arithmetically to avoid UTC/local mismatch
     const now = new Date();
     const monthlyData = Array.from({ length: 6 }, (_, i) => {
-      const d   = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
-      const key = d.toISOString().slice(0, 7);
+      let year = now.getFullYear();
+      let month = now.getMonth() - 5 + i; // 0-based
+      if (month < 0) { year--; month += 12; }
+      const key = `${year}-${String(month + 1).padStart(2, "0")}`;
       return { month: formatMonth(key, locale), commission: monthMap.get(key) ?? 0 };
     });
 
-    // Full monthly data for the selected range
+    // Full monthly data for the selected range — parse directly from date strings
     const allMonths: string[] = [];
-    const rangeStart = new Date(startDate);
-    const rangeEnd   = new Date(endDate);
-    for (const d = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
-         d <= rangeEnd;
-         d.setMonth(d.getMonth() + 1)) {
-      allMonths.push(d.toISOString().slice(0, 7));
+    const [startY, startM] = startDate.split("-").map(Number);
+    const [endY,   endM]   = endDate.split("-").map(Number);
+    let rYear = startY, rMonth = startM - 1; // 0-based
+    while (rYear < endY || (rYear === endY && rMonth <= endM - 1)) {
+      allMonths.push(`${rYear}-${String(rMonth + 1).padStart(2, "0")}`);
+      rMonth++;
+      if (rMonth > 11) { rMonth = 0; rYear++; }
     }
     const monthlyFull = allMonths.map(key => ({
       month: formatMonth(key, locale),
@@ -569,7 +572,7 @@ const AnalyticsPage = () => {
                 <PieChart>
                   <Pie
                     data={[
-                      { name: "Paid",     value: metrics.paidCount - metrics.pifCount - metrics.installCount < 0 ? metrics.paidCount : metrics.paidCount },
+                      { name: "Paid",     value: metrics.paidCount },
                       { name: "Refunded", value: metrics.refundCount },
                       { name: "Unpaid",   value: metrics.unpaidCount },
                     ].filter(d => d.value > 0)}
@@ -648,7 +651,7 @@ const AnalyticsPage = () => {
                         )}
                         <TableCell className="py-3 text-right text-sm tabular-nums">{fmt(s.amount)}</TableCell>
                         <TableCell className="py-3 text-right font-semibold text-primary tabular-nums text-sm">
-                          {fmt(isCloser ? s.closerCommission : isSetter ? s.setterCommission : s.closerCommission)}
+                          {fmt(isCloser ? s.closerCommission : isSetter ? s.setterCommission : s.closerCommission + s.setterCommission)}
                         </TableCell>
                         <TableCell className="py-3 pr-4">
                           <div className="flex items-center gap-1.5">

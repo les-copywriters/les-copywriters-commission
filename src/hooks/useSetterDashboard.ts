@@ -116,8 +116,7 @@ export const useSetterIntegrationMappings = () =>
   useQuery({
     queryKey: ["setter_integration_mappings"],
     queryFn: async (): Promise<SetterIntegrationMapping[]> => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from("setter_integration_mappings")
         .select(`
           profile_id,
@@ -161,8 +160,7 @@ export const useUpsertSetterIntegrationMapping = () => {
         notes: input.notes || null,
         updated_at: new Date().toISOString(),
       };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from("setter_integration_mappings")
         .upsert(payload, { onConflict: "profile_id" });
       if (error) throw new Error(error.message);
@@ -188,17 +186,14 @@ export const useSetterDashboardMetrics = ({
   useQuery({
     queryKey: ["setter_dashboard_metrics", profileId ?? "all", startDate, endDate],
     queryFn: async (): Promise<SetterDashboardMetrics> => {
-      // The generated database types have not been refreshed for these new tables yet.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let callQuery = (supabase as any)
+      let callQuery = supabase
         .from("setter_call_metrics_daily")
         .select("profile_id, metric_date, source, calls_made, calls_answered, talk_time_seconds")
         .gte("metric_date", startDate)
         .lte("metric_date", endDate)
         .order("metric_date", { ascending: true });
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let funnelQuery = (supabase as any)
+      let funnelQuery = supabase
         .from("setter_funnel_metrics_daily")
         .select("profile_id, metric_date, source, leads_validated, leads_canceled, show_ups, closes")
         .gte("metric_date", startDate)
@@ -229,8 +224,7 @@ export const useSetterSyncHealth = (enabled = true) =>
   useQuery({
     queryKey: ["setter_sync_health"],
     queryFn: async (): Promise<IntegrationSyncRun[]> => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from("integration_sync_runs")
         .select("id, source, mode, status, synced_from, synced_to, records_seen, rows_written, errors, started_at, finished_at, triggered_by")
         .order("started_at", { ascending: false })
@@ -361,8 +355,7 @@ export const useSetterPerformance = (dateFrom: string, dateTo: string) =>
   useQuery({
     queryKey: ["setter_performance", dateFrom, dateTo],
     queryFn: async (): Promise<SetterPerformanceRow[]> => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any).rpc("setter_performance_range", {
+      const { data, error } = await supabase.rpc("setter_performance_range", {
         date_from: dateFrom,
         date_to: dateTo,
       });
@@ -393,8 +386,7 @@ export const useSetterDailyActivity = (dateFrom: string, dateTo: string, profile
   useQuery({
     queryKey: ["setter_daily_activity", dateFrom, dateTo, profileId ?? "all"],
     queryFn: async (): Promise<DailyActivityPoint[]> => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any).rpc("setter_daily_activity", {
+      const { data, error } = await supabase.rpc("setter_daily_activity", {
         date_from: dateFrom,
         date_to: dateTo,
         p_profile_id: profileId ?? null,
@@ -435,8 +427,7 @@ export const useSetterCallHistory = (profileId: string, dateFrom: string, dateTo
     queryKey: ["setter_call_history", profileId, dateFrom, dateTo],
     queryFn: async (): Promise<SetterCallHistoryRow[]> => {
       const [callsRes, eventsRes] = await Promise.all([
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (supabase as any)
+        supabase
           .from("setter_call_records")
           .select("id, profile_id, started_at, duration_seconds, talk_time_seconds, contact_name, contact_phone, recording_url, status, raw_payload")
           .eq("profile_id", profileId)
@@ -444,8 +435,7 @@ export const useSetterCallHistory = (profileId: string, dateFrom: string, dateTo
           .lte("started_at", `${dateTo}T23:59:59Z`)
           .order("started_at", { ascending: false })
           .limit(2000),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (supabase as any)
+        supabase
           .from("iclosed_event_records")
           .select("id, profile_id, iclosed_event_id, phone_number, date_time, outcome, no_sale_reason, cancelled_by, amount_collected")
           .eq("profile_id", profileId)
@@ -509,8 +499,7 @@ export const useSetterCallRecords = (profileId?: string, startDate?: string, end
   return useQuery({
     queryKey: ["setter_call_records", profileId, startDate, endDate],
     queryFn: async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let query = (supabase as any)
+      let query = supabase
         .from("setter_call_records")
         .select("id, profile_id, aircall_call_id, direction, status, started_at, ended_at, duration_seconds, talk_time_seconds, contact_name, contact_phone, recording_url, notes, transcription, summary, ai_topics, ai_sentiments, talk_listen_ratio, raw_payload")
         .order("started_at", { ascending: false })
