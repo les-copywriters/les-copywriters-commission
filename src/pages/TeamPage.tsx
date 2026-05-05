@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 
 import { Link } from "react-router-dom";
@@ -17,6 +17,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Users, ArrowRight, AlertCircle, Archive } from "lucide-react";
 
 const initials = (name: string) => name.split(" ").map((n) => n[0]).join("").slice(0, 2);
+
+const emptyStats = { count: 0, commission: 0, volume: 0 };
 
 const MemberCard = ({
   user,
@@ -153,18 +155,18 @@ const TeamPage = () => {
     return map;
   }, [sales]);
 
-  const emptyStats = { count: 0, commission: 0, volume: 0 };
   const searchLower = search.trim().toLowerCase();
 
-  const sortMembers = (
-    members: Array<{ id: string; name: string; role: "closer" | "setter" } & typeof emptyStats>,
-  ) =>
-    [...members].sort((a, b) => {
-      if (sortBy === "name") return a.name.localeCompare(b.name);
-      if (sortBy === "sales") return b.count - a.count;
-      if (sortBy === "volume") return b.volume - a.volume;
-      return b.commission - a.commission;
-    });
+  const sortMembers = useCallback(
+    (members: Array<{ id: string; name: string; role: "closer" | "setter" } & typeof emptyStats>) =>
+      [...members].sort((a, b) => {
+        if (sortBy === "name") return a.name.localeCompare(b.name);
+        if (sortBy === "sales") return b.count - a.count;
+        if (sortBy === "volume") return b.volume - a.volume;
+        return b.commission - a.commission;
+      }),
+    [sortBy],
+  );
 
   const closerMembers = useMemo(() => {
     const rows = profiles
@@ -175,7 +177,7 @@ const TeamPage = () => {
       })
       .filter((user) => user.name.toLowerCase().includes(searchLower));
     return sortMembers(rows);
-  }, [profiles, closerStatsMap, searchLower, sortBy]);
+  }, [profiles, closerStatsMap, searchLower, sortMembers]);
 
   const setterMembers = useMemo(() => {
     const rows = profiles
@@ -186,7 +188,7 @@ const TeamPage = () => {
       })
       .filter((user) => user.name.toLowerCase().includes(searchLower));
     return sortMembers(rows);
-  }, [profiles, setterStatsMap, searchLower, sortBy]);
+  }, [profiles, setterStatsMap, searchLower, sortMembers]);
 
   const legacyMembers = useMemo(() => {
     const rows = profiles
