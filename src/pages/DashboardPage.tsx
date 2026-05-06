@@ -47,7 +47,6 @@ const SectionCard = ({ title, icon: Icon, badge, children }: {
 );
 
 const DashboardPage = () => {
-  const { t, locale } = useAuth() as never;
   const { t: translate, locale: loc } = useLanguage();
   const { user } = useAuth();
   const { data: allSales   = [], isLoading: loadingSales,   isError: salesFailed,   error: salesError   } = useSales();
@@ -55,8 +54,6 @@ const DashboardPage = () => {
   const { data: allImpayes = [], isLoading: loadingImpayes, isError: impayesFailed, error: impayesError } = useImpayes();
   const { data: tiers = [],                                 isError: tiersFailed,  error: tiersError  } = useBonusTiers();
   const sync = useSyncJotform();
-  void t; void locale;
-
   useEffect(() => { if (salesFailed)   toast.error(`${translate("sync.error")}: ${salesError?.message}`);   }, [salesFailed]);   // eslint-disable-line
   useEffect(() => { if (refundsFailed) toast.error(`${translate("sync.error")}: ${refundsError?.message}`); }, [refundsFailed]); // eslint-disable-line
   useEffect(() => { if (impayesFailed) toast.error(`${translate("sync.error")}: ${impayesError?.message}`); }, [impayesFailed]); // eslint-disable-line
@@ -209,19 +206,19 @@ const DashboardPage = () => {
               <button
                 disabled={funnelSync.isPending}
                 onClick={() => {
-                  const today = new Date();
-                  const d90 = new Date(today); d90.setDate(today.getDate() - 90);
-                  const fmt = (d: Date) => d.toISOString().split("T")[0];
                   // Only sync iClosed for the setter — Aircall is handled by the
                   // admin's scheduled sync and re-fetching 3000+ calls causes a timeout.
-                  funnelSync.mutate({ source: "iclosed", profileId: user?.id }, {
-                    onSuccess: (data) => {
-                      const { message, hasErrors } = parseSyncResult(data);
-                      if (hasErrors) toast.warning(message);
-                      else toast.success(message);
+                  funnelSync.mutate(
+                    { source: "iclosed", profileId: user?.id },
+                    {
+                      onSuccess: (data) => {
+                        const { message, hasErrors } = parseSyncResult(data);
+                        if (hasErrors) toast.warning(message);
+                        else toast.success(message);
+                      },
+                      onError: (e) => toast.error(e.message),
                     },
-                    onError: (e) => toast.error(e.message),
-                  });
+                  );
                 }}
                 className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-background px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
               >
@@ -419,7 +416,7 @@ const DashboardPage = () => {
                       </TableCell>
                       <TableCell className="py-3 text-right text-sm tabular-nums text-muted-foreground">{fmt(s.amount)}</TableCell>
                       <TableCell className="py-3 text-right font-semibold text-primary tabular-nums">
-                        {fmt(isCloser ? s.closerCommission : (isSetter ? s.setterCommission : s.closerCommission))}
+                        {fmt(isCloser ? s.closerCommission : isSetter ? s.setterCommission : s.closerCommission + s.setterCommission)}
                       </TableCell>
                       <TableCell className="py-3">
                         <div className="flex items-center gap-1.5">
