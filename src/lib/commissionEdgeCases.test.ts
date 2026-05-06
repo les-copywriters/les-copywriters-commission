@@ -5,7 +5,7 @@
 import { describe, it, expect } from "vitest";
 import { CLOSER_RATE, SETTER_RATE, PIF_BONUS_PER_SALE } from "./commissionRates";
 
-// Mirroring the exact calculation used in AddSaleDialog and the sync engine
+// Mirrors the calculation used in the sync engine
 function calcCommissions(amountTTC: number, taxAmount: number, hasSetterId: boolean) {
   const amountHT = Math.round((amountTTC - taxAmount) * 100) / 100;
   const closerCommission = Math.round(amountHT * CLOSER_RATE * 100) / 100;
