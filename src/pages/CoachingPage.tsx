@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/i18n";
 import { FrameworkDisplay } from "@/components/FrameworkDisplay";
-import { useCallAnalyses, useCloserFramework, useCloserFrameworkHistory, useGenerateFramework, useSyncFathom } from "@/hooks/useCallAnalysis";
+import { useCallAnalyses, useCloserFramework, useCloserFrameworkHistory, useGenerateFramework, useSyncFathom, useUpdateFathomKey } from "@/hooks/useCallAnalysis";
 import { CallAnalysis } from "@/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -15,9 +15,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  AlertCircle,
   Calendar,
   CheckCircle2,
   ChevronDown,
@@ -26,6 +28,7 @@ import {
   Eye,
   FileText,
   History,
+  KeyRound,
   Loader2,
   Phone,
   RefreshCw,
@@ -50,6 +53,7 @@ const CoachingPage = () => {
   const [selectedCallIds, setSelectedCallIds] = useState<Set<string>>(new Set());
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
   const [viewingCall, setViewingCall] = useState<CallAnalysis | null>(null);
+  const [fathomKeyInput, setFathomKeyInput] = useState("");
 
   const { data: closers = [] } = useQuery({
     queryKey: ["profiles", "closers"],
@@ -63,6 +67,39 @@ const CoachingPage = () => {
       return data as { id: string; name: string }[];
     },
   });
+
+  // Check if the selected closer has a Fathom API key configured
+  const { data: closerFathomKey, refetch: refetchFathomKey } = useQuery({
+    queryKey: ["closer_fathom_key", selectedCloserId],
+    queryFn: async () => {
+      if (!selectedCloserId) return null;
+      const { data } = await supabase
+        .from("profiles")
+        .select("fathom_api_key")
+        .eq("id", selectedCloserId)
+        .single();
+      return (data as { fathom_api_key: string | null } | null)?.fathom_api_key ?? null;
+    },
+    enabled: !!selectedCloserId,
+  });
+  const fathomKeyMissing = selectedCloserId !== "" && closerFathomKey === null;
+
+  const updateFathomKey = useUpdateFathomKey();
+
+  const handleSaveFathomKey = () => {
+    if (!selectedCloserId || !fathomKeyInput.trim()) return;
+    updateFathomKey.mutate(
+      { profileId: selectedCloserId, apiKey: fathomKeyInput.trim() },
+      {
+        onSuccess: () => {
+          toast.success("Fathom API key saved for this closer");
+          setFathomKeyInput("");
+          refetchFathomKey();
+        },
+        onError: (e) => toast.error(e.message),
+      },
+    );
+  };
 
   const { data: calls = [], isLoading: loadingCalls } = useCallAnalyses(selectedCloserId || undefined);
   const { data: framework, isLoading: loadingFramework } = useCloserFramework(selectedCloserId || null);
@@ -183,7 +220,8 @@ const CoachingPage = () => {
             <Button
               variant="outline"
               size="sm"
-              disabled={!selectedCloserId || syncFathom.isPending}
+              disabled={!selectedCloserId || syncFathom.isPending || fathomKeyMissing}
+              title={fathomKeyMissing ? "Set a Fathom API key for this closer first" : undefined}
               className="rounded-lg h-9 px-3 border-border/60 text-xs text-muted-foreground hover:text-foreground"
               onClick={handleSync}
             >
@@ -192,6 +230,50 @@ const CoachingPage = () => {
             </Button>
           </div>
         </div>
+
+        {/* Fathom key missing — let admin set it directly */}
+        {fathomKeyMissing && (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+              <div className="flex-1 space-y-3">
+                <div>
+                  <p className="text-sm font-medium text-amber-700 dark:text-amber-400">No Fathom API key for this closer</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    This closer hasn't saved their Fathom API key. Enter it below to enable call sync.
+                  </p>
+                </div>
+                <div className="flex gap-2 items-center">
+                  <KeyRound className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <Input
+                    type="password"
+                    value={fathomKeyInput}
+                    onChange={e => setFathomKeyInput(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && handleSaveFathomKey()}
+                    placeholder="fathom_••••••••••••••••"
+                    className="h-8 text-xs font-mono rounded-lg border-border/60 bg-background"
+                  />
+                  <Button
+                    size="sm"
+                    disabled={!fathomKeyInput.trim() || updateFathomKey.isPending}
+                    onClick={handleSaveFathomKey}
+                    className="h-8 px-3 text-xs rounded-lg shrink-0"
+                  >
+                    {updateFathomKey.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save key"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Fathom key confirmed */}
+        {selectedCloserId && closerFathomKey && (
+          <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+            <p className="text-xs text-emerald-700 dark:text-emerald-400">Fathom API key configured — ready to sync</p>
+          </div>
+        )}
 
         {selectedCloserId && stats ? (
           <>
