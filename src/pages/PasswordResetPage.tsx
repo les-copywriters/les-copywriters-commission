@@ -70,7 +70,6 @@ const PasswordResetPage = () => {
       {/* Background Decorative Elements */}
       <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/10 rounded-full blur-[120px] -mr-64 -mt-64" />
       <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-indigo-500/5 rounded-full blur-[100px] -ml-40 -mb-40" />
-      <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none" />
 
       <div className="w-full max-w-[450px] relative z-10 animate-in fade-in zoom-in-95 duration-700">
         <div className="flex flex-col items-center mb-10 gap-4">

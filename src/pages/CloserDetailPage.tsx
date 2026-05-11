@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/context/AuthContext";
 import ProfileTag from "@/components/ProfileTag";
 import { useSales } from "@/hooks/useSales";
+import { useRefunds } from "@/hooks/useRefunds";
 import { useBonusTiers } from "@/hooks/useBonusTiers";
 import { useCloserFramework } from "@/hooks/useCallAnalysis";
 import { useLanguage } from "@/i18n";
@@ -67,6 +68,7 @@ const CloserDetailPage = () => {
     error: tiersError,
     refetch: refetchTiers,
   } = useBonusTiers();
+  const { data: allRefunds = [] } = useRefunds();
 
   const { data: profileId } = useQuery({
     queryKey: ["profile_id_by_name", decodedName],
@@ -122,9 +124,15 @@ const CloserDetailPage = () => {
     };
   }, [allSales, decodedName, locale]);
 
+  // Scope refunds to this closer's sales so timing logic is correct
+  const closerSaleIds = useMemo(() => new Set(sales.map(s => s.id)), [sales]);
+  const closerRefunds = useMemo(
+    () => allRefunds.filter(r => closerSaleIds.has(r.saleId)),
+    [allRefunds, closerSaleIds],
+  );
   const bonusHistory = useMemo(
-    () => monthlyBonusBreakdown(sales, tiers),
-    [sales, tiers]
+    () => monthlyBonusBreakdown(sales, tiers, closerRefunds),
+    [sales, tiers, closerRefunds],
   );
 
   // Redirect after all hooks — closer can only view their own page

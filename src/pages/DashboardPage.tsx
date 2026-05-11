@@ -130,7 +130,10 @@ const DashboardPage = () => {
       monthlyData };
   }, [sales, refunds, impayes, isCloser, isSetter, loc]);
 
-  const bonusHistory    = useMemo(() => isCloser ? monthlyBonusBreakdown(sales, tiers) : [], [sales, tiers, isCloser]);
+  const bonusHistory    = useMemo(
+    () => isCloser ? monthlyBonusBreakdown(sales, tiers, allRefunds) : [],
+    [sales, tiers, isCloser, allRefunds],
+  );
   const currentMonthKey = new Date().toISOString().slice(0, 7);
   const currentMonthBonus = useMemo(() => {
     if (!isCloser) return null;

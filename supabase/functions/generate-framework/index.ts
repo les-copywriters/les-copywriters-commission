@@ -63,6 +63,13 @@ Deno.serve(async (req) => {
 
   let body: { closer_id: string; call_ids: string[] };
   try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const anonKey    = Deno.env.get("SUPABASE_ANON_KEY");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !serviceKey) {
+      return json({ ok: false, error: "Missing required environment variables" }, 500);
+    }
+
     body = await req.json();
   } catch {
     return json({ error: "Invalid JSON body" }, 400);
@@ -81,8 +88,8 @@ Deno.serve(async (req) => {
 
   try {
     const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      supabaseUrl,
+      serviceKey,
     );
 
     // Verify caller is admin

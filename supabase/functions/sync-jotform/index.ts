@@ -213,9 +213,15 @@ Deno.serve(async (req) => {
     return json({ error: "JOTFORM_API_KEY and JOTFORM_FORM_ID secrets are not set" }, 500);
   }
 
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceKey  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceKey) {
+    return json({ error: "Missing required Supabase environment variables" }, 500);
+  }
+
   const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    supabaseUrl,
+    serviceKey,
   );
 
   // Allow cron calls via shared secret (no JWT required)
@@ -254,11 +260,6 @@ Deno.serve(async (req) => {
   const errors: string[] = [];
 
   try {
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!serviceKey) {
-      throw new Error("SUPABASE_SERVICE_ROLE_KEY is missing from environment");
-    }
-
     // Initialize run record
     try {
       runId = await createRun(supabase, "jotform", mode, viaCron ? null : (callerProfile?.id ?? null));
@@ -431,6 +432,14 @@ Deno.serve(async (req) => {
       const paymentType: "pif" | "installments" =
         ptRaw.includes("sequra") || ptRaw.includes("séqura") ? "installments" : "pif";
 
+      // For installment sales (Séqura), the setter earns 1% of the first installment
+      // only (montantFacture = nowRaw), not 1% of the full plan total. Subsequent
+      // installment commissions require manual tracking or Séqura webhook integration.
+      // Closer still earns 8.8% of the full HT (Séqura pays the business upfront).
+      const setterBaseAmount = paymentType === "installments" && !isNaN(nowRaw) && nowRaw > 0
+        ? nowRaw
+        : amountHT;
+
       // 1. Resolve Closer
       const closerProfile = findProfileAnyRole(closerName, profiles);
       if (!closerProfile) {
@@ -484,7 +493,7 @@ Deno.serve(async (req) => {
         amount_ttc:         amountHT,
         tax_amount:         0,
         closer_commission:  Math.round(amountHT * closerRate * 100) / 100,
-        setter_commission:  setterProfile ? Math.round(amountHT * setterRate * 100) / 100 : 0,
+        setter_commission:  setterProfile ? Math.round(setterBaseAmount * setterRate * 100) / 100 : 0,
         payment_platform:   get("paymentPlatform") || null,
         payment_type:       paymentType,
       };
@@ -564,7 +573,7 @@ Deno.serve(async (req) => {
               countByCloser.set(row.closer_id, (countByCloser.get(row.closer_id) ?? 0) + 1);
             }
 
-            const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+            const notifyUrl = supabaseUrl;
             for (const [closerId, count] of countByCloser) {
               // Find the highest tier this closer has exactly reached this run.
               // "Exactly reached" = their count equals a tier's min_sales value,
@@ -573,7 +582,7 @@ Deno.serve(async (req) => {
               if (!hitTier) continue;
 
               // Fire and forget — a failed notification never fails the sync.
-              fetch(`${supabaseUrl}/functions/v1/notify`, {
+              fetch(`${notifyUrl}/functions/v1/notify`, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",

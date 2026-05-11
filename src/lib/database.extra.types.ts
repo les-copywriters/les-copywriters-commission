@@ -85,7 +85,22 @@ type IClosedEventRecordRow = {
   amount_collected: number | null;
 };
 
+type CloserFrameworkHistoryRow = {
+  id: string;
+  closer_id: string;
+  framework: string;
+  generated_from_calls: string[];
+  calls_count: number;
+  created_at: string;
+};
+
 type ExtraTables = {
+  closer_framework_history: {
+    Row: CloserFrameworkHistoryRow;
+    Insert: Omit<CloserFrameworkHistoryRow, "id"> & { id?: string };
+    Update: Partial<CloserFrameworkHistoryRow>;
+    Relationships: [];
+  };
   setter_integration_mappings: {
     Row: SetterIntegrationMappingRow;
     Insert: Partial<SetterIntegrationMappingRow> & { profile_id: string };

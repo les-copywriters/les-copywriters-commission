@@ -94,6 +94,13 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ ok: false, error: "Method not allowed" }, 405);
 
   try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const anonKey    = Deno.env.get("SUPABASE_ANON_KEY");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !serviceKey) {
+      return json({ ok: false, error: "Missing required environment variables" }, 500);
+    }
+
     // Accept cron secret or admin JWT
     const cronSecret   = Deno.env.get("SETTER_DASHBOARD_CRON_SECRET");
     const providedCron = req.headers.get("x-cron-secret");
@@ -103,8 +110,8 @@ Deno.serve(async (req) => {
       const authHeader = req.headers.get("Authorization");
       if (!authHeader) return json({ ok: false, error: "Missing authorization" }, 401);
       const callerClient = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_ANON_KEY")!,
+        supabaseUrl,
+        anonKey,
         { global: { headers: { Authorization: authHeader } } },
       );
       const { data: { user }, error } = await callerClient.auth.getUser();
@@ -120,8 +127,8 @@ Deno.serve(async (req) => {
     };
 
     const admin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      supabaseUrl,
+      serviceKey,
       { auth: { autoRefreshToken: false, persistSession: false } },
     );
 

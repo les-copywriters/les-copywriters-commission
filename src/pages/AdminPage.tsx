@@ -90,7 +90,10 @@ const AdminPage = () => {
   const handleSaveOverride = () => {
     if (!editing) return;
     const override = parseFloat(commOverride);
-    if (isNaN(override)) return;
+    if (isNaN(override) || override < 0) {
+      toast.error("Commission must be a positive number");
+      return;
+    }
     updateCommission.mutate({
       id: editing.id,
       closerCommission: override,
@@ -601,6 +604,7 @@ const AdminPage = () => {
                   value={commOverride}
                   onChange={(e) => setCommOverride(e.target.value)}
                   step="0.01"
+                  min="0"
                   className="h-9 pl-7 rounded-lg text-sm"
                 />
                 <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">€</div>

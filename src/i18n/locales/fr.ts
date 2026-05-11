@@ -127,13 +127,11 @@ const fr: Record<string, string> = {
   "teamManage.inviteMember": "Ajouter un membre",
   "teamManage.inviteTitle": "Ajouter un nouveau membre",
   "teamManage.inviteEmail": "Email",
-  "teamManage.invitePassword": "Mot de passe temporaire",
-  "teamManage.inviteConfirm": "Créer le compte",
-  "teamManage.inviteSuccess": "Compte créé avec succès",
-  "teamManage.inviteError": "Erreur lors de la création du compte",
+  "teamManage.inviteConfirm": "Envoyer l'invitation",
+  "teamManage.inviteSuccess": "Invitation envoyée — ils recevront un email pour définir leur mot de passe",
+  "teamManage.inviteError": "Échec de l'invitation",
   "teamManage.validation.name": "Le nom est requis",
   "teamManage.validation.email": "Un email valide est requis",
-  "teamManage.validation.password": "Le mot de passe doit contenir au moins 8 caractères",
 
   // Settings page
   "settings.title": "Paramètres",

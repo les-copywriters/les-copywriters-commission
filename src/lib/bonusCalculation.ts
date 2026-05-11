@@ -31,13 +31,52 @@ export function calculateMonthBonus(sales: Sale[], tiers: BonusTier[]): Omit<Mon
   return { validatedCount, pifCount, pifBonus, volumeTier, volumeBonus, total: pifBonus + volumeBonus };
 }
 
-/** Group a closer's sales by YYYY-MM, return sorted latest-first. */
-export function monthlyBonusBreakdown(sales: Sale[], tiers: BonusTier[]): MonthlyBonus[] {
-  const map = new Map<string, Sale[]>();
-  for (const s of sales) {
-    const month = s.date.slice(0, 7);
-    (map.get(month) ?? map.set(month, []).get(month)!).push(s);
+/**
+ * Group a closer's sales by YYYY-MM and compute per-month bonus.
+ *
+ * Refund timing rule (from owner):
+ * - Same-month refund: sale is not counted at all in bonus (excluded).
+ * - Later-month refund: the sale WAS valid at month-end, so it counts in
+ *   its original month's bonus. The commission clawback appears in the
+ *   refund month's payment — it does not retroactively remove the bonus.
+ *
+ * Pass the closer's refunds (with their date) so timing can be determined.
+ * If refunds are omitted, falls back to the old behaviour (always exclude).
+ */
+export function monthlyBonusBreakdown(
+  sales: Sale[],
+  tiers: BonusTier[],
+  refunds: { saleId: string; date: string }[] = [],
+): MonthlyBonus[] {
+  // Build a lookup of saleId → refund month ("YYYY-MM")
+  const refundMonthBySaleId = new Map<string, string>();
+  for (const r of refunds) {
+    refundMonthBySaleId.set(r.saleId, r.date.slice(0, 7));
   }
+
+  const map = new Map<string, Sale[]>();
+
+  for (const s of sales) {
+    const saleMonth = s.date.slice(0, 7);
+
+    if (s.refunded) {
+      const refundMonth = refundMonthBySaleId.get(s.id);
+
+      if (!refundMonth || refundMonth === saleMonth) {
+        // Same-month refund (or no refund date): exclude from bonus entirely.
+        (map.get(saleMonth) ?? map.set(saleMonth, []).get(saleMonth)!).push(s);
+      } else {
+        // Later-month refund: sale was valid when the month closed.
+        // Count it in its original month as if not refunded.
+        (map.get(saleMonth) ?? map.set(saleMonth, []).get(saleMonth)!).push(
+          { ...s, refunded: false },
+        );
+      }
+    } else {
+      (map.get(saleMonth) ?? map.set(saleMonth, []).get(saleMonth)!).push(s);
+    }
+  }
+
   return Array.from(map.entries())
     .sort(([a], [b]) => b.localeCompare(a))
     .map(([month, monthlySales]) => ({ month, ...calculateMonthBonus(monthlySales, tiers) }));

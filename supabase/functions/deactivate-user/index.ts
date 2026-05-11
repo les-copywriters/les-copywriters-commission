@@ -16,12 +16,19 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ ok: false, error: "Method not allowed" }, 405);
 
   try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const anonKey    = Deno.env.get("SUPABASE_ANON_KEY");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !serviceKey) {
+      return json({ ok: false, error: "Missing required environment variables" }, 500);
+    }
+
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) return json({ ok: false, error: "Missing authorization header" }, 401);
 
     const callerClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
+      supabaseUrl,
+      anonKey,
       { global: { headers: { Authorization: authHeader } } },
     );
 
@@ -41,8 +48,8 @@ Deno.serve(async (req) => {
     if (userId === caller.id) return json({ ok: false, error: "You cannot remove your own account" }, 400);
 
     const adminClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      supabaseUrl,
+      serviceKey,
       { auth: { autoRefreshToken: false, persistSession: false } },
     );
 

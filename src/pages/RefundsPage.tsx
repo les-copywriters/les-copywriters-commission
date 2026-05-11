@@ -15,7 +15,7 @@ import { useRefunds, useUpdateRefundStatus } from "@/hooks/useRefunds";
 import { useImpayes } from "@/hooks/useImpayes";
 import { useSales } from "@/hooks/useSales";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, Undo2, CreditCard } from "lucide-react";
+import { AlertTriangle, Loader2, Undo2, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const RefundsPage = () => {
@@ -231,7 +231,7 @@ const RefundsPage = () => {
               className="rounded-lg h-9 text-sm"
               disabled={updateStatus.isPending}
             >
-              {updateStatus.isPending ? <Skeleton className="h-4 w-10" /> : t("common.confirm")}
+              {updateStatus.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t("common.confirm")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

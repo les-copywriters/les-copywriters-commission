@@ -176,13 +176,18 @@ const SetterDashboardPage = () => {
           <div className="flex items-center gap-2 flex-wrap">
             <button
               disabled={syncMutation.isPending}
-              onClick={() => syncMutation.mutate({ source: "all" }, {
-                onSuccess: (data) => {
-                  const { message, hasErrors } = parseSyncResult(data);
-                  if (hasErrors) toast.warning(message); else toast.success(message);
+              onClick={() => syncMutation.mutate(
+                // Setters only sync iClosed — Aircall re-fetches 3000+ calls and causes timeouts.
+                // Aircall is handled by the admin's scheduled sync.
+                { source: user?.role === "setter" ? "iclosed" : "all" },
+                {
+                  onSuccess: (data) => {
+                    const { message, hasErrors } = parseSyncResult(data);
+                    if (hasErrors) toast.warning(message); else toast.success(message);
+                  },
+                  onError: (e) => toast.error(e.message),
                 },
-                onError: (e) => toast.error(e.message),
-              })}
+              )}
               className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-background px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
             >
               <RefreshCw className={cn("h-3.5 w-3.5", syncMutation.isPending && "animate-spin")} />
@@ -346,8 +351,8 @@ const SetterDashboardPage = () => {
                     </tr>
                   ))}
 
-                  {/* Total row */}
-                  {visibleRows.length > 0 && (
+                  {/* Total row — only meaningful when multiple setters are shown (admin view) */}
+                  {visibleRows.length > 1 && (
                     <tr className="bg-muted/20 border-t border-border/40 text-sm font-medium">
                       <td className="py-2.5 px-4 text-muted-foreground text-[11px] uppercase tracking-wide">{t("setter.leaderboard.totalRow")}</td>
                       <td className="py-2.5 px-2 text-center tabular-nums">{team.dialed.toLocaleString("fr-FR")}</td>

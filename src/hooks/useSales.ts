@@ -186,8 +186,7 @@ export const useMarkAsRefunded = () => {
     mutationFn: async ({ id, amount, date }: { id: string; amount: number; date: string }) => {
       const { error: saleErr } = await supabase.from("sales").update({ refunded: true }).eq("id", id);
       if (saleErr) throw new Error(saleErr.message);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: refundErr } = await (supabase as any).from("refunds").insert({
+      const { error: refundErr } = await supabase.from("refunds").insert({
         sale_id: id, amount, date, status: "approved",
       });
       if (refundErr) throw new Error(refundErr.message);
@@ -205,8 +204,7 @@ export const useMarkAsImpaye = () => {
     mutationFn: async ({ id, amount, date }: { id: string; amount: number; date: string }) => {
       const { error: saleErr } = await supabase.from("sales").update({ impaye: true }).eq("id", id);
       if (saleErr) throw new Error(saleErr.message);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: impayeErr } = await (supabase as any).from("impayes").insert({
+      const { error: impayeErr } = await supabase.from("impayes").insert({
         sale_id: id, amount, date,
       });
       if (impayeErr) throw new Error(impayeErr.message);

@@ -70,6 +70,7 @@ const SetterCallDetailPage = () => {
     audioRef.current.currentTime = ratio * audioRef.current.duration;
   };
 
+  const talkRatio = call?.talkListenRatio as { agent?: number; customer?: number } | null | undefined;
   const isAnswered = call?.status === "answered" || call?.status === "done";
   const isMissed = call?.status === "missed" || call?.status === "voicemail";
   const mins = Math.floor((call?.talkTimeSeconds ?? 0) / 60);
@@ -314,19 +315,19 @@ const SetterCallDetailPage = () => {
                             <div className="flex justify-between text-xs font-medium">
                               <span>Agent</span>
                               <span className="text-muted-foreground">
-                                {call.talkListenRatio?.agent ? `${Math.round(call.talkListenRatio.agent * 100)}%` : "—"}
+                                {talkRatio?.agent ? `${Math.round(talkRatio.agent * 100)}%` : "—"}
                               </span>
                             </div>
-                            <Progress value={call.talkListenRatio?.agent ? call.talkListenRatio.agent * 100 : 0} className="h-1.5 bg-muted" />
+                            <Progress value={talkRatio?.agent ? talkRatio.agent * 100 : 0} className="h-1.5 bg-muted" />
                           </div>
                           <div className="space-y-1.5">
                             <div className="flex justify-between text-xs font-medium text-muted-foreground">
                               <span>Contact</span>
                               <span>
-                                {call.talkListenRatio?.customer ? `${Math.round(call.talkListenRatio.customer * 100)}%` : "—"}
+                                {talkRatio?.customer ? `${Math.round(talkRatio.customer * 100)}%` : "—"}
                               </span>
                             </div>
-                            <Progress value={call.talkListenRatio?.customer ? call.talkListenRatio.customer * 100 : 0} className="h-1.5 bg-muted" />
+                            <Progress value={talkRatio?.customer ? talkRatio.customer * 100 : 0} className="h-1.5 bg-muted" />
                           </div>
                         </div>
                       </div>

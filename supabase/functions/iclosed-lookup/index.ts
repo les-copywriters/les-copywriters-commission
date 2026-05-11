@@ -30,6 +30,13 @@ async function getGlobalSettings(supabase: SupabaseClient): Promise<Record<strin
 
 async function safeFetch(url: string, init?: RequestInit): Promise<{ ok: boolean; status: number; body: string }> {
   try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const anonKey    = Deno.env.get("SUPABASE_ANON_KEY");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !serviceKey) {
+      return json({ ok: false, error: "Missing required environment variables" }, 500);
+    }
+
     const res = await fetch(url, init);
     const body = await res.text();
     return { ok: res.ok, status: res.status, body };
@@ -95,8 +102,8 @@ Deno.serve(async (req) => {
   }
 
   const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    supabaseUrl,
+    serviceKey,
   );
 
   const global = await getGlobalSettings(supabase);

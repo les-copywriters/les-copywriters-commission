@@ -169,8 +169,7 @@ export const useCloserFrameworkHistory = (closerId: string | null) =>
     queryKey: ["closer_framework_history", closerId],
     queryFn: async (): Promise<FrameworkHistoryEntry[]> => {
       if (!closerId) return [];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from("closer_framework_history")
         .select("id, closer_id, framework, generated_from_calls, calls_count, created_at")
         .eq("closer_id", closerId)

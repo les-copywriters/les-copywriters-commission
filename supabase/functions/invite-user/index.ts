@@ -36,9 +36,16 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) return json({ ok: false, error: "Missing authorization header" }, 401);
 
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const anonKey    = Deno.env.get("SUPABASE_ANON_KEY");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !anonKey || !serviceKey) {
+      return json({ ok: false, error: "Missing required environment variables" }, 500);
+    }
+
     const callerClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
+      supabaseUrl,
+      anonKey,
       { global: { headers: { Authorization: authHeader } } },
     );
 
@@ -69,8 +76,8 @@ Deno.serve(async (req) => {
     if (!role || !VALID_ROLES.has(role))       return json({ ok: false, error: "Invalid role" }, 400);
 
     const adminClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      supabaseUrl,
+      serviceKey,
       { auth: { autoRefreshToken: false, persistSession: false } },
     );
 

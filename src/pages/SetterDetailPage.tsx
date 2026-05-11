@@ -311,7 +311,7 @@ const SetterDetailPage = () => {
                         {t("setter.callHistory.empty")}
                       </td>
                     </tr>
-                  ) : calls.map(call => {
+                  ) : calls.map((call) => {
                     const sk = `setter.status.${
                       call.displayStatus === "annule_setter" ? "annuleSetter" :
                       call.displayStatus === "no_show"       ? "noShow" :
@@ -319,7 +319,11 @@ const SetterDetailPage = () => {
                       call.displayStatus
                     }` as const;
                     return (
-                      <tr key={call.id} className="border-b border-border/20 hover:bg-muted/20 transition-colors">
+                      <tr
+                        key={call.id}
+                        className="border-b border-border/20 hover:bg-muted/20 transition-colors cursor-pointer"
+                        onClick={() => navigate(`/setter-dashboard/calls/${call.id}`, { state: { call } })}
+                      >
                         <td className="py-3 px-4 text-xs text-muted-foreground tabular-nums whitespace-nowrap">
                           {fmtDate(call.startedAt)}
                         </td>
@@ -335,7 +339,7 @@ const SetterDetailPage = () => {
                             {t(sk)}
                           </span>
                         </td>
-                        <td className="py-3 px-2 text-center">
+                        <td className="py-3 px-2 text-center" onClick={e => e.stopPropagation()}>
                           {call.recordingUrl
                             ? <AudioButton url={call.recordingUrl} />
                             : <span className="text-muted-foreground/30 text-xs">—</span>

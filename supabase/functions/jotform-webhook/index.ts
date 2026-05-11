@@ -32,6 +32,13 @@ type Profile = { id: string; name: string; role: string };
 function parseAliasMap(raw: string | undefined): Record<string, string> {
   if (!raw) return {};
   try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const anonKey    = Deno.env.get("SUPABASE_ANON_KEY");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !serviceKey) {
+      return json({ ok: false, error: "Missing required environment variables" }, 500);
+    }
+
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     return Object.fromEntries(
       Object.entries(parsed)
@@ -208,8 +215,8 @@ Deno.serve(async (req) => {
     console.log(`[jotform-webhook] sub ${submissionId} — closer: "${closerName}" setter: "${setterName}"`);
 
     const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      supabaseUrl,
+      serviceKey
     );
 
     // Load all profiles for fuzzy matching

@@ -31,8 +31,8 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    supabaseUrl,
+    serviceKey,
   );
 
   const global = await getGlobalSettings(supabase);
@@ -46,6 +46,13 @@ Deno.serve(async (req) => {
   const auth = btoa(`${apiId}:${apiToken}`);
 
   try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const anonKey    = Deno.env.get("SUPABASE_ANON_KEY");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !serviceKey) {
+      return json({ ok: false, error: "Missing required environment variables" }, 500);
+    }
+
     const res = await fetch("https://api.aircall.io/v1/users?per_page=100", {
       headers: { Authorization: `Basic ${auth}` },
     });

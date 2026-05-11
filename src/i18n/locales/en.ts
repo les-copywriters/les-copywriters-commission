@@ -127,13 +127,11 @@ const en: Record<string, string> = {
   "teamManage.inviteMember": "Add Member",
   "teamManage.inviteTitle": "Add a New Member",
   "teamManage.inviteEmail": "Email",
-  "teamManage.invitePassword": "Temporary password",
-  "teamManage.inviteConfirm": "Create Account",
-  "teamManage.inviteSuccess": "Account created successfully",
-  "teamManage.inviteError": "Failed to create account",
+  "teamManage.inviteConfirm": "Send Invite",
+  "teamManage.inviteSuccess": "Invite sent — they'll receive an email to set their password",
+  "teamManage.inviteError": "Failed to send invite",
   "teamManage.validation.name": "Name is required",
   "teamManage.validation.email": "A valid email is required",
-  "teamManage.validation.password": "Password must be at least 8 characters",
 
   // Settings page
   "settings.title": "Settings",
